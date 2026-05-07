@@ -10,6 +10,7 @@ import { InventoryTab, CombosTab } from "@/components/InventoryCombos";
 import { CreditsTab } from "@/components/CreditsTab";
 import { WaitQueue } from "@/components/WaitQueue";
 import { CloseDayDialog } from "@/components/CloseDayDialog";
+import { MembersTab } from "@/components/MembersTab";
 import { Volume2, VolumeX, FileSpreadsheet, Gamepad2, Receipt } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -95,11 +96,12 @@ function Index() {
 
       <main className="max-w-[1600px] mx-auto px-4 py-6">
         <Tabs defaultValue="dashboard" className="space-y-4">
-          <TabsList className="bg-card border border-border">
+          <TabsList className="bg-card border border-border flex-wrap h-auto">
             <TabsTrigger value="dashboard">Consolas</TabsTrigger>
             <TabsTrigger value="inventory">Inventario</TabsTrigger>
             <TabsTrigger value="combos">Combos</TabsTrigger>
             <TabsTrigger value="credits">Fiados {credits.length > 0 && <span className="ml-1 text-accent">({credits.length})</span>}</TabsTrigger>
+            <TabsTrigger value="club">🏆 Club Gamer</TabsTrigger>
           </TabsList>
 
           <TabsContent value="dashboard">
@@ -116,6 +118,7 @@ function Index() {
           <TabsContent value="inventory"><InventoryTab /></TabsContent>
           <TabsContent value="combos"><CombosTab /></TabsContent>
           <TabsContent value="credits"><CreditsTab /></TabsContent>
+          <TabsContent value="club"><MembersTab /></TabsContent>
         </Tabs>
       </main>
 
