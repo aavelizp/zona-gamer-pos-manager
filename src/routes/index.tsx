@@ -36,6 +36,7 @@ function Index() {
   const sales = useStore((s) => s.sales);
   const products = useStore((s) => s.products);
   const credits = useStore((s) => s.credits);
+  const [closeOpen, setCloseOpen] = useState(false);
 
   const today = useMemo(() => {
     const start = new Date(); start.setHours(0, 0, 0, 0);
