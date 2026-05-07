@@ -44,10 +44,11 @@ function Index() {
     return sales.filter((s) => s.ts >= start.getTime()).reduce((a, s) => a + s.total, 0);
   }, [sales]);
 
-  // Suggested consoles (least used per type)
+  // Suggested consoles (least used per type, only among free ones)
   const suggested = useMemo(() => {
-    const ps4 = consoles.filter((c) => c.type === "PS4").sort((a, b) => a.totalMinutes - b.totalMinutes)[0]?.id;
-    const ps5 = consoles.filter((c) => c.type === "PS5").sort((a, b) => a.totalMinutes - b.totalMinutes)[0]?.id;
+    const free = consoles.filter((c) => !c.session);
+    const ps4 = free.filter((c) => c.type === "PS4").sort((a, b) => a.totalMinutes - b.totalMinutes)[0]?.id;
+    const ps5 = free.filter((c) => c.type === "PS5").sort((a, b) => a.totalMinutes - b.totalMinutes)[0]?.id;
     return new Set([ps4, ps5].filter(Boolean) as string[]);
   }, [consoles]);
 
@@ -61,7 +62,7 @@ function Index() {
               <Gamepad2 className="h-6 w-6 text-primary" />
             </div>
             <div>
-              <h1 className="font-display text-xl leading-none">GAMERZONE</h1>
+              <h1 className="font-display text-xl leading-none">TWINS GAMER</h1>
               <p className="text-[10px] uppercase tracking-widest text-accent">POS · Venezuela</p>
             </div>
           </div>
