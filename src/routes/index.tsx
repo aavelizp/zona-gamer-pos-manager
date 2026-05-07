@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useStore, fmtBs, fmtUsd } from "@/lib/store";
 import { exportData } from "@/lib/excel";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,8 @@ import { ConsoleCard } from "@/components/ConsoleCard";
 import { InventoryTab, CombosTab } from "@/components/InventoryCombos";
 import { CreditsTab } from "@/components/CreditsTab";
 import { WaitQueue } from "@/components/WaitQueue";
-import { Volume2, VolumeX, FileSpreadsheet, Gamepad2 } from "lucide-react";
+import { CloseDayDialog } from "@/components/CloseDayDialog";
+import { Volume2, VolumeX, FileSpreadsheet, Gamepad2, Receipt } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
