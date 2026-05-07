@@ -1,14 +1,140 @@
-import { useEffect, useMemo, useState } from "react";
-import { useStore, fmtUsd, fmtBs, computeTimeAmount, type ConsoleState } from "@/lib/store";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useStore, fmtUsd, fmtBs, computeTimeAmount, type ConsoleState, type Member } from "@/lib/store";
 import { playAlert } from "@/lib/sound";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Star, Gamepad2, Sparkles, Package, Coins, ShoppingBag, Receipt } from "lucide-react";
+import { Star, Gamepad2, Sparkles, Package, Coins, ShoppingBag, Receipt, Plus, Search, X } from "lucide-react";
 import { ReceiptDialog, type ReceiptData } from "@/components/Receipt";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+
+interface CustomerSearchProps {
+  name: string; idDoc: string; phone: string;
+  setName: (v: string) => void; setIdDoc: (v: string) => void; setPhone: (v: string) => void;
+}
+function CustomerSearch({ name, idDoc, phone, setName, setIdDoc, setPhone }: CustomerSearchProps) {
+  const members = useStore((s) => s.members);
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [selected, setSelected] = useState<Member | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return members.slice(0, 8);
+    return members.filter((m) =>
+      m.name.toLowerCase().includes(q) ||
+      (m.phone || "").includes(q) ||
+      (m.idDoc || "").toLowerCase().includes(q)
+    ).slice(0, 8);
+  }, [members, query]);
+
+  const pick = (m: Member) => {
+    setSelected(m); setName(m.name); setIdDoc(m.idDoc || ""); setPhone(m.phone || "");
+    setQuery(m.name); setOpen(false); setCreating(false);
+  };
+
+  const clear = () => {
+    setSelected(null); setName(""); setIdDoc(""); setPhone(""); setQuery(""); setCreating(false);
+  };
+
+  return (
+    <div className="space-y-2 border border-border rounded-md p-3 bg-background/40">
+      <div className="flex items-center justify-between">
+        <p className="text-xs uppercase tracking-wider text-accent font-semibold">Cliente</p>
+        {(selected || creating || name) && (
+          <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={clear}>
+            <X className="h-3 w-3 mr-1" />Limpiar
+          </Button>
+        )}
+      </div>
+
+      {!creating && (
+        <div ref={wrapRef} className="relative">
+          <div className="flex gap-1">
+            <div className="relative flex-1">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(e) => { setQuery(e.target.value); setOpen(true); if (selected) setSelected(null); }}
+                onFocus={() => setOpen(true)}
+                placeholder="Buscar cliente por nombre, teléfono o cédula..."
+                className="pl-7"
+              />
+            </div>
+            <Button type="button" size="icon" variant="outline" title="Cliente nuevo"
+              onClick={() => { setCreating(true); setOpen(false); setSelected(null); setName(query); setIdDoc(""); setPhone(""); }}>
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
+          {open && (
+            <div className="absolute z-50 mt-1 w-full bg-popover border border-border rounded-md shadow-lg max-h-56 overflow-auto">
+              {results.length === 0 ? (
+                <div className="p-2 text-xs text-muted-foreground">
+                  Sin coincidencias.{" "}
+                  <button type="button" className="text-primary underline"
+                    onClick={() => { setCreating(true); setOpen(false); setName(query); }}>
+                    Crear "{query}"
+                  </button>
+                </div>
+              ) : results.map((m) => (
+                <button key={m.id} type="button" onClick={() => pick(m)}
+                  className="w-full text-left px-3 py-2 hover:bg-accent/30 border-b border-border/40 last:border-0">
+                  <p className="text-sm font-semibold">{m.name}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {m.phone || "sin tel"} · {Math.round(m.totalMinutes / 60)}h
+                    {m.pendingRewards > 0 && <span className="text-gold"> · 🎁 {m.pendingRewards}</span>}
+                  </p>
+                </button>
+              ))}
+            </div>
+          )}
+          {selected && (
+            <p className="text-[10px] text-success mt-1">
+              ✓ {selected.name} · {Math.round(selected.totalMinutes / 60)}h en Club Gamer
+            </p>
+          )}
+        </div>
+      )}
+
+      {(creating || selected) && (
+        <div className="space-y-2">
+          {creating && (
+            <div>
+              <Label className="text-xs">Nombre y Apellido *</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Juan Pérez" autoFocus />
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="text-xs">Cédula/RIF</Label>
+              <Input value={idDoc} onChange={(e) => setIdDoc(e.target.value)} placeholder="V-12345678" />
+            </div>
+            <div>
+              <Label className="text-xs">Teléfono</Label>
+              <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="04141234567" />
+            </div>
+          </div>
+          {creating && name.trim() && phone.trim() && (
+            <p className="text-[10px] text-success">✓ Se creará en el Club Gamer al cobrar</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function useNow(intervalMs = 1000) {
   const [now, setNow] = useState(Date.now());
@@ -110,17 +236,20 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
   const total = timeAmount + extrasAmount;
 
   const [method, setMethod] = useState<"full" | "mixed" | "credit">("full");
+  const [fullPayMode, setFullPayMode] = useState<"cash" | "mobile">("cash");
   const [cashUsd, setCashUsd] = useState("");
   const [mobileBs, setMobileBs] = useState("");
   const [name, setName] = useState("");
   const [idDoc, setIdDoc] = useState("");
   const [phone, setPhone] = useState("");
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
+  // Once true, on receipt close we finalize+release the console
+  const [pendingFinalize, setPendingFinalize] = useState(false);
 
   useEffect(() => {
     if (open) {
-      setMethod("full"); setCashUsd(""); setMobileBs("");
-      setName(""); setIdDoc(""); setPhone(""); setReceipt(null);
+      setMethod("full"); setFullPayMode("cash"); setCashUsd(""); setMobileBs("");
+      setName(""); setIdDoc(""); setPhone(""); setReceipt(null); setPendingFinalize(false);
     }
   }, [open]);
 
@@ -130,6 +259,10 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
   const paid = method === "full" ? total : method === "mixed" ? cashUsdN + mobileUsd : 0;
   const remaining = total - paid;
 
+  // Resolve cash/mobile breakdown for both store + receipt
+  const resolvedCashUsd = method === "full" ? (fullPayMode === "cash" ? total : 0) : method === "mixed" ? cashUsdN : 0;
+  const resolvedMobileBs = method === "full" ? (fullPayMode === "mobile" ? total * rate : 0) : method === "mixed" ? mobileBsN : 0;
+
   const buildReceipt = (): ReceiptData => ({
     ts: Date.now(), rate, consoleName: consoleObj.name, minutes,
     timeAmount,
@@ -138,29 +271,42 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
       ...consoleObj.charges.map((ch) => ({ name: ch.label, qty: 1, price: ch.amount })),
     ],
     total, method,
-    cashUsd: method === "full" ? total : method === "mixed" ? cashUsdN : 0,
-    mobileBs: method === "mixed" ? mobileBsN : 0,
+    cashUsd: resolvedCashUsd,
+    mobileBs: resolvedMobileBs,
     customer: { name: name.trim() || "Consumidor Final", idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined },
   });
 
-  const submit = (alsoReceipt: boolean) => {
-    if (method === "credit" && !name.trim()) return;
-    if (method === "mixed" && remaining > 0.01) return;
-    const r = buildReceipt();
+  const doFinalize = () => {
     finalize(consoleObj.id, {
       method,
-      cashUsd: method === "full" ? total : method === "mixed" ? cashUsdN : 0,
-      mobileBs: method === "mixed" ? mobileBsN : 0,
+      cashUsd: resolvedCashUsd,
+      mobileBs: resolvedMobileBs,
       customer: method === "credit" ? name.trim() : undefined,
       customerInfo: name.trim() ? { name: name.trim(), idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined } : undefined,
       total, timeAmount, extrasAmount, minutes,
     });
-    if (alsoReceipt) setReceipt(r); else onClose();
+  };
+
+  const submit = () => {
+    if (method === "credit" && !name.trim()) return;
+    if (method === "mixed" && remaining > 0.01) return;
+    // Open receipt; release console only when receipt is closed
+    setReceipt(buildReceipt());
+    setPendingFinalize(true);
+  };
+
+  const handleReceiptClose = () => {
+    setReceipt(null);
+    if (pendingFinalize) {
+      doFinalize();
+      setPendingFinalize(false);
+      onClose();
+    }
   };
 
   return (
     <>
-    <Dialog open={open && !receipt} onOpenChange={onClose}>
+    <Dialog open={open && !receipt} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle className="font-display">Cobrar · {consoleObj.name}</DialogTitle></DialogHeader>
         <div className="space-y-3">
@@ -172,30 +318,39 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
             <div className="flex justify-between text-sm text-accent"><span>En Bs</span><span>{fmtBs(total, rate)}</span></div>
           </Card>
 
-          <div className="space-y-2 border border-border rounded-md p-3 bg-background/40">
-            <p className="text-xs uppercase tracking-wider text-accent font-semibold">Datos del Cliente</p>
-            <div>
-              <Label className="text-xs">Nombre y Apellido</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Juan Pérez" />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label className="text-xs">Cédula/RIF</Label>
-                <Input value={idDoc} onChange={(e) => setIdDoc(e.target.value)} placeholder="V-12345678" />
-              </div>
-              <div>
-                <Label className="text-xs">Teléfono</Label>
-                <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="04141234567" />
-              </div>
-            </div>
-            {name.trim() && phone.trim() && <p className="text-[10px] text-success">✓ Cliente se sumará al Club Gamer</p>}
-          </div>
+          <CustomerSearch
+            name={name} idDoc={idDoc} phone={phone}
+            setName={setName} setIdDoc={setIdDoc} setPhone={setPhone}
+          />
 
           <div className="grid grid-cols-3 gap-2">
             <Button variant={method === "full" ? "default" : "outline"} onClick={() => setMethod("full")}>Completo</Button>
             <Button variant={method === "mixed" ? "default" : "outline"} onClick={() => setMethod("mixed")}>Mixto</Button>
             <Button variant={method === "credit" ? "default" : "outline"} onClick={() => setMethod("credit")}>Fiado</Button>
           </div>
+
+          {method === "full" && (
+            <div className="space-y-2 border border-border rounded-md p-3 bg-background/40">
+              <Label className="text-xs uppercase tracking-wider text-accent font-semibold">¿Cómo pagó?</Label>
+              <RadioGroup value={fullPayMode} onValueChange={(v) => setFullPayMode(v as "cash" | "mobile")} className="grid grid-cols-2 gap-2">
+                <label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "cash" ? "border-primary bg-primary/10" : "border-border"}`}>
+                  <RadioGroupItem value="cash" />
+                  <div>
+                    <p className="text-sm font-semibold">Efectivo $</p>
+                    <p className="text-[10px] text-muted-foreground">{fmtUsd(total)}</p>
+                  </div>
+                </label>
+                <label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "mobile" ? "border-primary bg-primary/10" : "border-border"}`}>
+                  <RadioGroupItem value="mobile" />
+                  <div>
+                    <p className="text-sm font-semibold">Pago Móvil Bs</p>
+                    <p className="text-[10px] text-muted-foreground">{fmtBs(total, rate)}</p>
+                  </div>
+                </label>
+              </RadioGroup>
+            </div>
+          )}
+
           {method === "mixed" && (
             <div className="space-y-2">
               <div>
@@ -213,17 +368,20 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
             </div>
           )}
           {method === "credit" && total > 10 && <p className="text-xs text-warning">⚠ Supera el límite sugerido de $10</p>}
+          {method === "credit" && !name.trim() && <p className="text-xs text-destructive">Debes seleccionar o crear un cliente para fiar.</p>}
         </div>
         <DialogFooter className="flex-wrap gap-2">
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button variant="secondary" onClick={() => submit(false)}>Confirmar</Button>
-          <Button onClick={() => submit(true)} className="bg-gradient-to-r from-primary to-accent">
-            <Receipt className="h-4 w-4 mr-1" />Generar Recibo
+          <Button onClick={submit} className="bg-gradient-to-r from-primary to-accent">
+            <Receipt className="h-4 w-4 mr-1" />Confirmar Pago
           </Button>
         </DialogFooter>
+        <p className="text-[10px] text-muted-foreground text-center">
+          La consola se liberará al cerrar el recibo digital.
+        </p>
       </DialogContent>
     </Dialog>
-    <ReceiptDialog open={!!receipt} onClose={() => { setReceipt(null); onClose(); }} data={receipt} />
+    <ReceiptDialog open={!!receipt} onClose={handleReceiptClose} data={receipt} />
     </>
   );
 }
