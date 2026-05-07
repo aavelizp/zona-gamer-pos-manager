@@ -174,6 +174,7 @@ export const useStore = create<State>()(
       sales: [],
       credits: [],
       queue: [],
+      members: [],
 
       setRate: (n) => set({ rate: Math.max(0, n) }),
       toggleSound: () => set((s) => ({ soundOn: !s.soundOn })),
