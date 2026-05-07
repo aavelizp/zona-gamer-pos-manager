@@ -109,6 +109,7 @@ interface State {
   sales: SaleRecord[];
   credits: Credit[];
   queue: QueueEntry[];
+  members: Member[];
 
   // setters
   setRate: (n: number) => void;
@@ -121,7 +122,7 @@ interface State {
   addCombo: (c: Omit<Combo, "id">) => void;
   removeCombo: (id: string) => void;
 
-  startSession: (consoleId: string, minutes?: number) => void; // undefined => free
+  startSession: (consoleId: string, minutes?: number) => void;
   extendSession: (consoleId: string, addMinutes: number) => void;
   markAlerted: (consoleId: string) => void;
 
@@ -130,7 +131,7 @@ interface State {
 
   finalizeConsole: (
     consoleId: string,
-    payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; customer?: string; total: number; timeAmount: number; extrasAmount: number; minutes: number }
+    payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; customer?: string; total: number; timeAmount: number; extrasAmount: number; minutes: number; customerInfo?: CustomerInfo }
   ) => void;
 
   payCredit: (
@@ -140,6 +141,9 @@ interface State {
 
   enqueue: (e: Omit<QueueEntry, "id" | "ts">) => void;
   dequeue: (id: string) => void;
+
+  redeemReward: (memberId: string) => void;
+  removeMember: (memberId: string) => void;
 
   closeDay: () => void;
 }
