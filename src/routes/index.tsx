@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useStore, fmtBs, fmtUsd } from "@/lib/store";
 import { exportData } from "@/lib/excel";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,8 @@ import { ConsoleCard } from "@/components/ConsoleCard";
 import { InventoryTab, CombosTab } from "@/components/InventoryCombos";
 import { CreditsTab } from "@/components/CreditsTab";
 import { WaitQueue } from "@/components/WaitQueue";
-import { Volume2, VolumeX, FileSpreadsheet, Gamepad2 } from "lucide-react";
+import { CloseDayDialog } from "@/components/CloseDayDialog";
+import { Volume2, VolumeX, FileSpreadsheet, Gamepad2, Receipt } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -35,6 +36,7 @@ function Index() {
   const sales = useStore((s) => s.sales);
   const products = useStore((s) => s.products);
   const credits = useStore((s) => s.credits);
+  const [closeOpen, setCloseOpen] = useState(false);
 
   const today = useMemo(() => {
     const start = new Date(); start.setHours(0, 0, 0, 0);
@@ -81,6 +83,9 @@ function Index() {
             <Button variant="outline" size="sm" onClick={() => exportData({ sales, products, credits, rate })}>
               <FileSpreadsheet className="h-4 w-4 mr-1" />Excel
             </Button>
+            <Button size="sm" onClick={() => setCloseOpen(true)} className="bg-gradient-to-r from-primary to-accent text-primary-foreground font-display tracking-wider">
+              <Receipt className="h-4 w-4 mr-1" />Cerrar Caja
+            </Button>
             <Button variant={soundOn ? "default" : "outline"} size="icon" onClick={toggleSound}>
               {soundOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
             </Button>
@@ -117,6 +122,7 @@ function Index() {
       <footer className="text-center py-6 text-xs text-muted-foreground">
         💾 Datos guardados localmente · Exporta a Excel para respaldo
       </footer>
+      <CloseDayDialog open={closeOpen} onOpenChange={setCloseOpen} />
     </div>
   );
 }
