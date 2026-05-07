@@ -428,10 +428,16 @@ export const useStore = create<State>()(
       removeMember: (memberId) => set((s) => ({ members: s.members.filter((m) => m.id !== memberId) })),
 
       closeDay: () =>
-        set((s) => ({
-          sales: [],
-          consoles: s.consoles.map((c) => ({ ...c, session: undefined, charges: [] })),
-        })),
+        set((s) => {
+          const startOfToday = new Date();
+          startOfToday.setHours(0, 0, 0, 0);
+          // Keep historical sales (before today). Only clear TODAY's sales.
+          // Inventory (products), credits, members and consoles.totalMinutes are preserved.
+          return {
+            sales: s.sales.filter((sale) => sale.ts < startOfToday.getTime()),
+            consoles: s.consoles.map((c) => ({ ...c, session: undefined, charges: [] })),
+          };
+        }),
     }),
     { name: "gamerzone-store-v1" }
   )

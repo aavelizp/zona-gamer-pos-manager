@@ -114,8 +114,8 @@ export function CloseDayDialog({ open, onOpenChange }: Props) {
             <div className="flex items-start gap-2">
               <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
               <div className="text-sm">
-                <p className="font-bold">¿Finalizar el día?</p>
-                <p className="text-xs text-muted-foreground">Se descargará un Excel de respaldo automáticamente. Se reiniciarán: ventas del día, sesiones de consolas. Se conservarán: inventario, fiados, minutos históricos y tasa.</p>
+                <p className="font-bold">¿Estás seguro?</p>
+                <p className="text-xs text-muted-foreground">Se borrarán los datos de ventas de HOY. Asegúrate de haber descargado tu reporte primero. NO se tocarán: inventario, cuentas por cobrar, clientes del Club Gamer, ni los minutos acumulados históricos de las consolas.</p>
               </div>
             </div>
           </Card>
