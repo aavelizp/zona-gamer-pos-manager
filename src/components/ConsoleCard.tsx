@@ -4,11 +4,10 @@ import { playAlert } from "@/lib/sound";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Star, Gamepad2, Sparkles, Plus, Package, Clock, Coins, ShoppingBag, Wallet } from "lucide-react";
+import { Star, Gamepad2, Sparkles, Package, Coins, ShoppingBag } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 function useNow(intervalMs = 1000) {
   const [now, setNow] = useState(Date.now());
