@@ -111,9 +111,17 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
   const [method, setMethod] = useState<"full" | "mixed" | "credit">("full");
   const [cashUsd, setCashUsd] = useState("");
   const [mobileBs, setMobileBs] = useState("");
-  const [customer, setCustomer] = useState("");
+  const [name, setName] = useState("");
+  const [idDoc, setIdDoc] = useState("");
+  const [phone, setPhone] = useState("");
+  const [receipt, setReceipt] = useState<ReceiptData | null>(null);
 
-  useEffect(() => { if (open) { setMethod("full"); setCashUsd(""); setMobileBs(""); setCustomer(""); } }, [open]);
+  useEffect(() => {
+    if (open) {
+      setMethod("full"); setCashUsd(""); setMobileBs("");
+      setName(""); setIdDoc(""); setPhone(""); setReceipt(null);
+    }
+  }, [open]);
 
   const cashUsdN = parseFloat(cashUsd) || 0;
   const mobileBsN = parseFloat(mobileBs) || 0;
@@ -121,22 +129,38 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
   const paid = method === "full" ? total : method === "mixed" ? cashUsdN + mobileUsd : 0;
   const remaining = total - paid;
 
-  const submit = () => {
-    if (method === "credit" && !customer.trim()) return;
+  const buildReceipt = (): ReceiptData => ({
+    ts: Date.now(), rate, consoleName: consoleObj.name, minutes,
+    timeAmount,
+    items: [
+      ...(timeAmount > 0 ? [{ name: `Tiempo ${consoleObj.name} (${minutes} min)`, qty: 1, price: timeAmount }] : []),
+      ...consoleObj.charges.map((ch) => ({ name: ch.label, qty: 1, price: ch.amount })),
+    ],
+    total, method,
+    cashUsd: method === "full" ? total : method === "mixed" ? cashUsdN : 0,
+    mobileBs: method === "mixed" ? mobileBsN : 0,
+    customer: { name: name.trim() || "Consumidor Final", idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined },
+  });
+
+  const submit = (alsoReceipt: boolean) => {
+    if (method === "credit" && !name.trim()) return;
     if (method === "mixed" && remaining > 0.01) return;
+    const r = buildReceipt();
     finalize(consoleObj.id, {
       method,
       cashUsd: method === "full" ? total : method === "mixed" ? cashUsdN : 0,
       mobileBs: method === "mixed" ? mobileBsN : 0,
-      customer: method === "credit" ? customer.trim() : undefined,
+      customer: method === "credit" ? name.trim() : undefined,
+      customerInfo: name.trim() ? { name: name.trim(), idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined } : undefined,
       total, timeAmount, extrasAmount, minutes,
     });
-    onClose();
+    if (alsoReceipt) setReceipt(r); else onClose();
   };
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
+    <>
+    <Dialog open={open && !receipt} onOpenChange={onClose}>
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle className="font-display">Cobrar · {consoleObj.name}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <Card className="p-3 bg-secondary/40">
@@ -146,6 +170,26 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
             <div className="flex justify-between font-display text-lg"><span>TOTAL</span><span>{fmtUsd(total)}</span></div>
             <div className="flex justify-between text-sm text-accent"><span>En Bs</span><span>{fmtBs(total, rate)}</span></div>
           </Card>
+
+          <div className="space-y-2 border border-border rounded-md p-3 bg-background/40">
+            <p className="text-xs uppercase tracking-wider text-accent font-semibold">Datos del Cliente</p>
+            <div>
+              <Label className="text-xs">Nombre y Apellido</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Juan Pérez" />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs">Cédula/RIF</Label>
+                <Input value={idDoc} onChange={(e) => setIdDoc(e.target.value)} placeholder="V-12345678" />
+              </div>
+              <div>
+                <Label className="text-xs">Teléfono</Label>
+                <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="04141234567" />
+              </div>
+            </div>
+            {name.trim() && phone.trim() && <p className="text-[10px] text-success">✓ Cliente se sumará al Club Gamer</p>}
+          </div>
+
           <div className="grid grid-cols-3 gap-2">
             <Button variant={method === "full" ? "default" : "outline"} onClick={() => setMethod("full")}>Completo</Button>
             <Button variant={method === "mixed" ? "default" : "outline"} onClick={() => setMethod("mixed")}>Mixto</Button>
@@ -167,20 +211,19 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
               </div>
             </div>
           )}
-          {method === "credit" && (
-            <div>
-              <Label>Nombre del Cliente</Label>
-              <Input value={customer} onChange={(e) => setCustomer(e.target.value)} placeholder="Juan Pérez" />
-              {total > 10 && <p className="text-xs text-warning mt-1">⚠ Supera el límite sugerido de $10</p>}
-            </div>
-          )}
+          {method === "credit" && total > 10 && <p className="text-xs text-warning">⚠ Supera el límite sugerido de $10</p>}
         </div>
-        <DialogFooter>
+        <DialogFooter className="flex-wrap gap-2">
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={submit}>Confirmar Pago</Button>
+          <Button variant="secondary" onClick={() => submit(false)}>Confirmar</Button>
+          <Button onClick={() => submit(true)} className="bg-gradient-to-r from-primary to-accent">
+            <Receipt className="h-4 w-4 mr-1" />Generar Recibo
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <ReceiptDialog open={!!receipt} onClose={() => { setReceipt(null); onClose(); }} data={receipt} />
+    </>
   );
 }
 
