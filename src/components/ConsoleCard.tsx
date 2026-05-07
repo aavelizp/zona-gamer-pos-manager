@@ -236,17 +236,20 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
   const total = timeAmount + extrasAmount;
 
   const [method, setMethod] = useState<"full" | "mixed" | "credit">("full");
+  const [fullPayMode, setFullPayMode] = useState<"cash" | "mobile">("cash");
   const [cashUsd, setCashUsd] = useState("");
   const [mobileBs, setMobileBs] = useState("");
   const [name, setName] = useState("");
   const [idDoc, setIdDoc] = useState("");
   const [phone, setPhone] = useState("");
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
+  // Once true, on receipt close we finalize+release the console
+  const [pendingFinalize, setPendingFinalize] = useState(false);
 
   useEffect(() => {
     if (open) {
-      setMethod("full"); setCashUsd(""); setMobileBs("");
-      setName(""); setIdDoc(""); setPhone(""); setReceipt(null);
+      setMethod("full"); setFullPayMode("cash"); setCashUsd(""); setMobileBs("");
+      setName(""); setIdDoc(""); setPhone(""); setReceipt(null); setPendingFinalize(false);
     }
   }, [open]);
 
@@ -256,6 +259,10 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
   const paid = method === "full" ? total : method === "mixed" ? cashUsdN + mobileUsd : 0;
   const remaining = total - paid;
 
+  // Resolve cash/mobile breakdown for both store + receipt
+  const resolvedCashUsd = method === "full" ? (fullPayMode === "cash" ? total : 0) : method === "mixed" ? cashUsdN : 0;
+  const resolvedMobileBs = method === "full" ? (fullPayMode === "mobile" ? total * rate : 0) : method === "mixed" ? mobileBsN : 0;
+
   const buildReceipt = (): ReceiptData => ({
     ts: Date.now(), rate, consoleName: consoleObj.name, minutes,
     timeAmount,
@@ -264,29 +271,42 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
       ...consoleObj.charges.map((ch) => ({ name: ch.label, qty: 1, price: ch.amount })),
     ],
     total, method,
-    cashUsd: method === "full" ? total : method === "mixed" ? cashUsdN : 0,
-    mobileBs: method === "mixed" ? mobileBsN : 0,
+    cashUsd: resolvedCashUsd,
+    mobileBs: resolvedMobileBs,
     customer: { name: name.trim() || "Consumidor Final", idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined },
   });
 
-  const submit = (alsoReceipt: boolean) => {
-    if (method === "credit" && !name.trim()) return;
-    if (method === "mixed" && remaining > 0.01) return;
-    const r = buildReceipt();
+  const doFinalize = () => {
     finalize(consoleObj.id, {
       method,
-      cashUsd: method === "full" ? total : method === "mixed" ? cashUsdN : 0,
-      mobileBs: method === "mixed" ? mobileBsN : 0,
+      cashUsd: resolvedCashUsd,
+      mobileBs: resolvedMobileBs,
       customer: method === "credit" ? name.trim() : undefined,
       customerInfo: name.trim() ? { name: name.trim(), idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined } : undefined,
       total, timeAmount, extrasAmount, minutes,
     });
-    if (alsoReceipt) setReceipt(r); else onClose();
+  };
+
+  const submit = () => {
+    if (method === "credit" && !name.trim()) return;
+    if (method === "mixed" && remaining > 0.01) return;
+    // Open receipt; release console only when receipt is closed
+    setReceipt(buildReceipt());
+    setPendingFinalize(true);
+  };
+
+  const handleReceiptClose = () => {
+    setReceipt(null);
+    if (pendingFinalize) {
+      doFinalize();
+      setPendingFinalize(false);
+      onClose();
+    }
   };
 
   return (
     <>
-    <Dialog open={open && !receipt} onOpenChange={onClose}>
+    <Dialog open={open && !receipt} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle className="font-display">Cobrar · {consoleObj.name}</DialogTitle></DialogHeader>
         <div className="space-y-3">
@@ -298,30 +318,39 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
             <div className="flex justify-between text-sm text-accent"><span>En Bs</span><span>{fmtBs(total, rate)}</span></div>
           </Card>
 
-          <div className="space-y-2 border border-border rounded-md p-3 bg-background/40">
-            <p className="text-xs uppercase tracking-wider text-accent font-semibold">Datos del Cliente</p>
-            <div>
-              <Label className="text-xs">Nombre y Apellido</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Juan Pérez" />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label className="text-xs">Cédula/RIF</Label>
-                <Input value={idDoc} onChange={(e) => setIdDoc(e.target.value)} placeholder="V-12345678" />
-              </div>
-              <div>
-                <Label className="text-xs">Teléfono</Label>
-                <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="04141234567" />
-              </div>
-            </div>
-            {name.trim() && phone.trim() && <p className="text-[10px] text-success">✓ Cliente se sumará al Club Gamer</p>}
-          </div>
+          <CustomerSearch
+            name={name} idDoc={idDoc} phone={phone}
+            setName={setName} setIdDoc={setIdDoc} setPhone={setPhone}
+          />
 
           <div className="grid grid-cols-3 gap-2">
             <Button variant={method === "full" ? "default" : "outline"} onClick={() => setMethod("full")}>Completo</Button>
             <Button variant={method === "mixed" ? "default" : "outline"} onClick={() => setMethod("mixed")}>Mixto</Button>
             <Button variant={method === "credit" ? "default" : "outline"} onClick={() => setMethod("credit")}>Fiado</Button>
           </div>
+
+          {method === "full" && (
+            <div className="space-y-2 border border-border rounded-md p-3 bg-background/40">
+              <Label className="text-xs uppercase tracking-wider text-accent font-semibold">¿Cómo pagó?</Label>
+              <RadioGroup value={fullPayMode} onValueChange={(v) => setFullPayMode(v as "cash" | "mobile")} className="grid grid-cols-2 gap-2">
+                <label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "cash" ? "border-primary bg-primary/10" : "border-border"}`}>
+                  <RadioGroupItem value="cash" />
+                  <div>
+                    <p className="text-sm font-semibold">Efectivo $</p>
+                    <p className="text-[10px] text-muted-foreground">{fmtUsd(total)}</p>
+                  </div>
+                </label>
+                <label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "mobile" ? "border-primary bg-primary/10" : "border-border"}`}>
+                  <RadioGroupItem value="mobile" />
+                  <div>
+                    <p className="text-sm font-semibold">Pago Móvil Bs</p>
+                    <p className="text-[10px] text-muted-foreground">{fmtBs(total, rate)}</p>
+                  </div>
+                </label>
+              </RadioGroup>
+            </div>
+          )}
+
           {method === "mixed" && (
             <div className="space-y-2">
               <div>
@@ -339,17 +368,20 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
             </div>
           )}
           {method === "credit" && total > 10 && <p className="text-xs text-warning">⚠ Supera el límite sugerido de $10</p>}
+          {method === "credit" && !name.trim() && <p className="text-xs text-destructive">Debes seleccionar o crear un cliente para fiar.</p>}
         </div>
         <DialogFooter className="flex-wrap gap-2">
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button variant="secondary" onClick={() => submit(false)}>Confirmar</Button>
-          <Button onClick={() => submit(true)} className="bg-gradient-to-r from-primary to-accent">
-            <Receipt className="h-4 w-4 mr-1" />Generar Recibo
+          <Button onClick={submit} className="bg-gradient-to-r from-primary to-accent">
+            <Receipt className="h-4 w-4 mr-1" />Confirmar Pago
           </Button>
         </DialogFooter>
+        <p className="text-[10px] text-muted-foreground text-center">
+          La consola se liberará al cerrar el recibo digital.
+        </p>
       </DialogContent>
     </Dialog>
-    <ReceiptDialog open={!!receipt} onClose={() => { setReceipt(null); onClose(); }} data={receipt} />
+    <ReceiptDialog open={!!receipt} onClose={handleReceiptClose} data={receipt} />
     </>
   );
 }
