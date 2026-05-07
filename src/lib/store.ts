@@ -310,7 +310,7 @@ export const useStore = create<State>()(
             mobileBs: payload.mobileBs,
             rate: s.rate,
             method: payload.method,
-            customer: payload.customer,
+            customer: payload.customerInfo?.name || payload.customer,
             concept: "Consola",
             items: [
               ...(payload.timeAmount > 0
@@ -325,27 +325,64 @@ export const useStore = create<State>()(
                   ...s.credits,
                   {
                     id: uid(),
-                    customer: payload.customer || "Sin nombre",
+                    customer: payload.customerInfo?.name || payload.customer || "Sin nombre",
                     amount: payload.total,
                     createdAt: Date.now(),
                     note: c.name,
                   },
                 ]
               : s.credits;
+
+          // Loyalty: upsert member if customerInfo with name+phone provided
+          let newMembers = s.members;
+          const ci = payload.customerInfo;
+          if (ci && ci.name?.trim() && ci.phone?.trim()) {
+            const key = ci.phone.trim();
+            const existing = s.members.find((m) => m.phone === key);
+            if (existing) {
+              const newReward = existing.rewardMinutes + payload.minutes;
+              const earned = Math.floor(newReward / 600);
+              newMembers = s.members.map((m) =>
+                m.id === existing.id
+                  ? {
+                      ...m,
+                      name: ci.name.trim(),
+                      idDoc: ci.idDoc?.trim() || m.idDoc,
+                      totalMinutes: m.totalMinutes + payload.minutes,
+                      rewardMinutes: newReward - earned * 600,
+                      pendingRewards: m.pendingRewards + earned,
+                      lastVisit: Date.now(),
+                    }
+                  : m
+              );
+            } else {
+              const earned = Math.floor(payload.minutes / 600);
+              newMembers = [
+                ...s.members,
+                {
+                  id: uid(),
+                  name: ci.name.trim(),
+                  idDoc: ci.idDoc?.trim(),
+                  phone: key,
+                  totalMinutes: payload.minutes,
+                  rewardMinutes: payload.minutes - earned * 600,
+                  pendingRewards: earned,
+                  createdAt: Date.now(),
+                  lastVisit: Date.now(),
+                },
+              ];
+            }
+          }
+
           return {
             consoles: s.consoles.map((x) =>
               x.id === consoleId
-                ? {
-                    ...x,
-                    session: undefined,
-                    charges: [],
-                    totalMinutes: x.totalMinutes + payload.minutes,
-                  }
+                ? { ...x, session: undefined, charges: [], totalMinutes: x.totalMinutes + payload.minutes }
                 : x
             ),
-            // Don't add to today's cash if credit
             sales: payload.method === "credit" ? s.sales : [...s.sales, sale],
             credits: newCredits,
+            members: newMembers,
           };
         }),
 
