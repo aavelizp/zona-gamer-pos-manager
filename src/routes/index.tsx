@@ -10,6 +10,7 @@ import { InventoryTab, CombosTab } from "@/components/InventoryCombos";
 import { CreditsTab } from "@/components/CreditsTab";
 import { WaitQueue } from "@/components/WaitQueue";
 import { CloseDayDialog } from "@/components/CloseDayDialog";
+import { MembersTab } from "@/components/MembersTab";
 import { Volume2, VolumeX, FileSpreadsheet, Gamepad2, Receipt } from "lucide-react";
 
 export const Route = createFileRoute("/")({
