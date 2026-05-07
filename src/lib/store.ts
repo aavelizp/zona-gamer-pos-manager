@@ -122,6 +122,8 @@ interface State {
 
   enqueue: (e: Omit<QueueEntry, "id" | "ts">) => void;
   dequeue: (id: string) => void;
+
+  closeDay: () => void;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
