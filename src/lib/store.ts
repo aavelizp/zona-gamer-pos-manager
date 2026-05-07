@@ -356,6 +356,12 @@ export const useStore = create<State>()(
 
       enqueue: (e) => set((s) => ({ queue: [...s.queue, { ...e, id: uid(), ts: Date.now() }] })),
       dequeue: (id) => set((s) => ({ queue: s.queue.filter((q) => q.id !== id) })),
+
+      closeDay: () =>
+        set((s) => ({
+          sales: [],
+          consoles: s.consoles.map((c) => ({ ...c, session: undefined, charges: [] })),
+        })),
     }),
     { name: "gamerzone-store-v1" }
   )
