@@ -427,8 +427,6 @@ export const useStore = create<State>()(
         })),
       removeMember: (memberId) => set((s) => ({ members: s.members.filter((m) => m.id !== memberId) })),
 
-      dequeue: (id) => set((s) => ({ queue: s.queue.filter((q) => q.id !== id) })),
-
       closeDay: () =>
         set((s) => ({
           sales: [],
