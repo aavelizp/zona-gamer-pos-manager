@@ -122,6 +122,7 @@ function Index() {
       <footer className="text-center py-6 text-xs text-muted-foreground">
         💾 Datos guardados localmente · Exporta a Excel para respaldo
       </footer>
+      <CloseDayDialog open={closeOpen} onOpenChange={setCloseOpen} />
     </div>
   );
 }
