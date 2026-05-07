@@ -1,14 +1,140 @@
-import { useEffect, useMemo, useState } from "react";
-import { useStore, fmtUsd, fmtBs, computeTimeAmount, type ConsoleState } from "@/lib/store";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useStore, fmtUsd, fmtBs, computeTimeAmount, type ConsoleState, type Member } from "@/lib/store";
 import { playAlert } from "@/lib/sound";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Star, Gamepad2, Sparkles, Package, Coins, ShoppingBag, Receipt } from "lucide-react";
+import { Star, Gamepad2, Sparkles, Package, Coins, ShoppingBag, Receipt, Plus, Search, X } from "lucide-react";
 import { ReceiptDialog, type ReceiptData } from "@/components/Receipt";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+
+interface CustomerSearchProps {
+  name: string; idDoc: string; phone: string;
+  setName: (v: string) => void; setIdDoc: (v: string) => void; setPhone: (v: string) => void;
+}
+function CustomerSearch({ name, idDoc, phone, setName, setIdDoc, setPhone }: CustomerSearchProps) {
+  const members = useStore((s) => s.members);
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [selected, setSelected] = useState<Member | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return members.slice(0, 8);
+    return members.filter((m) =>
+      m.name.toLowerCase().includes(q) ||
+      (m.phone || "").includes(q) ||
+      (m.idDoc || "").toLowerCase().includes(q)
+    ).slice(0, 8);
+  }, [members, query]);
+
+  const pick = (m: Member) => {
+    setSelected(m); setName(m.name); setIdDoc(m.idDoc || ""); setPhone(m.phone || "");
+    setQuery(m.name); setOpen(false); setCreating(false);
+  };
+
+  const clear = () => {
+    setSelected(null); setName(""); setIdDoc(""); setPhone(""); setQuery(""); setCreating(false);
+  };
+
+  return (
+    <div className="space-y-2 border border-border rounded-md p-3 bg-background/40">
+      <div className="flex items-center justify-between">
+        <p className="text-xs uppercase tracking-wider text-accent font-semibold">Cliente</p>
+        {(selected || creating || name) && (
+          <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={clear}>
+            <X className="h-3 w-3 mr-1" />Limpiar
+          </Button>
+        )}
+      </div>
+
+      {!creating && (
+        <div ref={wrapRef} className="relative">
+          <div className="flex gap-1">
+            <div className="relative flex-1">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(e) => { setQuery(e.target.value); setOpen(true); if (selected) setSelected(null); }}
+                onFocus={() => setOpen(true)}
+                placeholder="Buscar cliente por nombre, teléfono o cédula..."
+                className="pl-7"
+              />
+            </div>
+            <Button type="button" size="icon" variant="outline" title="Cliente nuevo"
+              onClick={() => { setCreating(true); setOpen(false); setSelected(null); setName(query); setIdDoc(""); setPhone(""); }}>
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
+          {open && (
+            <div className="absolute z-50 mt-1 w-full bg-popover border border-border rounded-md shadow-lg max-h-56 overflow-auto">
+              {results.length === 0 ? (
+                <div className="p-2 text-xs text-muted-foreground">
+                  Sin coincidencias.{" "}
+                  <button type="button" className="text-primary underline"
+                    onClick={() => { setCreating(true); setOpen(false); setName(query); }}>
+                    Crear "{query}"
+                  </button>
+                </div>
+              ) : results.map((m) => (
+                <button key={m.id} type="button" onClick={() => pick(m)}
+                  className="w-full text-left px-3 py-2 hover:bg-accent/30 border-b border-border/40 last:border-0">
+                  <p className="text-sm font-semibold">{m.name}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {m.phone || "sin tel"} · {Math.round(m.totalMinutes / 60)}h
+                    {m.pendingRewards > 0 && <span className="text-gold"> · 🎁 {m.pendingRewards}</span>}
+                  </p>
+                </button>
+              ))}
+            </div>
+          )}
+          {selected && (
+            <p className="text-[10px] text-success mt-1">
+              ✓ {selected.name} · {Math.round(selected.totalMinutes / 60)}h en Club Gamer
+            </p>
+          )}
+        </div>
+      )}
+
+      {(creating || selected) && (
+        <div className="space-y-2">
+          {creating && (
+            <div>
+              <Label className="text-xs">Nombre y Apellido *</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Juan Pérez" autoFocus />
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="text-xs">Cédula/RIF</Label>
+              <Input value={idDoc} onChange={(e) => setIdDoc(e.target.value)} placeholder="V-12345678" />
+            </div>
+            <div>
+              <Label className="text-xs">Teléfono</Label>
+              <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="04141234567" />
+            </div>
+          </div>
+          {creating && name.trim() && phone.trim() && (
+            <p className="text-[10px] text-success">✓ Se creará en el Club Gamer al cobrar</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function useNow(intervalMs = 1000) {
   const [now, setNow] = useState(Date.now());
