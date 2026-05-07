@@ -118,6 +118,7 @@ function Index() {
           <TabsContent value="inventory"><InventoryTab /></TabsContent>
           <TabsContent value="combos"><CombosTab /></TabsContent>
           <TabsContent value="credits"><CreditsTab /></TabsContent>
+          <TabsContent value="club"><MembersTab /></TabsContent>
         </Tabs>
       </main>
 
