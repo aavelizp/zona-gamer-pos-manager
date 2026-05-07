@@ -417,6 +417,18 @@ export const useStore = create<State>()(
       enqueue: (e) => set((s) => ({ queue: [...s.queue, { ...e, id: uid(), ts: Date.now() }] })),
       dequeue: (id) => set((s) => ({ queue: s.queue.filter((q) => q.id !== id) })),
 
+      redeemReward: (memberId) =>
+        set((s) => ({
+          members: s.members.map((m) =>
+            m.id === memberId && m.pendingRewards > 0
+              ? { ...m, pendingRewards: m.pendingRewards - 1, rewardMinutes: 0 }
+              : m
+          ),
+        })),
+      removeMember: (memberId) => set((s) => ({ members: s.members.filter((m) => m.id !== memberId) })),
+
+      dequeue: (id) => set((s) => ({ queue: s.queue.filter((q) => q.id !== id) })),
+
       closeDay: () =>
         set((s) => ({
           sales: [],
