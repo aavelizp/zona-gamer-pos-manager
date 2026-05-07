@@ -75,6 +75,24 @@ export interface Credit {
   note?: string;
 }
 
+export interface CustomerInfo {
+  name: string;
+  idDoc?: string;
+  phone?: string;
+}
+
+export interface Member {
+  id: string;
+  name: string;
+  idDoc?: string;
+  phone?: string;
+  totalMinutes: number;     // historical accumulated minutes
+  rewardMinutes: number;    // minutes since last reward (resets on redeem)
+  pendingRewards: number;   // unredeemed gifts (1h each per 10h)
+  createdAt: number;
+  lastVisit: number;
+}
+
 export interface QueueEntry {
   id: string;
   name: string;
