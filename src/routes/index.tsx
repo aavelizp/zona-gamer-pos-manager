@@ -83,6 +83,9 @@ function Index() {
             <Button variant="outline" size="sm" onClick={() => exportData({ sales, products, credits, rate })}>
               <FileSpreadsheet className="h-4 w-4 mr-1" />Excel
             </Button>
+            <Button size="sm" onClick={() => setCloseOpen(true)} className="bg-gradient-to-r from-primary to-accent text-primary-foreground font-display tracking-wider">
+              <Receipt className="h-4 w-4 mr-1" />Cerrar Caja
+            </Button>
             <Button variant={soundOn ? "default" : "outline"} size="icon" onClick={toggleSound}>
               {soundOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
             </Button>
