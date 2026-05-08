@@ -11,6 +11,7 @@ import { CreditsTab } from "@/components/CreditsTab";
 import { WaitQueue } from "@/components/WaitQueue";
 import { CloseDayDialog } from "@/components/CloseDayDialog";
 import { MembersTab } from "@/components/MembersTab";
+import { MaintenanceTab } from "@/components/MaintenanceTab";
 import { Volume2, VolumeX, FileSpreadsheet, Gamepad2, Receipt } from "lucide-react";
 
 export const Route = createFileRoute("/")({
