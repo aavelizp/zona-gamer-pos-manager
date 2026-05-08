@@ -122,6 +122,7 @@ function Index() {
           <TabsContent value="combos"><CombosTab /></TabsContent>
           <TabsContent value="credits"><CreditsTab /></TabsContent>
           <TabsContent value="club"><MembersTab /></TabsContent>
+          <TabsContent value="maintenance"><MaintenanceTab /></TabsContent>
         </Tabs>
       </main>
 
