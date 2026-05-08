@@ -120,6 +120,7 @@ interface State {
   credits: Credit[];
   queue: QueueEntry[];
   members: Member[];
+  maintenanceLogs: MaintenanceLog[];
 
   // setters
   setRate: (n: number) => void;
