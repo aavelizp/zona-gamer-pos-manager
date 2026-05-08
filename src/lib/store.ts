@@ -391,7 +391,13 @@ export const useStore = create<State>()(
           return {
             consoles: s.consoles.map((x) =>
               x.id === consoleId
-                ? { ...x, session: undefined, charges: [], totalMinutes: x.totalMinutes + payload.minutes }
+                ? {
+                    ...x,
+                    session: undefined,
+                    charges: [],
+                    totalMinutes: x.totalMinutes + payload.minutes,
+                    maintenanceMinutes: (x.maintenanceMinutes || 0) + payload.minutes,
+                  }
                 : x
             ),
             sales: payload.method === "credit" ? s.sales : [...s.sales, sale],
