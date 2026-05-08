@@ -458,6 +458,26 @@ export const useStore = create<State>()(
             consoles: s.consoles.map((c) => ({ ...c, session: undefined, charges: [] })),
           };
         }),
+
+      registerMaintenance: (consoleId, description, date) =>
+        set((s) => {
+          const c = s.consoles.find((x) => x.id === consoleId);
+          if (!c) return s;
+          const log: MaintenanceLog = {
+            id: uid(),
+            consoleId: c.id,
+            consoleName: c.name,
+            description,
+            date,
+            minutesAtService: c.totalMinutes,
+          };
+          return {
+            consoles: s.consoles.map((x) =>
+              x.id === consoleId ? { ...x, maintenanceMinutes: 0 } : x
+            ),
+            maintenanceLogs: [log, ...s.maintenanceLogs],
+          };
+        }),
     }),
     { name: "gamerzone-store-v1" }
   )
