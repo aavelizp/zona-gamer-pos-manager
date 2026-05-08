@@ -11,6 +11,7 @@ import { CreditsTab } from "@/components/CreditsTab";
 import { WaitQueue } from "@/components/WaitQueue";
 import { CloseDayDialog } from "@/components/CloseDayDialog";
 import { MembersTab } from "@/components/MembersTab";
+import { MaintenanceTab } from "@/components/MaintenanceTab";
 import { Volume2, VolumeX, FileSpreadsheet, Gamepad2, Receipt } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -103,6 +104,7 @@ function Index() {
             <TabsTrigger value="combos">Combos</TabsTrigger>
             <TabsTrigger value="credits">Fiados {credits.length > 0 && <span className="ml-1 text-accent">({credits.length})</span>}</TabsTrigger>
             <TabsTrigger value="club">🏆 Club Gamer</TabsTrigger>
+            <TabsTrigger value="maintenance">🔧 Mantenimiento</TabsTrigger>
           </TabsList>
 
           <TabsContent value="dashboard">
@@ -120,6 +122,7 @@ function Index() {
           <TabsContent value="combos"><CombosTab /></TabsContent>
           <TabsContent value="credits"><CreditsTab /></TabsContent>
           <TabsContent value="club"><MembersTab /></TabsContent>
+          <TabsContent value="maintenance"><MaintenanceTab /></TabsContent>
         </Tabs>
       </main>
 

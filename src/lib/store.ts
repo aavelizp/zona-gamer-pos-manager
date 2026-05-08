@@ -43,8 +43,18 @@ export interface ConsoleState {
   type: ConsoleType;
   ratePerHour: number; // USD
   totalMinutes: number; // historical
+  maintenanceMinutes?: number; // minutes since last maintenance
   session?: ConsoleSession;
   charges: ExtraCharge[]; // snacks, combos extras
+}
+
+export interface MaintenanceLog {
+  id: string;
+  consoleId: string;
+  consoleName: string;
+  description: string;
+  date: number; // ms
+  minutesAtService: number;
 }
 
 export type PaymentMethod = "full" | "mixed" | "credit";
@@ -110,6 +120,7 @@ interface State {
   credits: Credit[];
   queue: QueueEntry[];
   members: Member[];
+  maintenanceLogs: MaintenanceLog[];
 
   // setters
   setRate: (n: number) => void;
@@ -146,6 +157,8 @@ interface State {
   removeMember: (memberId: string) => void;
 
   closeDay: () => void;
+
+  registerMaintenance: (consoleId: string, description: string, date: number) => void;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -175,6 +188,7 @@ export const useStore = create<State>()(
       credits: [],
       queue: [],
       members: [],
+      maintenanceLogs: [],
 
       setRate: (n) => set({ rate: Math.max(0, n) }),
       toggleSound: () => set((s) => ({ soundOn: !s.soundOn })),
@@ -377,7 +391,13 @@ export const useStore = create<State>()(
           return {
             consoles: s.consoles.map((x) =>
               x.id === consoleId
-                ? { ...x, session: undefined, charges: [], totalMinutes: x.totalMinutes + payload.minutes }
+                ? {
+                    ...x,
+                    session: undefined,
+                    charges: [],
+                    totalMinutes: x.totalMinutes + payload.minutes,
+                    maintenanceMinutes: (x.maintenanceMinutes || 0) + payload.minutes,
+                  }
                 : x
             ),
             sales: payload.method === "credit" ? s.sales : [...s.sales, sale],
@@ -436,6 +456,26 @@ export const useStore = create<State>()(
           return {
             sales: s.sales.filter((sale) => sale.ts < startOfToday.getTime()),
             consoles: s.consoles.map((c) => ({ ...c, session: undefined, charges: [] })),
+          };
+        }),
+
+      registerMaintenance: (consoleId, description, date) =>
+        set((s) => {
+          const c = s.consoles.find((x) => x.id === consoleId);
+          if (!c) return s;
+          const log: MaintenanceLog = {
+            id: uid(),
+            consoleId: c.id,
+            consoleName: c.name,
+            description,
+            date,
+            minutesAtService: c.totalMinutes,
+          };
+          return {
+            consoles: s.consoles.map((x) =>
+              x.id === consoleId ? { ...x, maintenanceMinutes: 0 } : x
+            ),
+            maintenanceLogs: [log, ...s.maintenanceLogs],
           };
         }),
     }),
