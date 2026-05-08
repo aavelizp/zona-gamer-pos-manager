@@ -43,8 +43,18 @@ export interface ConsoleState {
   type: ConsoleType;
   ratePerHour: number; // USD
   totalMinutes: number; // historical
+  maintenanceMinutes?: number; // minutes since last maintenance
   session?: ConsoleSession;
   charges: ExtraCharge[]; // snacks, combos extras
+}
+
+export interface MaintenanceLog {
+  id: string;
+  consoleId: string;
+  consoleName: string;
+  description: string;
+  date: number; // ms
+  minutesAtService: number;
 }
 
 export type PaymentMethod = "full" | "mixed" | "credit";
