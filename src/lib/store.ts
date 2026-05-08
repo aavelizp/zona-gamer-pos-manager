@@ -157,6 +157,8 @@ interface State {
   removeMember: (memberId: string) => void;
 
   closeDay: () => void;
+
+  registerMaintenance: (consoleId: string, description: string, date: number) => void;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
