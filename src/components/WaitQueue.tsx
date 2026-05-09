@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { useStore, type QueueEntry } from "@/lib/store";
 import { Button } from "@/components/ui/button";
