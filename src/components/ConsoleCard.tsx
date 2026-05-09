@@ -696,6 +696,7 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
       <SnackPicker consoleId={consoleObj.id} open={snackOpen} onClose={() => setSnackOpen(false)} />
       <ComboPicker consoleId={consoleObj.id} open={comboOpen} onClose={() => setComboOpen(false)} />
       <Checkout open={checkoutOpen} onClose={() => setCheckoutOpen(false)} consoleObj={consoleObj} />
+      <PrepayCheckout open={prepayOpen} onClose={() => setPrepayOpen(false)} consoleObj={consoleObj} />
     </Card>
   );
 }
