@@ -680,9 +680,15 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
                 ))}
               </div>
             )}
-            <Button className="w-full glow-primary" onClick={() => setCheckoutOpen(true)}>
-              <Coins className="h-4 w-4 mr-2" /> Cobrar {fmtUsd(total)}
-            </Button>
+            {session?.prepaid ? (
+              <Button className="w-full" variant="secondary" onClick={() => releaseConsole(consoleObj.id)}>
+                <Coins className="h-4 w-4 mr-2" /> Liberar (Prepagado · {session.prepaidMinutes} min)
+              </Button>
+            ) : (
+              <Button className="w-full glow-primary" onClick={() => setCheckoutOpen(true)}>
+                <Coins className="h-4 w-4 mr-2" /> Cobrar {fmtUsd(total)}
+              </Button>
+            )}
           </>
         )}
       </div>
