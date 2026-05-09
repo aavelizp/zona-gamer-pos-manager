@@ -26,6 +26,8 @@ export interface ConsoleSession {
   startedAt: number; // ms
   endsAt?: number;   // ms (for fixed)
   alerted?: boolean;
+  prepaid?: boolean; // true when paid up-front
+  prepaidMinutes?: number;
 }
 
 export interface ExtraCharge {
