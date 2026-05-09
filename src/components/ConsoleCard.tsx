@@ -405,6 +405,167 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
   );
 }
 
+interface PrepayProps {
+  open: boolean;
+  onClose: () => void;
+  consoleObj: ConsoleState;
+}
+function PrepayCheckout({ open, onClose, consoleObj }: PrepayProps) {
+  const rate = useStore((s) => s.rate);
+  const prepay = useStore((s) => s.prepaySession);
+
+  const [step, setStep] = useState<"time" | "pay">("time");
+  const [chosenMinutes, setChosenMinutes] = useState<number>(60);
+  const [method, setMethod] = useState<"full" | "mixed">("full");
+  const [fullPayMode, setFullPayMode] = useState<"cash" | "mobile">("cash");
+  const [cashUsd, setCashUsd] = useState("");
+  const [mobileBs, setMobileBs] = useState("");
+  const [billReceived, setBillReceived] = useState("");
+  const [name, setName] = useState("");
+  const [idDoc, setIdDoc] = useState("");
+  const [phone, setPhone] = useState("");
+  const [receipt, setReceipt] = useState<ReceiptData | null>(null);
+  const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setStep("time"); setChosenMinutes(60); setMethod("full"); setFullPayMode("cash");
+      setCashUsd(""); setMobileBs(""); setBillReceived("");
+      setName(""); setIdDoc(""); setPhone(""); setReceipt(null); setPending(false);
+    }
+  }, [open]);
+
+  const total = +(consoleObj.ratePerHour * (chosenMinutes / 60)).toFixed(2);
+  const cashUsdN = parseFloat(cashUsd) || 0;
+  const mobileBsN = parseFloat(mobileBs) || 0;
+  const mobileUsd = rate > 0 ? mobileBsN / rate : 0;
+  const paid = method === "full" ? total : cashUsdN + mobileUsd;
+  const remaining = total - paid;
+  const resolvedCashUsd = method === "full" ? (fullPayMode === "cash" ? total : 0) : cashUsdN;
+  const resolvedMobileBs = method === "full" ? (fullPayMode === "mobile" ? total * rate : 0) : mobileBsN;
+
+  const billN = parseFloat(billReceived) || 0;
+  const cashTarget = method === "full" && fullPayMode === "cash" ? total : method === "mixed" ? cashUsdN : 0;
+  const rawChange = billN - cashTarget;
+  const showBill = (method === "full" && fullPayMode === "cash") || (method === "mixed" && cashTarget > 0);
+  const changeDisplay = rawChange < 1 ? "$0 (Sin cambio en centavos)" : fmtUsd(rawChange);
+
+  const submit = () => {
+    if (method === "mixed" && remaining > 0.01) return;
+    setReceipt({
+      ts: Date.now(), rate, consoleName: consoleObj.name, minutes: chosenMinutes,
+      timeAmount: total,
+      items: [{ name: `Prepago ${consoleObj.name} (${chosenMinutes} min)`, qty: 1, price: total }],
+      total, method,
+      cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs,
+      customer: { name: name.trim() || "Consumidor Final", idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined },
+    });
+    setPending(true);
+  };
+
+  const handleReceiptClose = () => {
+    setReceipt(null);
+    if (pending) {
+      prepay(consoleObj.id, chosenMinutes, {
+        method, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, total,
+        customerInfo: name.trim() ? { name: name.trim(), idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined } : undefined,
+      });
+      setPending(false);
+      onClose();
+    }
+  };
+
+  return (
+    <>
+      <Dialog open={open && !receipt} onOpenChange={(o) => { if (!o) onClose(); }}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle className="font-display">Prepago · {consoleObj.name}</DialogTitle></DialogHeader>
+          {step === "time" ? (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">¿Cuánto tiempo va a jugar?</p>
+              <div className="grid grid-cols-2 gap-2">
+                {[30, 60, 90, 120].map((m) => (
+                  <Button key={m} variant={chosenMinutes === m ? "default" : "outline"} onClick={() => setChosenMinutes(m)}>
+                    {m >= 60 ? `${m / 60}h` : `${m} min`} · {fmtUsd(+(consoleObj.ratePerHour * (m / 60)).toFixed(2))}
+                  </Button>
+                ))}
+              </div>
+              <div>
+                <Label className="text-xs">Otro (minutos)</Label>
+                <Input type="number" min={5} step={5} value={chosenMinutes} onChange={(e) => setChosenMinutes(Math.max(5, parseInt(e.target.value) || 0))} />
+              </div>
+              <Card className="p-3 bg-secondary/40">
+                <div className="flex justify-between font-display text-lg"><span>TOTAL</span><span>{fmtUsd(total)}</span></div>
+                <div className="flex justify-between text-sm text-accent"><span>En Bs</span><span>{fmtBs(total, rate)}</span></div>
+              </Card>
+              <DialogFooter>
+                <Button variant="outline" onClick={onClose}>Cancelar</Button>
+                <Button onClick={() => setStep("pay")} disabled={chosenMinutes < 5 || total <= 0}>Continuar al pago</Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <Card className="p-3 bg-secondary/40">
+                <div className="flex justify-between text-sm"><span>Tiempo prepago</span><span>{chosenMinutes} min</span></div>
+                <div className="flex justify-between font-display text-lg"><span>TOTAL</span><span>{fmtUsd(total)}</span></div>
+                <div className="flex justify-between text-sm text-accent"><span>En Bs</span><span>{fmtBs(total, rate)}</span></div>
+              </Card>
+              <CustomerSearch
+                name={name} idDoc={idDoc} phone={phone}
+                setName={setName} setIdDoc={setIdDoc} setPhone={setPhone}
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant={method === "full" ? "default" : "outline"} onClick={() => setMethod("full")}>Completo</Button>
+                <Button variant={method === "mixed" ? "default" : "outline"} onClick={() => setMethod("mixed")}>Mixto</Button>
+              </div>
+              {method === "full" && (
+                <div className="grid grid-cols-2 gap-2">
+                  <Button size="sm" variant={fullPayMode === "cash" ? "default" : "outline"} onClick={() => setFullPayMode("cash")}>Efectivo $</Button>
+                  <Button size="sm" variant={fullPayMode === "mobile" ? "default" : "outline"} onClick={() => setFullPayMode("mobile")}>Pago Móvil Bs</Button>
+                </div>
+              )}
+              {method === "mixed" && (
+                <div className="space-y-2">
+                  <div><Label>Efectivo $</Label><Input type="number" step="0.01" value={cashUsd} onChange={(e) => setCashUsd(e.target.value)} /></div>
+                  <div>
+                    <Label>Pago Móvil Bs</Label>
+                    <Input type="number" step="0.01" value={mobileBs} onChange={(e) => setMobileBs(e.target.value)} />
+                    <p className="text-xs text-muted-foreground">≈ {fmtUsd(mobileUsd)}</p>
+                  </div>
+                  <div className={`text-sm ${Math.abs(remaining) < 0.01 ? "text-success" : remaining > 0 ? "text-warning" : "text-accent"}`}>
+                    Pagado: {fmtUsd(paid)} / {fmtUsd(total)} {paid + 0.01 >= total ? "✓" : `· Falta ${fmtUsd(Math.max(0, remaining))}`}
+                  </div>
+                </div>
+              )}
+              {showBill && cashTarget > 0 && (
+                <div className="space-y-1 border border-border rounded-md p-3 bg-background/40">
+                  <Label className="text-xs">Billete recibido ($)</Label>
+                  <Input type="number" step="0.01" value={billReceived} onChange={(e) => setBillReceived(e.target.value)} placeholder={cashTarget.toFixed(2)} />
+                  {billN > 0 && (
+                    <p className={`text-sm ${rawChange < 1 ? "text-muted-foreground" : "text-accent"}`}>
+                      Vuelto a entregar: <span className="font-display">{changeDisplay}</span>
+                    </p>
+                  )}
+                </div>
+              )}
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setStep("time")}>← Atrás</Button>
+                <Button onClick={submit} disabled={method === "mixed" && remaining > 0.01} className="bg-gradient-to-r from-primary to-accent">
+                  <Receipt className="h-4 w-4 mr-1" /> Cobrar y arrancar
+                </Button>
+              </DialogFooter>
+              <p className="text-[10px] text-muted-foreground text-center">
+                La consola arrancará al cerrar el recibo digital.
+              </p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+      <ReceiptDialog open={!!receipt} onClose={handleReceiptClose} data={receipt} />
+    </>
+  );
+}
+
 interface ConsoleCardProps { consoleObj: ConsoleState; suggested: boolean; }
 export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
   const rate = useStore((s) => s.rate);
