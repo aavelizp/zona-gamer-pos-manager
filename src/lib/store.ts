@@ -487,6 +487,79 @@ export const useStore = create<State>()(
             maintenanceLogs: [log, ...s.maintenanceLogs],
           };
         }),
+
+      prepaySession: (consoleId, minutes, payload) =>
+        set((s) => {
+          const c = s.consoles.find((x) => x.id === consoleId);
+          if (!c) return s;
+          const sale: SaleRecord = {
+            id: uid(),
+            ts: Date.now(),
+            consoleId: c.id,
+            consoleName: c.name,
+            minutes,
+            timeAmount: payload.total,
+            extrasAmount: 0,
+            total: payload.total,
+            cashUsd: payload.cashUsd,
+            mobileBs: payload.mobileBs,
+            rate: s.rate,
+            method: payload.method,
+            customer: payload.customerInfo?.name,
+            concept: "Consola",
+            items: [{ name: `Prepago ${c.name} (${minutes} min)`, qty: 1, price: payload.total }],
+          };
+          // Loyalty upsert (mirror finalizeConsole)
+          let newMembers = s.members;
+          const ci = payload.customerInfo;
+          if (ci && ci.name?.trim() && ci.phone?.trim()) {
+            const key = ci.phone.trim();
+            const existing = s.members.find((m) => m.phone === key);
+            if (existing) {
+              const newReward = existing.rewardMinutes + minutes;
+              const earned = Math.floor(newReward / 600);
+              newMembers = s.members.map((m) =>
+                m.id === existing.id
+                  ? { ...m, name: ci.name.trim(), idDoc: ci.idDoc?.trim() || m.idDoc,
+                      totalMinutes: m.totalMinutes + minutes,
+                      rewardMinutes: newReward - earned * 600,
+                      pendingRewards: m.pendingRewards + earned, lastVisit: Date.now() }
+                  : m
+              );
+            } else {
+              const earned = Math.floor(minutes / 600);
+              newMembers = [...s.members, {
+                id: uid(), name: ci.name.trim(), idDoc: ci.idDoc?.trim(), phone: key,
+                totalMinutes: minutes, rewardMinutes: minutes - earned * 600,
+                pendingRewards: earned, createdAt: Date.now(), lastVisit: Date.now(),
+              }];
+            }
+          }
+          return {
+            consoles: s.consoles.map((x) =>
+              x.id === consoleId
+                ? { ...x, session: { mode: "fixed", startedAt: Date.now(), endsAt: Date.now() + minutes * 60_000, prepaid: true, prepaidMinutes: minutes } }
+                : x
+            ),
+            sales: [...s.sales, sale],
+            members: newMembers,
+          };
+        }),
+
+      releaseConsole: (consoleId) =>
+        set((s) => ({
+          consoles: s.consoles.map((x) => {
+            if (x.id !== consoleId || !x.session) return x;
+            const mins = x.session.prepaidMinutes ?? 0;
+            return {
+              ...x,
+              session: undefined,
+              charges: [],
+              totalMinutes: x.totalMinutes + mins,
+              maintenanceMinutes: (x.maintenanceMinutes || 0) + mins,
+            };
+          }),
+        })),
     }),
     { name: "gamerzone-store-v1" }
   )
