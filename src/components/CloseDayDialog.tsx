@@ -72,6 +72,11 @@ export function CloseDayDialog({ open, onOpenChange }: Props) {
           <p className="text-xs text-muted-foreground">{new Date().toLocaleString("es-VE")} · Tasa: Bs {rate}/$</p>
         </DialogHeader>
 
+        <div ref={reportRef} className="space-y-4 p-4 bg-background rounded-md">
+          <div className="text-center pb-2 border-b border-border">
+            <h2 className="font-display text-xl">TWINS GAMER · Cierre de Caja</h2>
+            <p className="text-xs text-muted-foreground">{new Date().toLocaleString("es-VE")} · Tasa: Bs {rate}/$</p>
+          </div>
         {/* Total */}
         <Card className="p-4 bg-primary/10 border-primary/40">
           <div className="text-xs uppercase tracking-widest text-muted-foreground">Total Facturado Hoy</div>
