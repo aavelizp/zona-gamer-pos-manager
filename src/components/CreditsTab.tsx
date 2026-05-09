@@ -15,10 +15,14 @@ export function CreditsTab() {
   const [payingId, setPayingId] = useState<string | null>(null);
   const credit = credits.find((c) => c.id === payingId);
   const [method, setMethod] = useState<"full" | "mixed">("full");
+  const [fullPayMode, setFullPayMode] = useState<"cash" | "mobile">("cash");
   const [cashUsd, setCashUsd] = useState("");
   const [mobileBs, setMobileBs] = useState("");
+  const [billReceived, setBillReceived] = useState("");
 
-  useEffect(() => { setMethod("full"); setCashUsd(""); setMobileBs(""); }, [payingId]);
+  useEffect(() => {
+    setMethod("full"); setFullPayMode("cash"); setCashUsd(""); setMobileBs(""); setBillReceived("");
+  }, [payingId]);
 
   const total = credit?.amount ?? 0;
   const cashUsdN = parseFloat(cashUsd) || 0;
@@ -26,14 +30,24 @@ export function CreditsTab() {
   const mobileUsd = rate > 0 ? mobileBsN / rate : 0;
   const paid = method === "full" ? total : cashUsdN + mobileUsd;
   const remaining = total - paid;
+  const covered = paid + 0.01 >= total;
+
+  // Change calc for cash
+  const billN = parseFloat(billReceived) || 0;
+  const cashTarget = method === "full" && fullPayMode === "cash" ? total : method === "mixed" ? cashUsdN : 0;
+  const rawChange = billN - cashTarget;
+  const showChange = (method === "full" && fullPayMode === "cash") || (method === "mixed" && cashTarget > 0);
+  const changeDisplay = rawChange < 1 ? "$0 (Sin cambio en centavos)" : fmtUsd(rawChange);
 
   const submit = () => {
     if (!credit) return;
-    if (method === "mixed" && remaining > 0.01) return;
+    if (method === "mixed" && !covered) return;
+    const resolvedCashUsd = method === "full" ? (fullPayMode === "cash" ? total : 0) : cashUsdN;
+    const resolvedMobileBs = method === "full" ? (fullPayMode === "mobile" ? total * rate : 0) : mobileBsN;
     payCredit(credit.id, {
       method,
-      cashUsd: method === "full" ? total : cashUsdN,
-      mobileBs: method === "mixed" ? mobileBsN : 0,
+      cashUsd: resolvedCashUsd,
+      mobileBs: resolvedMobileBs,
       amount: total,
     });
     setPayingId(null);
@@ -78,6 +92,12 @@ export function CreditsTab() {
                 <Button variant={method === "full" ? "default" : "outline"} onClick={() => setMethod("full")}>Completo</Button>
                 <Button variant={method === "mixed" ? "default" : "outline"} onClick={() => setMethod("mixed")}>Mixto</Button>
               </div>
+              {method === "full" && (
+                <div className="grid grid-cols-2 gap-2">
+                  <Button size="sm" variant={fullPayMode === "cash" ? "default" : "outline"} onClick={() => setFullPayMode("cash")}>Efectivo $</Button>
+                  <Button size="sm" variant={fullPayMode === "mobile" ? "default" : "outline"} onClick={() => setFullPayMode("mobile")}>Pago Móvil Bs</Button>
+                </div>
+              )}
               {method === "mixed" && (
                 <div className="space-y-2">
                   <div><Label>Efectivo $</Label><Input type="number" step="0.01" value={cashUsd} onChange={(e) => setCashUsd(e.target.value)} /></div>
@@ -86,16 +106,27 @@ export function CreditsTab() {
                     <Input type="number" step="0.01" value={mobileBs} onChange={(e) => setMobileBs(e.target.value)} />
                     <p className="text-xs text-muted-foreground">≈ {fmtUsd(mobileUsd)}</p>
                   </div>
-                  <div className={`text-sm ${Math.abs(remaining) < 0.01 ? "text-success" : "text-warning"}`}>
-                    {remaining > 0.01 ? `Falta: ${fmtUsd(remaining)}` : remaining < -0.01 ? `Vuelto: ${fmtUsd(-remaining)}` : "Pago exacto ✓"}
+                  <div className={`text-sm ${covered ? "text-success" : "text-warning"}`}>
+                    Pagado: {fmtUsd(paid)} / {fmtUsd(total)} {covered ? "✓" : `· Falta ${fmtUsd(Math.max(0, remaining))}`}
                   </div>
+                </div>
+              )}
+              {showChange && cashTarget > 0 && (
+                <div className="space-y-1 border border-border rounded-md p-3 bg-background/40">
+                  <Label className="text-xs">Billete recibido ($)</Label>
+                  <Input type="number" step="0.01" value={billReceived} onChange={(e) => setBillReceived(e.target.value)} placeholder={cashTarget.toFixed(2)} />
+                  {billN > 0 && (
+                    <p className={`text-sm ${rawChange < 1 ? "text-muted-foreground" : "text-accent"}`}>
+                      Vuelto a entregar: <span className="font-display">{changeDisplay}</span>
+                    </p>
+                  )}
                 </div>
               )}
             </div>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setPayingId(null)}>Cancelar</Button>
-            <Button onClick={submit}>Confirmar</Button>
+            <Button onClick={submit} disabled={method === "mixed" && !covered}>Confirmar Pago</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

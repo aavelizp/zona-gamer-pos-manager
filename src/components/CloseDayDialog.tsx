@@ -1,11 +1,12 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useStore, fmtUsd, fmtBs } from "@/lib/store";
 import { exportData } from "@/lib/excel";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Card } from "@/components/ui/card";
-import { AlertTriangle, FileSpreadsheet, RotateCcw, Gamepad2, ShoppingBag, Banknote, Smartphone, HandCoins, Receipt } from "lucide-react";
+import { AlertTriangle, FileSpreadsheet, RotateCcw, Gamepad2, ShoppingBag, Banknote, Smartphone, HandCoins, Receipt, ImageDown } from "lucide-react";
 import { toast } from "sonner";
+import html2canvas from "html2canvas";
 
 interface Props {
   open: boolean;
@@ -19,6 +20,21 @@ export function CloseDayDialog({ open, onOpenChange }: Props) {
   const credits = useStore((s) => s.credits);
   const closeDay = useStore((s) => s.closeDay);
   const [confirming, setConfirming] = useState(false);
+  const reportRef = useRef<HTMLDivElement>(null);
+
+  const downloadImage = async () => {
+    if (!reportRef.current) return;
+    try {
+      const canvas = await html2canvas(reportRef.current, { backgroundColor: "#0a0a0a", scale: 2 });
+      const link = document.createElement("a");
+      link.download = `cierre-caja-${new Date().toISOString().slice(0, 10)}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+      toast.success("Imagen descargada");
+    } catch (e) {
+      toast.error("Error al generar la imagen");
+    }
+  };
 
   const report = useMemo(() => {
     const start = new Date(); start.setHours(0, 0, 0, 0);
@@ -56,6 +72,11 @@ export function CloseDayDialog({ open, onOpenChange }: Props) {
           <p className="text-xs text-muted-foreground">{new Date().toLocaleString("es-VE")} · Tasa: Bs {rate}/$</p>
         </DialogHeader>
 
+        <div ref={reportRef} className="space-y-4 p-4 bg-background rounded-md">
+          <div className="text-center pb-2 border-b border-border">
+            <h2 className="font-display text-xl">TWINS GAMER · Cierre de Caja</h2>
+            <p className="text-xs text-muted-foreground">{new Date().toLocaleString("es-VE")} · Tasa: Bs {rate}/$</p>
+          </div>
         {/* Total */}
         <Card className="p-4 bg-primary/10 border-primary/40">
           <div className="text-xs uppercase tracking-widest text-muted-foreground">Total Facturado Hoy</div>
@@ -108,6 +129,8 @@ export function CloseDayDialog({ open, onOpenChange }: Props) {
           <div className="text-sm">Efectivo $: <span className="font-display text-base">{fmtUsd(report.cashUsd)}</span></div>
           <div className="text-sm">Pago Móvil Bs: <span className="font-display text-base">Bs {report.mobileBs.toLocaleString("es-VE", { maximumFractionDigits: 2 })}</span></div>
         </Card>
+        </div>
+
 
         {confirming && (
           <Card className="p-3 border-destructive/60 bg-destructive/10">
@@ -123,7 +146,10 @@ export function CloseDayDialog({ open, onOpenChange }: Props) {
 
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => exportData({ sales: report.today, products, credits, rate })}>
-            <FileSpreadsheet className="h-4 w-4 mr-1" /> Descargar Excel
+            <FileSpreadsheet className="h-4 w-4 mr-1" /> Excel
+          </Button>
+          <Button variant="outline" onClick={downloadImage}>
+            <ImageDown className="h-4 w-4 mr-1" /> Descargar Resumen en Imagen
           </Button>
           {!confirming ? (
             <Button variant="destructive" onClick={() => setConfirming(true)}>
