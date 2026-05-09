@@ -20,6 +20,21 @@ export function CloseDayDialog({ open, onOpenChange }: Props) {
   const credits = useStore((s) => s.credits);
   const closeDay = useStore((s) => s.closeDay);
   const [confirming, setConfirming] = useState(false);
+  const reportRef = useRef<HTMLDivElement>(null);
+
+  const downloadImage = async () => {
+    if (!reportRef.current) return;
+    try {
+      const canvas = await html2canvas(reportRef.current, { backgroundColor: "#0a0a0a", scale: 2 });
+      const link = document.createElement("a");
+      link.download = `cierre-caja-${new Date().toISOString().slice(0, 10)}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+      toast.success("Imagen descargada");
+    } catch (e) {
+      toast.error("Error al generar la imagen");
+    }
+  };
 
   const report = useMemo(() => {
     const start = new Date(); start.setHours(0, 0, 0, 0);
