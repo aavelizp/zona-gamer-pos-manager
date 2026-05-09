@@ -578,6 +578,8 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
   const [snackOpen, setSnackOpen] = useState(false);
   const [comboOpen, setComboOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [prepayOpen, setPrepayOpen] = useState(false);
+  const releaseConsole = useStore((s) => s.releaseConsole);
 
   const isPS5 = consoleObj.type === "PS5";
   const session = consoleObj.session;
