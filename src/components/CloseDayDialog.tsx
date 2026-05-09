@@ -146,7 +146,10 @@ export function CloseDayDialog({ open, onOpenChange }: Props) {
 
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => exportData({ sales: report.today, products, credits, rate })}>
-            <FileSpreadsheet className="h-4 w-4 mr-1" /> Descargar Excel
+            <FileSpreadsheet className="h-4 w-4 mr-1" /> Excel
+          </Button>
+          <Button variant="outline" onClick={downloadImage}>
+            <ImageDown className="h-4 w-4 mr-1" /> Descargar Resumen en Imagen
           </Button>
           {!confirming ? (
             <Button variant="destructive" onClick={() => setConfirming(true)}>
