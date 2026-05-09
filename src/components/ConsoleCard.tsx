@@ -239,6 +239,7 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
   const [fullPayMode, setFullPayMode] = useState<"cash" | "mobile">("cash");
   const [cashUsd, setCashUsd] = useState("");
   const [mobileBs, setMobileBs] = useState("");
+  const [billReceived, setBillReceived] = useState("");
   const [name, setName] = useState("");
   const [idDoc, setIdDoc] = useState("");
   const [phone, setPhone] = useState("");
@@ -248,7 +249,7 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
 
   useEffect(() => {
     if (open) {
-      setMethod("full"); setFullPayMode("cash"); setCashUsd(""); setMobileBs("");
+      setMethod("full"); setFullPayMode("cash"); setCashUsd(""); setMobileBs(""); setBillReceived("");
       setName(""); setIdDoc(""); setPhone(""); setReceipt(null); setPendingFinalize(false);
     }
   }, [open]);
@@ -262,6 +263,13 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
   // Resolve cash/mobile breakdown for both store + receipt
   const resolvedCashUsd = method === "full" ? (fullPayMode === "cash" ? total : 0) : method === "mixed" ? cashUsdN : 0;
   const resolvedMobileBs = method === "full" ? (fullPayMode === "mobile" ? total * rate : 0) : method === "mixed" ? mobileBsN : 0;
+
+  // Change calc
+  const billN = parseFloat(billReceived) || 0;
+  const cashTarget = method === "full" && fullPayMode === "cash" ? total : method === "mixed" ? cashUsdN : 0;
+  const rawChange = billN - cashTarget;
+  const showBill = (method === "full" && fullPayMode === "cash") || (method === "mixed" && cashTarget > 0);
+  const changeDisplay = rawChange < 1 ? "$0 (Sin cambio en centavos)" : fmtUsd(rawChange);
 
   const buildReceipt = (): ReceiptData => ({
     ts: Date.now(), rate, consoleName: consoleObj.name, minutes,
