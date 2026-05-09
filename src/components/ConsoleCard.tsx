@@ -651,10 +651,15 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
         </div>
 
         {!occupied ? (
-          <div className="grid grid-cols-3 gap-2">
-            <Button size="sm" variant="outline" onClick={() => startSession(consoleObj.id)}>Libre</Button>
-            <Button size="sm" onClick={() => startSession(consoleObj.id, 30)}>30 min</Button>
-            <Button size="sm" onClick={() => startSession(consoleObj.id, 60)}>1 hora</Button>
+          <div className="space-y-2">
+            <div className="grid grid-cols-3 gap-2">
+              <Button size="sm" variant="outline" onClick={() => startSession(consoleObj.id)}>Libre</Button>
+              <Button size="sm" onClick={() => startSession(consoleObj.id, 30)}>30 min</Button>
+              <Button size="sm" onClick={() => startSession(consoleObj.id, 60)}>1 hora</Button>
+            </div>
+            <Button size="sm" className="w-full bg-gradient-to-r from-accent to-primary text-primary-foreground font-semibold" onClick={() => setPrepayOpen(true)}>
+              <Coins className="h-4 w-4 mr-1" /> Prepago (cobrar antes)
+            </Button>
           </div>
         ) : (
           <>
