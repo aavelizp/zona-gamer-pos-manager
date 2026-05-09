@@ -375,6 +375,17 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
               </div>
             </div>
           )}
+          {showBill && cashTarget > 0 && (
+            <div className="space-y-1 border border-border rounded-md p-3 bg-background/40">
+              <Label className="text-xs">Billete recibido ($)</Label>
+              <Input type="number" step="0.01" value={billReceived} onChange={(e) => setBillReceived(e.target.value)} placeholder={cashTarget.toFixed(2)} />
+              {billN > 0 && (
+                <p className={`text-sm ${rawChange < 1 ? "text-muted-foreground" : "text-accent"}`}>
+                  Vuelto a entregar: <span className="font-display">{changeDisplay}</span>
+                </p>
+              )}
+            </div>
+          )}
           {method === "credit" && total > 10 && <p className="text-xs text-warning">⚠ Supera el límite sugerido de $10</p>}
           {method === "credit" && !name.trim() && <p className="text-xs text-destructive">Debes seleccionar o crear un cliente para fiar.</p>}
         </div>
