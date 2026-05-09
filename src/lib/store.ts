@@ -161,6 +161,13 @@ interface State {
   closeDay: () => void;
 
   registerMaintenance: (consoleId: string, description: string, date: number) => void;
+
+  prepaySession: (
+    consoleId: string,
+    minutes: number,
+    payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; total: number; customerInfo?: CustomerInfo }
+  ) => void;
+  releaseConsole: (consoleId: string) => void;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
