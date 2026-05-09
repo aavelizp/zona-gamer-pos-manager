@@ -129,6 +129,8 @@ export function CloseDayDialog({ open, onOpenChange }: Props) {
           <div className="text-sm">Efectivo $: <span className="font-display text-base">{fmtUsd(report.cashUsd)}</span></div>
           <div className="text-sm">Pago Móvil Bs: <span className="font-display text-base">Bs {report.mobileBs.toLocaleString("es-VE", { maximumFractionDigits: 2 })}</span></div>
         </Card>
+        </div>
+
 
         {confirming && (
           <Card className="p-3 border-destructive/60 bg-destructive/10">
