@@ -28,6 +28,7 @@ export interface ConsoleSession {
   alerted?: boolean;
   prepaid?: boolean; // true when paid up-front
   prepaidMinutes?: number;
+  customerName?: string;
 }
 
 export interface ExtraCharge {
@@ -135,7 +136,7 @@ interface State {
   addCombo: (c: Omit<Combo, "id">) => void;
   removeCombo: (id: string) => void;
 
-  startSession: (consoleId: string, minutes?: number) => void;
+  startSession: (consoleId: string, minutes?: number, customerName?: string) => void;
   extendSession: (consoleId: string, addMinutes: number) => void;
   markAlerted: (consoleId: string) => void;
 
@@ -165,9 +166,13 @@ interface State {
   prepaySession: (
     consoleId: string,
     minutes: number,
-    payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; total: number; customerInfo?: CustomerInfo }
+    payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; total: number; customerInfo?: CustomerInfo; comboId?: string }
   ) => void;
-  releaseConsole: (consoleId: string) => void;
+  releaseConsole: (consoleId: string) => boolean;
+  payExtras: (
+    consoleId: string,
+    payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; total: number; customer?: string }
+  ) => void;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -210,7 +215,7 @@ export const useStore = create<State>()(
       addCombo: (c) => set((s) => ({ combos: [...s.combos, { ...c, id: uid() }] })),
       removeCombo: (id) => set((s) => ({ combos: s.combos.filter((c) => c.id !== id) })),
 
-      startSession: (consoleId, minutes) =>
+      startSession: (consoleId, minutes, customerName) =>
         set((s) => ({
           consoles: s.consoles.map((c) =>
             c.id === consoleId
@@ -220,6 +225,7 @@ export const useStore = create<State>()(
                     mode: minutes ? "fixed" : "free",
                     startedAt: Date.now(),
                     endsAt: minutes ? Date.now() + minutes * 60_000 : undefined,
+                    customerName,
                   },
                 }
               : c
@@ -492,24 +498,37 @@ export const useStore = create<State>()(
         set((s) => {
           const c = s.consoles.find((x) => x.id === consoleId);
           if (!c) return s;
+          const combo = payload.comboId ? s.combos.find((cm) => cm.id === payload.comboId) : undefined;
+
+          // Stock check + deduction for combo
+          let newProducts = s.products;
+          const items: SaleRecord["items"] = [];
+          if (combo) {
+            for (const it of combo.items) {
+              const p = s.products.find((pp) => pp.id === it.productId);
+              if (!p || p.stock < it.qty) return s;
+            }
+            newProducts = s.products.map((p) => {
+              const it = combo.items.find((i) => i.productId === p.id);
+              return it ? { ...p, stock: p.stock - it.qty } : p;
+            });
+            items.push({ name: `Combo: ${combo.name} - ${c.name} (${minutes} min)`, qty: 1, price: payload.total });
+            for (const it of combo.items) {
+              const p = s.products.find((pp) => pp.id === it.productId);
+              if (p) items.push({ name: `  · ${p.name}`, qty: it.qty, price: 0 });
+            }
+          } else {
+            items.push({ name: `Prepago ${c.name} (${minutes} min)`, qty: 1, price: payload.total });
+          }
+
           const sale: SaleRecord = {
-            id: uid(),
-            ts: Date.now(),
-            consoleId: c.id,
-            consoleName: c.name,
-            minutes,
-            timeAmount: payload.total,
-            extrasAmount: 0,
-            total: payload.total,
-            cashUsd: payload.cashUsd,
-            mobileBs: payload.mobileBs,
-            rate: s.rate,
-            method: payload.method,
-            customer: payload.customerInfo?.name,
-            concept: "Consola",
-            items: [{ name: `Prepago ${c.name} (${minutes} min)`, qty: 1, price: payload.total }],
+            id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, minutes,
+            timeAmount: payload.total, extrasAmount: 0, total: payload.total,
+            cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, rate: s.rate,
+            method: payload.method, customer: payload.customerInfo?.name,
+            concept: "Consola", items,
           };
-          // Loyalty upsert (mirror finalizeConsole)
+          // Loyalty upsert
           let newMembers = s.members;
           const ci = payload.customerInfo;
           if (ci && ci.name?.trim() && ci.phone?.trim()) {
@@ -536,9 +555,10 @@ export const useStore = create<State>()(
             }
           }
           return {
+            products: newProducts,
             consoles: s.consoles.map((x) =>
               x.id === consoleId
-                ? { ...x, session: { mode: "fixed", startedAt: Date.now(), endsAt: Date.now() + minutes * 60_000, prepaid: true, prepaidMinutes: minutes } }
+                ? { ...x, session: { mode: "fixed", startedAt: Date.now(), endsAt: Date.now() + minutes * 60_000, prepaid: true, prepaidMinutes: minutes, customerName: ci?.name?.trim() } }
                 : x
             ),
             sales: [...s.sales, sale],
@@ -546,20 +566,46 @@ export const useStore = create<State>()(
           };
         }),
 
-      releaseConsole: (consoleId) =>
-        set((s) => ({
-          consoles: s.consoles.map((x) => {
-            if (x.id !== consoleId || !x.session) return x;
-            const mins = x.session.prepaidMinutes ?? 0;
-            return {
-              ...x,
-              session: undefined,
-              charges: [],
-              totalMinutes: x.totalMinutes + mins,
-              maintenanceMinutes: (x.maintenanceMinutes || 0) + mins,
-            };
-          }),
-        })),
+      releaseConsole: (consoleId) => {
+        const s = get();
+        const c = s.consoles.find((x) => x.id === consoleId);
+        if (!c || !c.session) return false;
+        const pendingExtras = c.charges.reduce((a, ch) => a + ch.amount, 0);
+        if (pendingExtras > 0.001) return false;
+        const mins = c.session.prepaidMinutes ?? 0;
+        set({
+          consoles: s.consoles.map((x) =>
+            x.id === consoleId
+              ? { ...x, session: undefined, charges: [],
+                  totalMinutes: x.totalMinutes + mins,
+                  maintenanceMinutes: (x.maintenanceMinutes || 0) + mins }
+              : x
+          ),
+        });
+        return true;
+      },
+
+      payExtras: (consoleId, payload) =>
+        set((s) => {
+          const c = s.consoles.find((x) => x.id === consoleId);
+          if (!c || c.charges.length === 0) return s;
+          const sale: SaleRecord = {
+            id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name,
+            minutes: 0, timeAmount: 0, extrasAmount: payload.total, total: payload.total,
+            cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, rate: s.rate,
+            method: payload.method, customer: payload.customer,
+            concept: "Adicionales",
+            items: c.charges.map((ch) => ({ name: ch.label, qty: 1, price: ch.amount })),
+          };
+          const newCredits = payload.method === "credit"
+            ? [...s.credits, { id: uid(), customer: payload.customer || "Sin nombre", amount: payload.total, createdAt: Date.now(), note: `Adicionales ${c.name}` }]
+            : s.credits;
+          return {
+            consoles: s.consoles.map((x) => x.id === consoleId ? { ...x, charges: [] } : x),
+            sales: payload.method === "credit" ? s.sales : [...s.sales, sale],
+            credits: newCredits,
+          };
+        }),
     }),
     { name: "gamerzone-store-v1" }
   )

@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Card } from "@/components/ui/card";
 import { AlertTriangle, FileSpreadsheet, RotateCcw, Gamepad2, ShoppingBag, Banknote, Smartphone, HandCoins, Receipt, ImageDown } from "lucide-react";
 import { toast } from "sonner";
-import html2canvas from "html2canvas";
+import { toPng } from "html-to-image";
 
 interface Props {
   open: boolean;
@@ -20,19 +20,31 @@ export function CloseDayDialog({ open, onOpenChange }: Props) {
   const credits = useStore((s) => s.credits);
   const closeDay = useStore((s) => s.closeDay);
   const [confirming, setConfirming] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
 
   const downloadImage = async () => {
     if (!reportRef.current) return;
+    setDownloading(true);
     try {
-      const canvas = await html2canvas(reportRef.current, { backgroundColor: "#0a0a0a", scale: 2 });
+      // Wait a frame so layout is stable
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+      const dataUrl = await toPng(reportRef.current, {
+        backgroundColor: "#ffffff",
+        pixelRatio: 2,
+        cacheBust: true,
+      });
       const link = document.createElement("a");
-      link.download = `cierre-caja-${new Date().toISOString().slice(0, 10)}.png`;
-      link.href = canvas.toDataURL("image/png");
+      const date = new Date().toISOString().slice(0, 10);
+      link.download = `Cierre_Caja_${date}.png`;
+      link.href = dataUrl;
       link.click();
       toast.success("Imagen descargada");
     } catch (e) {
+      console.error(e);
       toast.error("Error al generar la imagen");
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -72,63 +84,62 @@ export function CloseDayDialog({ open, onOpenChange }: Props) {
           <p className="text-xs text-muted-foreground">{new Date().toLocaleString("es-VE")} · Tasa: Bs {rate}/$</p>
         </DialogHeader>
 
-        <div ref={reportRef} className="space-y-4 p-4 bg-background rounded-md">
-          <div className="text-center pb-2 border-b border-border">
-            <h2 className="font-display text-xl">TWINS GAMER · Cierre de Caja</h2>
-            <p className="text-xs text-muted-foreground">{new Date().toLocaleString("es-VE")} · Tasa: Bs {rate}/$</p>
+        <div ref={reportRef} style={{ backgroundColor: "#ffffff", color: "#0f172a", padding: "20px", borderRadius: 8, fontFamily: "Hind, system-ui, sans-serif" }}>
+          <div style={{ textAlign: "center", paddingBottom: 12, borderBottom: "2px solid #0f172a", marginBottom: 16 }}>
+            <h2 style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 24, margin: 0, color: "#0f172a" }}>RESUMEN DE CIERRE DIARIO · TWINS GAMER</h2>
+            <p style={{ fontSize: 12, margin: "4px 0 0", color: "#475569" }}>{new Date().toLocaleString("es-VE")} · Tasa: Bs {rate}/$</p>
           </div>
-        {/* Total */}
-        <Card className="p-4 bg-primary/10 border-primary/40">
-          <div className="text-xs uppercase tracking-widest text-muted-foreground">Total Facturado Hoy</div>
-          <div className="font-display text-3xl text-primary">{fmtUsd(report.totalUsd)}</div>
-          <div className="text-accent">{fmtBs(report.totalUsd, rate)}</div>
-        </Card>
 
-        {/* Por categoría */}
-        <div className="grid sm:grid-cols-2 gap-3">
-          <Card className="p-3">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground"><Gamepad2 className="h-4 w-4" /> Horas de Juego</div>
-            <div className="font-display text-xl">{fmtUsd(report.horasUsd)}</div>
-            <div className="text-xs text-accent">{fmtBs(report.horasUsd, rate)}</div>
-          </Card>
-          <Card className="p-3">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground"><ShoppingBag className="h-4 w-4" /> Inventario / Snacks</div>
-            <div className="font-display text-xl">{fmtUsd(report.inventarioUsd)}</div>
-            <div className="text-xs text-accent">{fmtBs(report.inventarioUsd, rate)}</div>
-          </Card>
-        </div>
-
-        {/* Arqueo por método */}
-        <div>
-          <h3 className="font-display text-sm uppercase tracking-widest text-muted-foreground mb-2">Arqueo por Método de Pago</h3>
-          <div className="grid sm:grid-cols-2 gap-3">
-            <Card className="p-3 border-green-500/30">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground"><Banknote className="h-4 w-4 text-green-500" /> Efectivo en Caja ($)</div>
-              <div className="font-display text-xl text-green-500">{fmtUsd(report.cashUsd)}</div>
-            </Card>
-            <Card className="p-3 border-blue-500/30">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground"><Smartphone className="h-4 w-4 text-blue-400" /> Pago Móvil / Transferencia (Bs)</div>
-              <div className="font-display text-xl text-blue-400">Bs {report.mobileBs.toLocaleString("es-VE", { maximumFractionDigits: 2 })}</div>
-              <div className="text-xs text-muted-foreground">≈ {fmtUsd(report.mobileBs / (rate || 1))}</div>
-            </Card>
-            <Card className="p-3 border-amber-500/30">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground"><HandCoins className="h-4 w-4 text-amber-500" /> Fiado Otorgado Hoy</div>
-              <div className="font-display text-xl text-amber-500">{fmtUsd(report.fiadoHoy)}</div>
-              <div className="text-xs text-muted-foreground">No está en caja</div>
-            </Card>
-            <Card className="p-3 border-emerald-500/30">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground"><Receipt className="h-4 w-4 text-emerald-500" /> Deudas Recuperadas Hoy</div>
-              <div className="font-display text-xl text-emerald-500">{fmtUsd(report.deudasCobradas)}</div>
-            </Card>
+          {/* Total */}
+          <div style={{ padding: 16, borderRadius: 8, backgroundColor: "#eff6ff", border: "2px solid #3b82f6", marginBottom: 12 }}>
+            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 2, color: "#475569" }}>Total Facturado Hoy</div>
+            <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 32, color: "#1d4ed8" }}>{fmtUsd(report.totalUsd)}</div>
+            <div style={{ color: "#0e7490" }}>{fmtBs(report.totalUsd, rate)}</div>
           </div>
-        </div>
 
-        {/* Cuadre */}
-        <Card className="p-3 bg-secondary/30">
-          <div className="text-xs uppercase tracking-widest text-muted-foreground mb-1">Total Esperado en Caja</div>
-          <div className="text-sm">Efectivo $: <span className="font-display text-base">{fmtUsd(report.cashUsd)}</span></div>
-          <div className="text-sm">Pago Móvil Bs: <span className="font-display text-base">Bs {report.mobileBs.toLocaleString("es-VE", { maximumFractionDigits: 2 })}</span></div>
-        </Card>
+          {/* Por categoría */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+            <div style={{ padding: 12, borderRadius: 8, border: "1px solid #cbd5e1", backgroundColor: "#f8fafc" }}>
+              <div style={{ fontSize: 11, color: "#475569" }}>🎮 Horas de Juego</div>
+              <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 20, color: "#0f172a" }}>{fmtUsd(report.horasUsd)}</div>
+              <div style={{ fontSize: 11, color: "#0e7490" }}>{fmtBs(report.horasUsd, rate)}</div>
+            </div>
+            <div style={{ padding: 12, borderRadius: 8, border: "1px solid #cbd5e1", backgroundColor: "#f8fafc" }}>
+              <div style={{ fontSize: 11, color: "#475569" }}>🛍️ Inventario / Snacks</div>
+              <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 20, color: "#0f172a" }}>{fmtUsd(report.inventarioUsd)}</div>
+              <div style={{ fontSize: 11, color: "#0e7490" }}>{fmtBs(report.inventarioUsd, rate)}</div>
+            </div>
+          </div>
+
+          {/* Arqueo */}
+          <h3 style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 13, textTransform: "uppercase", letterSpacing: 2, color: "#475569", margin: "12px 0 8px" }}>Arqueo por Método de Pago</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+            <div style={{ padding: 12, borderRadius: 8, border: "1px solid #22c55e", backgroundColor: "#f0fdf4" }}>
+              <div style={{ fontSize: 11, color: "#475569" }}>💵 Efectivo en Caja ($)</div>
+              <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 20, color: "#15803d" }}>{fmtUsd(report.cashUsd)}</div>
+            </div>
+            <div style={{ padding: 12, borderRadius: 8, border: "1px solid #3b82f6", backgroundColor: "#eff6ff" }}>
+              <div style={{ fontSize: 11, color: "#475569" }}>📱 Pago Móvil / Transferencia (Bs)</div>
+              <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 20, color: "#1d4ed8" }}>Bs {report.mobileBs.toLocaleString("es-VE", { maximumFractionDigits: 2 })}</div>
+              <div style={{ fontSize: 11, color: "#475569" }}>≈ {fmtUsd(report.mobileBs / (rate || 1))}</div>
+            </div>
+            <div style={{ padding: 12, borderRadius: 8, border: "1px solid #f59e0b", backgroundColor: "#fffbeb" }}>
+              <div style={{ fontSize: 11, color: "#475569" }}>🤝 Fiado Otorgado Hoy</div>
+              <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 20, color: "#b45309" }}>{fmtUsd(report.fiadoHoy)}</div>
+              <div style={{ fontSize: 11, color: "#475569" }}>No está en caja</div>
+            </div>
+            <div style={{ padding: 12, borderRadius: 8, border: "1px solid #10b981", backgroundColor: "#ecfdf5" }}>
+              <div style={{ fontSize: 11, color: "#475569" }}>🧾 Deudas Recuperadas Hoy</div>
+              <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 20, color: "#047857" }}>{fmtUsd(report.deudasCobradas)}</div>
+            </div>
+          </div>
+
+          {/* Cuadre */}
+          <div style={{ padding: 12, borderRadius: 8, border: "1px solid #cbd5e1", backgroundColor: "#f1f5f9" }}>
+            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 2, color: "#475569", marginBottom: 4 }}>Total Esperado en Caja</div>
+            <div style={{ fontSize: 13, color: "#0f172a" }}>Efectivo $: <span style={{ fontFamily: "'Archivo Black', sans-serif" }}>{fmtUsd(report.cashUsd)}</span></div>
+            <div style={{ fontSize: 13, color: "#0f172a" }}>Pago Móvil Bs: <span style={{ fontFamily: "'Archivo Black', sans-serif" }}>Bs {report.mobileBs.toLocaleString("es-VE", { maximumFractionDigits: 2 })}</span></div>
+          </div>
         </div>
 
 
@@ -148,8 +159,8 @@ export function CloseDayDialog({ open, onOpenChange }: Props) {
           <Button variant="outline" onClick={() => exportData({ sales: report.today, products, credits, rate })}>
             <FileSpreadsheet className="h-4 w-4 mr-1" /> Excel
           </Button>
-          <Button variant="outline" onClick={downloadImage}>
-            <ImageDown className="h-4 w-4 mr-1" /> Descargar Resumen en Imagen
+          <Button variant="outline" onClick={downloadImage} disabled={downloading}>
+            <ImageDown className="h-4 w-4 mr-1" /> {downloading ? "Generando..." : "Descargar Resumen (Imagen)"}
           </Button>
           {!confirming ? (
             <Button variant="destructive" onClick={() => setConfirming(true)}>
