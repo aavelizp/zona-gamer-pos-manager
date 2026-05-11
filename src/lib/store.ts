@@ -136,7 +136,7 @@ interface State {
   addCombo: (c: Omit<Combo, "id">) => void;
   removeCombo: (id: string) => void;
 
-  startSession: (consoleId: string, minutes?: number) => void;
+  startSession: (consoleId: string, minutes?: number, customerName?: string) => void;
   extendSession: (consoleId: string, addMinutes: number) => void;
   markAlerted: (consoleId: string) => void;
 
@@ -166,9 +166,13 @@ interface State {
   prepaySession: (
     consoleId: string,
     minutes: number,
-    payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; total: number; customerInfo?: CustomerInfo }
+    payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; total: number; customerInfo?: CustomerInfo; comboId?: string }
   ) => void;
-  releaseConsole: (consoleId: string) => void;
+  releaseConsole: (consoleId: string) => boolean;
+  payExtras: (
+    consoleId: string,
+    payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; total: number; customer?: string }
+  ) => void;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
