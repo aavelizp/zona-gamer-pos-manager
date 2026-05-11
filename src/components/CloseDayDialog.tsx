@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Card } from "@/components/ui/card";
 import { AlertTriangle, FileSpreadsheet, RotateCcw, Gamepad2, ShoppingBag, Banknote, Smartphone, HandCoins, Receipt, ImageDown } from "lucide-react";
 import { toast } from "sonner";
-import html2canvas from "html2canvas";
+import { toPng } from "html-to-image";
 
 interface Props {
   open: boolean;
@@ -20,19 +20,31 @@ export function CloseDayDialog({ open, onOpenChange }: Props) {
   const credits = useStore((s) => s.credits);
   const closeDay = useStore((s) => s.closeDay);
   const [confirming, setConfirming] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
 
   const downloadImage = async () => {
     if (!reportRef.current) return;
+    setDownloading(true);
     try {
-      const canvas = await html2canvas(reportRef.current, { backgroundColor: "#0a0a0a", scale: 2 });
+      // Wait a frame so layout is stable
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+      const dataUrl = await toPng(reportRef.current, {
+        backgroundColor: "#ffffff",
+        pixelRatio: 2,
+        cacheBust: true,
+      });
       const link = document.createElement("a");
-      link.download = `cierre-caja-${new Date().toISOString().slice(0, 10)}.png`;
-      link.href = canvas.toDataURL("image/png");
+      const date = new Date().toISOString().slice(0, 10);
+      link.download = `Cierre_Caja_${date}.png`;
+      link.href = dataUrl;
       link.click();
       toast.success("Imagen descargada");
     } catch (e) {
+      console.error(e);
       toast.error("Error al generar la imagen");
+    } finally {
+      setDownloading(false);
     }
   };
 
