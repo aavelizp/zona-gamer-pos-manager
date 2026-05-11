@@ -781,6 +781,17 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
   const statusDot = !occupied ? "bg-success" : expired ? "bg-destructive" : "bg-primary";
   const statusText = !occupied ? "LIBRE" : expired ? "TIEMPO AGOTADO" : "OCUPADO";
 
+  const customerName = session?.customerName?.trim();
+  const pendingExtras = consoleObj.charges.reduce((a, c) => a + c.amount, 0);
+  const isPrepaid = !!session?.prepaid;
+  const blockedRelease = isPrepaid && expired && pendingExtras > 0.001;
+  const [payExtrasOpen, setPayExtrasOpen] = useState(false);
+
+  const tryRelease = () => {
+    const ok = releaseConsole(consoleObj.id);
+    if (!ok) toast.error("No se puede liberar: hay un saldo adicional pendiente. Cóbralo o pásalo a Fiado.");
+  };
+
   return (
     <Card className={`relative p-4 border-2 ${statusBg} ${isPS5 ? "border-gold/70 ring-1 ring-gold/30" : ""} bg-card transition-all`}>
       {isPS5 && <div className="absolute inset-0 rounded-xl pointer-events-none glow-gold opacity-30" />}
@@ -803,6 +814,14 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
           </div>
         </div>
 
+        {/* Customer name banner */}
+        <div className={`flex items-center gap-2 rounded-md px-3 py-2 border ${occupied && customerName ? "bg-primary/15 border-primary/40" : "bg-secondary/30 border-border/40"}`}>
+          <User className={`h-4 w-4 ${occupied && customerName ? "text-primary" : "text-muted-foreground"}`} />
+          <span className={`text-sm font-semibold truncate ${occupied && customerName ? "text-foreground" : "text-muted-foreground italic"}`}>
+            {!occupied ? "Disponible" : customerName || "Cliente sin registrar"}
+          </span>
+        </div>
+
         <div className="rounded-lg bg-secondary/40 p-3 text-center">
           {!occupied ? (
             <p className="text-sm text-muted-foreground">Sin sesión activa</p>
@@ -819,13 +838,33 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
               <p className="font-display text-3xl tabular-nums">{formatDuration(elapsedMs)}</p>
             </>
           )}
-          {occupied && (
+          {occupied && !isPrepaid && (
             <p className="text-sm mt-1">
               <span className="text-accent font-semibold">{fmtUsd(total)}</span>
               <span className="text-muted-foreground"> · {fmtBs(total, rate)}</span>
             </p>
           )}
+          {occupied && isPrepaid && (
+            <p className="text-[11px] mt-1 text-success">✓ Prepagado · {session?.prepaidMinutes} min</p>
+          )}
         </div>
+
+        {/* Pending extras balance — visible always when occupied */}
+        {occupied && (
+          <div className={`rounded-md p-2 border ${pendingExtras > 0 ? "bg-warning/10 border-warning/40" : "bg-secondary/20 border-border/40"}`}>
+            <div className="flex justify-between items-center">
+              <span className="text-xs uppercase tracking-wider text-muted-foreground">Saldo Adicional Pendiente</span>
+              <span className={`font-display text-base ${pendingExtras > 0 ? "text-warning" : "text-muted-foreground"}`}>{fmtUsd(pendingExtras)}</span>
+            </div>
+          </div>
+        )}
+
+        {blockedRelease && (
+          <div className="rounded-md p-2 border border-destructive bg-destructive/10 flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+            <p className="text-xs text-destructive">Tiempo agotado con saldo pendiente. Cóbralo antes de liberar la consola.</p>
+          </div>
+        )}
 
         {!occupied ? (
           <div className="space-y-2">
@@ -857,9 +896,14 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
                 ))}
               </div>
             )}
-            {session?.prepaid ? (
-              <Button className="w-full" variant="secondary" onClick={() => releaseConsole(consoleObj.id)}>
-                <Coins className="h-4 w-4 mr-2" /> Liberar (Prepagado · {session.prepaidMinutes} min)
+            {isPrepaid && pendingExtras > 0.001 && (
+              <Button className="w-full" variant="default" onClick={() => setPayExtrasOpen(true)}>
+                <Coins className="h-4 w-4 mr-2" /> Cobrar Adicional {fmtUsd(pendingExtras)}
+              </Button>
+            )}
+            {isPrepaid ? (
+              <Button className="w-full" variant="secondary" onClick={tryRelease} disabled={pendingExtras > 0.001}>
+                <Coins className="h-4 w-4 mr-2" /> Liberar (Prepagado · {session?.prepaidMinutes} min)
               </Button>
             ) : (
               <Button className="w-full glow-primary" onClick={() => setCheckoutOpen(true)}>
@@ -874,6 +918,7 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
       <ComboPicker consoleId={consoleObj.id} open={comboOpen} onClose={() => setComboOpen(false)} />
       <Checkout open={checkoutOpen} onClose={() => setCheckoutOpen(false)} consoleObj={consoleObj} />
       <PrepayCheckout open={prepayOpen} onClose={() => setPrepayOpen(false)} consoleObj={consoleObj} />
+      <PayExtrasDialog open={payExtrasOpen} onClose={() => setPayExtrasOpen(false)} consoleObj={consoleObj} />
     </Card>
   );
 }
