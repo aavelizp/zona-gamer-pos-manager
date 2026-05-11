@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useStore, fmtUsd, fmtBs, computeTimeAmount, type ConsoleState, type Member } from "@/lib/store";
+import { toast } from "sonner";
+import { useStore, fmtUsd, fmtBs, computeTimeAmount, type ConsoleState, type Member, type Combo } from "@/lib/store";
 import { playAlert } from "@/lib/sound";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Star, Gamepad2, Sparkles, Package, Coins, ShoppingBag, Receipt, Plus, Search, X } from "lucide-react";
+import { Star, Gamepad2, Sparkles, Package, Coins, ShoppingBag, Receipt, Plus, Search, X, User, AlertTriangle } from "lucide-react";
 import { ReceiptDialog, type ReceiptData } from "@/components/Receipt";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
