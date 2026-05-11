@@ -159,8 +159,8 @@ export function CloseDayDialog({ open, onOpenChange }: Props) {
           <Button variant="outline" onClick={() => exportData({ sales: report.today, products, credits, rate })}>
             <FileSpreadsheet className="h-4 w-4 mr-1" /> Excel
           </Button>
-          <Button variant="outline" onClick={downloadImage}>
-            <ImageDown className="h-4 w-4 mr-1" /> Descargar Resumen en Imagen
+          <Button variant="outline" onClick={downloadImage} disabled={downloading}>
+            <ImageDown className="h-4 w-4 mr-1" /> {downloading ? "Generando..." : "Descargar Resumen (Imagen)"}
           </Button>
           {!confirming ? (
             <Button variant="destructive" onClick={() => setConfirming(true)}>
