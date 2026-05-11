@@ -215,7 +215,7 @@ export const useStore = create<State>()(
       addCombo: (c) => set((s) => ({ combos: [...s.combos, { ...c, id: uid() }] })),
       removeCombo: (id) => set((s) => ({ combos: s.combos.filter((c) => c.id !== id) })),
 
-      startSession: (consoleId, minutes) =>
+      startSession: (consoleId, minutes, customerName) =>
         set((s) => ({
           consoles: s.consoles.map((c) =>
             c.id === consoleId
@@ -225,6 +225,7 @@ export const useStore = create<State>()(
                     mode: minutes ? "fixed" : "free",
                     startedAt: Date.now(),
                     endsAt: minutes ? Date.now() + minutes * 60_000 : undefined,
+                    customerName,
                   },
                 }
               : c
