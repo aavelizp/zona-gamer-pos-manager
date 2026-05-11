@@ -28,6 +28,7 @@ export interface ConsoleSession {
   alerted?: boolean;
   prepaid?: boolean; // true when paid up-front
   prepaidMinutes?: number;
+  customerName?: string;
 }
 
 export interface ExtraCharge {
