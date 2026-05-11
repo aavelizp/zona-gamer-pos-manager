@@ -50,7 +50,7 @@ export function WaitQueue() {
 
   const startWith = (minutes?: number) => {
     if (!assigning) return;
-    startSession(assigning.consoleId, minutes);
+    startSession(assigning.consoleId, minutes, assigning.entry.name);
     dequeue(assigning.entry.id);
     toast.success(`${assigning.entry.name} → ${assigning.consoleName}`);
     setAssigning(null);
