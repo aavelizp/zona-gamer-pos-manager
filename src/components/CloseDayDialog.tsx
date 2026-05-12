@@ -18,6 +18,7 @@ export function CloseDayDialog({ open, onOpenChange }: Props) {
   const sales = useStore((s) => s.sales);
   const products = useStore((s) => s.products);
   const credits = useStore((s) => s.credits);
+  const expenses = useStore((s) => s.expenses);
   const closeDay = useStore((s) => s.closeDay);
   const [confirming, setConfirming] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -51,19 +52,27 @@ export function CloseDayDialog({ open, onOpenChange }: Props) {
   const report = useMemo(() => {
     const start = new Date(); start.setHours(0, 0, 0, 0);
     const today = sales.filter((s) => s.ts >= start.getTime());
+    const todayExpenses = expenses.filter((e) => e.ts >= start.getTime());
 
     const totalUsd = today.reduce((a, s) => a + s.total, 0);
     const horasUsd = today.reduce((a, s) => a + (s.timeAmount || 0), 0);
     const inventarioUsd = today.reduce((a, s) => a + (s.concept === "Consola" ? (s.extrasAmount || 0) : 0), 0);
-    const cashUsd = today.reduce((a, s) => a + (s.cashUsd || 0), 0);
-    const mobileBs = today.reduce((a, s) => a + (s.mobileBs || 0), 0);
+    const cashUsdGross = today.reduce((a, s) => a + (s.cashUsd || 0), 0);
+    const mobileBsGross = today.reduce((a, s) => a + (s.mobileBs || 0), 0);
     const deudasCobradas = today.filter((s) => s.concept === "Deuda Cobrada").reduce((a, s) => a + s.total, 0);
 
-    // Credits granted today (still in credits list with createdAt today)
+    // Gastos
+    const gastosCashUsd = todayExpenses.filter((e) => e.method === "cash").reduce((a, e) => a + e.amount, 0);
+    const gastosMobileBs = todayExpenses.filter((e) => e.method === "mobile").reduce((a, e) => a + (e.amountBs || 0), 0);
+    const gastosTotalUsd = todayExpenses.reduce((a, e) => a + e.amount, 0);
+
+    const cashUsd = cashUsdGross - gastosCashUsd;
+    const mobileBs = mobileBsGross - gastosMobileBs;
+
     const fiadoHoy = credits.filter((c) => c.createdAt >= start.getTime()).reduce((a, c) => a + c.amount, 0);
 
-    return { today, totalUsd, horasUsd, inventarioUsd, cashUsd, mobileBs, deudasCobradas, fiadoHoy };
-  }, [sales, credits]);
+    return { today, todayExpenses, totalUsd, horasUsd, inventarioUsd, cashUsd, mobileBs, cashUsdGross, mobileBsGross, gastosCashUsd, gastosMobileBs, gastosTotalUsd, deudasCobradas, fiadoHoy };
+  }, [sales, credits, expenses]);
 
   const handleClose = () => {
     // Force backup export first
