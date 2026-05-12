@@ -904,12 +904,30 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
         ) : (
           <>
             <div className="grid grid-cols-2 gap-2">
-              <Button size="sm" variant="secondary" onClick={() => extendSession(consoleObj.id, 15)}>+15 min</Button>
-              <Button size="sm" variant="secondary" onClick={() => extendSession(consoleObj.id, 30)}>+30 min</Button>
+              {isPrepaid ? (
+                <>
+                  <Button size="sm" variant="secondary" onClick={() => setExtendOpen(15)}>+15 min (cobrar)</Button>
+                  <Button size="sm" variant="secondary" onClick={() => setExtendOpen(30)}>+30 min (cobrar)</Button>
+                </>
+              ) : (
+                <>
+                  <Button size="sm" variant="secondary" onClick={() => extendSession(consoleObj.id, 15)}>+15 min</Button>
+                  <Button size="sm" variant="secondary" onClick={() => extendSession(consoleObj.id, 30)}>+30 min</Button>
+                </>
+              )}
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <Button size="sm" variant="outline" onClick={() => setSnackOpen(true)}><ShoppingBag className="h-4 w-4 mr-1" />Snack</Button>
               <Button size="sm" variant="outline" onClick={() => setComboOpen(true)}><Package className="h-4 w-4 mr-1" />Combo</Button>
+              {paused ? (
+                <Button size="sm" variant="default" className="bg-warning text-foreground hover:bg-warning/90" onClick={() => resumeSession(consoleObj.id)}>
+                  <Play className="h-4 w-4 mr-1" />Reanudar
+                </Button>
+              ) : (
+                <Button size="sm" variant="outline" onClick={() => pauseSession(consoleObj.id)}>
+                  <Pause className="h-4 w-4 mr-1" />Pausa
+                </Button>
+              )}
             </div>
             {consoleObj.charges.length > 0 && (
               <div className="text-xs text-muted-foreground space-y-0.5 max-h-16 overflow-auto">
@@ -943,6 +961,14 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
       <Checkout open={checkoutOpen} onClose={() => setCheckoutOpen(false)} consoleObj={consoleObj} />
       <PrepayCheckout open={prepayOpen} onClose={() => setPrepayOpen(false)} consoleObj={consoleObj} />
       <PayExtrasDialog open={payExtrasOpen} onClose={() => setPayExtrasOpen(false)} consoleObj={consoleObj} />
+      {extendOpen !== null && (
+        <ExtendCheckoutDialog
+          open={true}
+          onClose={() => setExtendOpen(null)}
+          consoleObj={consoleObj}
+          addMinutes={extendOpen}
+        />
+      )}
     </Card>
   );
 }
