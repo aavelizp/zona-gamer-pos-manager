@@ -18,6 +18,7 @@ export function CloseDayDialog({ open, onOpenChange }: Props) {
   const sales = useStore((s) => s.sales);
   const products = useStore((s) => s.products);
   const credits = useStore((s) => s.credits);
+  const expenses = useStore((s) => s.expenses);
   const closeDay = useStore((s) => s.closeDay);
   const [confirming, setConfirming] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -51,19 +52,27 @@ export function CloseDayDialog({ open, onOpenChange }: Props) {
   const report = useMemo(() => {
     const start = new Date(); start.setHours(0, 0, 0, 0);
     const today = sales.filter((s) => s.ts >= start.getTime());
+    const todayExpenses = expenses.filter((e) => e.ts >= start.getTime());
 
     const totalUsd = today.reduce((a, s) => a + s.total, 0);
     const horasUsd = today.reduce((a, s) => a + (s.timeAmount || 0), 0);
     const inventarioUsd = today.reduce((a, s) => a + (s.concept === "Consola" ? (s.extrasAmount || 0) : 0), 0);
-    const cashUsd = today.reduce((a, s) => a + (s.cashUsd || 0), 0);
-    const mobileBs = today.reduce((a, s) => a + (s.mobileBs || 0), 0);
+    const cashUsdGross = today.reduce((a, s) => a + (s.cashUsd || 0), 0);
+    const mobileBsGross = today.reduce((a, s) => a + (s.mobileBs || 0), 0);
     const deudasCobradas = today.filter((s) => s.concept === "Deuda Cobrada").reduce((a, s) => a + s.total, 0);
 
-    // Credits granted today (still in credits list with createdAt today)
+    // Gastos
+    const gastosCashUsd = todayExpenses.filter((e) => e.method === "cash").reduce((a, e) => a + e.amount, 0);
+    const gastosMobileBs = todayExpenses.filter((e) => e.method === "mobile").reduce((a, e) => a + (e.amountBs || 0), 0);
+    const gastosTotalUsd = todayExpenses.reduce((a, e) => a + e.amount, 0);
+
+    const cashUsd = cashUsdGross - gastosCashUsd;
+    const mobileBs = mobileBsGross - gastosMobileBs;
+
     const fiadoHoy = credits.filter((c) => c.createdAt >= start.getTime()).reduce((a, c) => a + c.amount, 0);
 
-    return { today, totalUsd, horasUsd, inventarioUsd, cashUsd, mobileBs, deudasCobradas, fiadoHoy };
-  }, [sales, credits]);
+    return { today, todayExpenses, totalUsd, horasUsd, inventarioUsd, cashUsd, mobileBs, cashUsdGross, mobileBsGross, gastosCashUsd, gastosMobileBs, gastosTotalUsd, deudasCobradas, fiadoHoy };
+  }, [sales, credits, expenses]);
 
   const handleClose = () => {
     // Force backup export first
@@ -134,11 +143,38 @@ export function CloseDayDialog({ open, onOpenChange }: Props) {
             </div>
           </div>
 
+          {/* Gastos del día */}
+          {report.todayExpenses.length > 0 && (
+            <div style={{ padding: 12, borderRadius: 8, border: "1px solid #ef4444", backgroundColor: "#fef2f2", marginBottom: 12 }}>
+              <h3 style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 13, textTransform: "uppercase", letterSpacing: 2, color: "#991b1b", margin: "0 0 8px" }}>
+                💸 Gastos del Día (Caja Chica)
+              </h3>
+              {report.todayExpenses.map((e) => (
+                <div key={e.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#0f172a", borderBottom: "1px dashed #fecaca", padding: "4px 0" }}>
+                  <span>{e.description} <span style={{ color: "#64748b" }}>({e.method === "cash" ? "Efectivo $" : "Pago Móvil Bs"})</span></span>
+                  <span style={{ fontFamily: "'Archivo Black', sans-serif" }}>
+                    {e.method === "cash" ? `-${fmtUsd(e.amount)}` : `-Bs ${(e.amountBs || 0).toLocaleString("es-VE")}`}
+                  </span>
+                </div>
+              ))}
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: "#991b1b", paddingTop: 8, marginTop: 4, borderTop: "1px solid #fca5a5" }}>
+                <span style={{ fontFamily: "'Archivo Black', sans-serif" }}>TOTAL GASTOS</span>
+                <span style={{ fontFamily: "'Archivo Black', sans-serif" }}>{fmtUsd(report.gastosTotalUsd)}</span>
+              </div>
+            </div>
+          )}
+
           {/* Cuadre */}
           <div style={{ padding: 12, borderRadius: 8, border: "1px solid #cbd5e1", backgroundColor: "#f1f5f9" }}>
-            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 2, color: "#475569", marginBottom: 4 }}>Total Esperado en Caja</div>
-            <div style={{ fontSize: 13, color: "#0f172a" }}>Efectivo $: <span style={{ fontFamily: "'Archivo Black', sans-serif" }}>{fmtUsd(report.cashUsd)}</span></div>
-            <div style={{ fontSize: 13, color: "#0f172a" }}>Pago Móvil Bs: <span style={{ fontFamily: "'Archivo Black', sans-serif" }}>Bs {report.mobileBs.toLocaleString("es-VE", { maximumFractionDigits: 2 })}</span></div>
+            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 2, color: "#475569", marginBottom: 4 }}>Total Esperado en Caja (Neto · post-gastos)</div>
+            <div style={{ fontSize: 13, color: "#0f172a" }}>
+              Efectivo $: <span style={{ fontFamily: "'Archivo Black', sans-serif" }}>{fmtUsd(report.cashUsd)}</span>
+              {report.gastosCashUsd > 0 && <span style={{ fontSize: 11, color: "#991b1b" }}> (bruto {fmtUsd(report.cashUsdGross)} − gastos {fmtUsd(report.gastosCashUsd)})</span>}
+            </div>
+            <div style={{ fontSize: 13, color: "#0f172a" }}>
+              Pago Móvil Bs: <span style={{ fontFamily: "'Archivo Black', sans-serif" }}>Bs {report.mobileBs.toLocaleString("es-VE", { maximumFractionDigits: 2 })}</span>
+              {report.gastosMobileBs > 0 && <span style={{ fontSize: 11, color: "#991b1b" }}> (bruto Bs {report.mobileBsGross.toLocaleString("es-VE")} − gastos Bs {report.gastosMobileBs.toLocaleString("es-VE")})</span>}
+            </div>
           </div>
         </div>
 

@@ -26,9 +26,11 @@ export interface ConsoleSession {
   startedAt: number; // ms
   endsAt?: number;   // ms (for fixed)
   alerted?: boolean;
+  preAlerted?: boolean; // 5-min warning fired
   prepaid?: boolean; // true when paid up-front
   prepaidMinutes?: number;
   customerName?: string;
+  pausedAt?: number; // ms when paused; undefined when running
 }
 
 export interface ExtraCharge {
@@ -113,6 +115,27 @@ export interface QueueEntry {
   ts: number;
 }
 
+export interface SessionHistoryEntry {
+  id: string;
+  ts: number;            // when the session was closed
+  consoleId: string;
+  consoleName: string;
+  customer?: string;
+  minutes: number;
+  amount: number;        // USD total cobrado por tiempo+extras
+  prepaid: boolean;
+}
+
+export interface Expense {
+  id: string;
+  ts: number;
+  description: string;
+  amount: number;        // USD
+  method: "cash" | "mobile"; // efectivo $ o pago móvil Bs
+  amountBs?: number;     // si fue pago móvil, monto original en Bs
+  rate: number;
+}
+
 interface State {
   rate: number;
   soundOn: boolean;
@@ -124,6 +147,8 @@ interface State {
   queue: QueueEntry[];
   members: Member[];
   maintenanceLogs: MaintenanceLog[];
+  sessionHistory: SessionHistoryEntry[];
+  expenses: Expense[];
 
   // setters
   setRate: (n: number) => void;
@@ -139,6 +164,9 @@ interface State {
   startSession: (consoleId: string, minutes?: number, customerName?: string) => void;
   extendSession: (consoleId: string, addMinutes: number) => void;
   markAlerted: (consoleId: string) => void;
+  markPreAlerted: (consoleId: string) => void;
+  pauseSession: (consoleId: string) => void;
+  resumeSession: (consoleId: string) => void;
 
   addSnackToConsole: (consoleId: string, productId: string, qty: number) => void;
   applyComboToConsole: (consoleId: string, comboId: string) => void;
@@ -173,6 +201,15 @@ interface State {
     consoleId: string,
     payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; total: number; customer?: string }
   ) => void;
+
+  extendPaidSession: (
+    consoleId: string,
+    addMinutes: number,
+    payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; total: number; customer?: string }
+  ) => void;
+
+  addExpense: (e: { description: string; amount: number; method: "cash" | "mobile"; amountBs?: number }) => void;
+  removeExpense: (id: string) => void;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -203,6 +240,8 @@ export const useStore = create<State>()(
       queue: [],
       members: [],
       maintenanceLogs: [],
+      sessionHistory: [],
+      expenses: [],
 
       setRate: (n) => set({ rate: Math.max(0, n) }),
       toggleSound: () => set((s) => ({ soundOn: !s.soundOn })),
@@ -254,6 +293,40 @@ export const useStore = create<State>()(
           consoles: s.consoles.map((c) =>
             c.id === consoleId && c.session ? { ...c, session: { ...c.session, alerted: true } } : c
           ),
+        })),
+
+      markPreAlerted: (consoleId) =>
+        set((s) => ({
+          consoles: s.consoles.map((c) =>
+            c.id === consoleId && c.session ? { ...c, session: { ...c.session, preAlerted: true } } : c
+          ),
+        })),
+
+      pauseSession: (consoleId) =>
+        set((s) => ({
+          consoles: s.consoles.map((c) => {
+            if (c.id !== consoleId || !c.session || c.session.pausedAt) return c;
+            return { ...c, session: { ...c.session, pausedAt: Date.now() } };
+          }),
+        })),
+
+      resumeSession: (consoleId) =>
+        set((s) => ({
+          consoles: s.consoles.map((c) => {
+            if (c.id !== consoleId || !c.session || !c.session.pausedAt) return c;
+            const delta = Date.now() - c.session.pausedAt;
+            return {
+              ...c,
+              session: {
+                ...c.session,
+                startedAt: c.session.startedAt + delta,
+                endsAt: c.session.endsAt ? c.session.endsAt + delta : undefined,
+                pausedAt: undefined,
+                alerted: false,
+                preAlerted: false,
+              },
+            };
+          }),
         })),
 
       addSnackToConsole: (consoleId, productId, qty) =>
@@ -403,6 +476,13 @@ export const useStore = create<State>()(
             }
           }
 
+          const histEntry: SessionHistoryEntry = {
+            id: uid(), ts: Date.now(),
+            consoleId: c.id, consoleName: c.name,
+            customer: payload.customerInfo?.name || payload.customer,
+            minutes: payload.minutes, amount: payload.total, prepaid: false,
+          };
+
           return {
             consoles: s.consoles.map((x) =>
               x.id === consoleId
@@ -418,6 +498,7 @@ export const useStore = create<State>()(
             sales: payload.method === "credit" ? s.sales : [...s.sales, sale],
             credits: newCredits,
             members: newMembers,
+            sessionHistory: [histEntry, ...s.sessionHistory],
           };
         }),
 
@@ -466,10 +547,11 @@ export const useStore = create<State>()(
         set((s) => {
           const startOfToday = new Date();
           startOfToday.setHours(0, 0, 0, 0);
-          // Keep historical sales (before today). Only clear TODAY's sales.
-          // Inventory (products), credits, members and consoles.totalMinutes are preserved.
+          // Solo limpia VENTAS y GASTOS de HOY. Preserva: inventario, fiados,
+          // clientes, totalMinutes históricos y sessionHistory.
           return {
             sales: s.sales.filter((sale) => sale.ts < startOfToday.getTime()),
+            expenses: s.expenses.filter((e) => e.ts < startOfToday.getTime()),
             consoles: s.consoles.map((c) => ({ ...c, session: undefined, charges: [] })),
           };
         }),
@@ -573,6 +655,12 @@ export const useStore = create<State>()(
         const pendingExtras = c.charges.reduce((a, ch) => a + ch.amount, 0);
         if (pendingExtras > 0.001) return false;
         const mins = c.session.prepaidMinutes ?? 0;
+        const histEntry: SessionHistoryEntry = {
+          id: uid(), ts: Date.now(),
+          consoleId: c.id, consoleName: c.name,
+          customer: c.session.customerName,
+          minutes: mins, amount: 0, prepaid: true,
+        };
         set({
           consoles: s.consoles.map((x) =>
             x.id === consoleId
@@ -581,6 +669,7 @@ export const useStore = create<State>()(
                   maintenanceMinutes: (x.maintenanceMinutes || 0) + mins }
               : x
           ),
+          sessionHistory: [histEntry, ...s.sessionHistory],
         });
         return true;
       },
@@ -606,6 +695,54 @@ export const useStore = create<State>()(
             credits: newCredits,
           };
         }),
+
+      extendPaidSession: (consoleId, addMinutes, payload) =>
+        set((s) => {
+          const c = s.consoles.find((x) => x.id === consoleId);
+          if (!c || !c.session) return s;
+          const base = c.session.endsAt && c.session.endsAt > Date.now() ? c.session.endsAt : Date.now();
+          const newEnds = base + addMinutes * 60_000;
+          const sale: SaleRecord = {
+            id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name,
+            minutes: addMinutes, timeAmount: payload.total, extrasAmount: 0, total: payload.total,
+            cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, rate: s.rate,
+            method: payload.method, customer: payload.customer || c.session.customerName,
+            concept: "Consola",
+            items: [{ name: `Extensión ${c.name} (+${addMinutes} min)`, qty: 1, price: payload.total }],
+          };
+          const newCredits = payload.method === "credit"
+            ? [...s.credits, { id: uid(), customer: payload.customer || c.session.customerName || "Sin nombre", amount: payload.total, createdAt: Date.now(), note: `Extensión ${c.name}` }]
+            : s.credits;
+          return {
+            consoles: s.consoles.map((x) =>
+              x.id === consoleId
+                ? {
+                    ...x,
+                    session: {
+                      ...x.session!,
+                      mode: "fixed",
+                      endsAt: newEnds,
+                      prepaidMinutes: (x.session!.prepaidMinutes ?? 0) + addMinutes,
+                      alerted: false,
+                      preAlerted: false,
+                    },
+                  }
+                : x
+            ),
+            sales: payload.method === "credit" ? s.sales : [...s.sales, sale],
+            credits: newCredits,
+          };
+        }),
+
+      addExpense: (e) =>
+        set((s) => ({
+          expenses: [
+            { id: uid(), ts: Date.now(), rate: s.rate, ...e },
+            ...s.expenses,
+          ],
+        })),
+
+      removeExpense: (id) => set((s) => ({ expenses: s.expenses.filter((e) => e.id !== id) })),
     }),
     { name: "gamerzone-store-v1" }
   )
@@ -618,7 +755,8 @@ export const fmtBs = (usd: number, rate: number) =>
 
 export const computeTimeAmount = (consoleObj: ConsoleState, nowMs: number): { minutes: number; amount: number } => {
   if (!consoleObj.session) return { minutes: 0, amount: 0 };
-  const elapsedMs = Math.max(0, nowMs - consoleObj.session.startedAt);
+  const ref = consoleObj.session.pausedAt ?? nowMs;
+  const elapsedMs = Math.max(0, ref - consoleObj.session.startedAt);
   const minutes = Math.ceil(elapsedMs / 60_000);
   const amount = (minutes / 60) * consoleObj.ratePerHour;
   return { minutes, amount };

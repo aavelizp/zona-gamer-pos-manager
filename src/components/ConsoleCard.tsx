@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useStore, fmtUsd, fmtBs, computeTimeAmount, type ConsoleState, type Member, type Combo } from "@/lib/store";
-import { playAlert } from "@/lib/sound";
+import { playAlert, playPreAlert } from "@/lib/sound";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Star, Gamepad2, Sparkles, Package, Coins, ShoppingBag, Receipt, Plus, Search, X, User, AlertTriangle } from "lucide-react";
+import { Star, Gamepad2, Sparkles, Package, Coins, ShoppingBag, Receipt, Plus, Search, X, User, AlertTriangle, Pause, Play } from "lucide-react";
 import { ReceiptDialog, type ReceiptData } from "@/components/Receipt";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { ExtendCheckoutDialog } from "@/components/ExtendCheckoutDialog";
 
 interface CustomerSearchProps {
   name: string; idDoc: string; phone: string;
@@ -750,21 +751,27 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
   const startSession = useStore((s) => s.startSession);
   const extendSession = useStore((s) => s.extendSession);
   const markAlerted = useStore((s) => s.markAlerted);
+  const markPreAlerted = useStore((s) => s.markPreAlerted);
+  const pauseSession = useStore((s) => s.pauseSession);
+  const resumeSession = useStore((s) => s.resumeSession);
   const now = useNow();
 
   const [snackOpen, setSnackOpen] = useState(false);
   const [comboOpen, setComboOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [prepayOpen, setPrepayOpen] = useState(false);
+  const [extendOpen, setExtendOpen] = useState<null | number>(null);
   const releaseConsole = useStore((s) => s.releaseConsole);
 
   const isPS5 = consoleObj.type === "PS5";
   const session = consoleObj.session;
   const occupied = !!session;
+  const paused = !!session?.pausedAt;
   const isFixed = session?.mode === "fixed";
-  const remainingMs = session?.endsAt ? session.endsAt - now : 0;
-  const expired = isFixed && remainingMs <= 0;
-  const elapsedMs = session ? now - session.startedAt : 0;
+  const refNow = paused ? session!.pausedAt! : now;
+  const remainingMs = session?.endsAt ? session.endsAt - refNow : 0;
+  const expired = isFixed && remainingMs <= 0 && !paused;
+  const elapsedMs = session ? refNow - session.startedAt : 0;
   const { amount: timeAmount, minutes } = computeTimeAmount(consoleObj, now);
   const extras = consoleObj.charges.reduce((a, c) => a + c.amount, 0);
   const total = timeAmount + extras;
@@ -777,9 +784,26 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
     }
   }, [expired, session, soundOn, markAlerted, consoleObj.id]);
 
-  const statusBg = !occupied ? "border-success/50" : expired ? "border-destructive animate-blink" : "border-primary/60";
-  const statusDot = !occupied ? "bg-success" : expired ? "bg-destructive" : "bg-primary";
-  const statusText = !occupied ? "LIBRE" : expired ? "TIEMPO AGOTADO" : "OCUPADO";
+  // Pre-alert at 5 min remaining (fixed sessions only, not paused, not yet expired)
+  const preAlertActive = isFixed && !paused && !expired && remainingMs > 0 && remainingMs <= 5 * 60_000;
+  useEffect(() => {
+    if (preAlertActive && session && !session.preAlerted) {
+      if (soundOn) playPreAlert();
+      markPreAlerted(consoleObj.id);
+    }
+  }, [preAlertActive, session, soundOn, markPreAlerted, consoleObj.id]);
+
+  const statusBg = !occupied
+    ? "border-success/50"
+    : paused
+      ? "border-warning animate-pulse"
+      : expired
+        ? "border-destructive animate-blink"
+        : preAlertActive
+          ? "border-warning animate-blink"
+          : "border-primary/60";
+  const statusDot = !occupied ? "bg-success" : paused ? "bg-warning" : expired ? "bg-destructive" : preAlertActive ? "bg-warning" : "bg-primary";
+  const statusText = !occupied ? "LIBRE" : paused ? "EN PAUSA" : expired ? "TIEMPO AGOTADO" : preAlertActive ? "ÚLTIMOS 5 MIN" : "OCUPADO";
 
   const customerName = session?.customerName?.trim();
   const pendingExtras = consoleObj.charges.reduce((a, c) => a + c.amount, 0);
@@ -880,12 +904,30 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
         ) : (
           <>
             <div className="grid grid-cols-2 gap-2">
-              <Button size="sm" variant="secondary" onClick={() => extendSession(consoleObj.id, 15)}>+15 min</Button>
-              <Button size="sm" variant="secondary" onClick={() => extendSession(consoleObj.id, 30)}>+30 min</Button>
+              {isPrepaid ? (
+                <>
+                  <Button size="sm" variant="secondary" onClick={() => setExtendOpen(15)}>+15 min (cobrar)</Button>
+                  <Button size="sm" variant="secondary" onClick={() => setExtendOpen(30)}>+30 min (cobrar)</Button>
+                </>
+              ) : (
+                <>
+                  <Button size="sm" variant="secondary" onClick={() => extendSession(consoleObj.id, 15)}>+15 min</Button>
+                  <Button size="sm" variant="secondary" onClick={() => extendSession(consoleObj.id, 30)}>+30 min</Button>
+                </>
+              )}
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <Button size="sm" variant="outline" onClick={() => setSnackOpen(true)}><ShoppingBag className="h-4 w-4 mr-1" />Snack</Button>
               <Button size="sm" variant="outline" onClick={() => setComboOpen(true)}><Package className="h-4 w-4 mr-1" />Combo</Button>
+              {paused ? (
+                <Button size="sm" variant="default" className="bg-warning text-foreground hover:bg-warning/90" onClick={() => resumeSession(consoleObj.id)}>
+                  <Play className="h-4 w-4 mr-1" />Reanudar
+                </Button>
+              ) : (
+                <Button size="sm" variant="outline" onClick={() => pauseSession(consoleObj.id)}>
+                  <Pause className="h-4 w-4 mr-1" />Pausa
+                </Button>
+              )}
             </div>
             {consoleObj.charges.length > 0 && (
               <div className="text-xs text-muted-foreground space-y-0.5 max-h-16 overflow-auto">
@@ -919,6 +961,14 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
       <Checkout open={checkoutOpen} onClose={() => setCheckoutOpen(false)} consoleObj={consoleObj} />
       <PrepayCheckout open={prepayOpen} onClose={() => setPrepayOpen(false)} consoleObj={consoleObj} />
       <PayExtrasDialog open={payExtrasOpen} onClose={() => setPayExtrasOpen(false)} consoleObj={consoleObj} />
+      {extendOpen !== null && (
+        <ExtendCheckoutDialog
+          open={true}
+          onClose={() => setExtendOpen(null)}
+          consoleObj={consoleObj}
+          addMinutes={extendOpen}
+        />
+      )}
     </Card>
   );
 }
