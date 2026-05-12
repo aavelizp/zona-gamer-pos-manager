@@ -476,6 +476,13 @@ export const useStore = create<State>()(
             }
           }
 
+          const histEntry: SessionHistoryEntry = {
+            id: uid(), ts: Date.now(),
+            consoleId: c.id, consoleName: c.name,
+            customer: payload.customerInfo?.name || payload.customer,
+            minutes: payload.minutes, amount: payload.total, prepaid: false,
+          };
+
           return {
             consoles: s.consoles.map((x) =>
               x.id === consoleId
@@ -491,6 +498,7 @@ export const useStore = create<State>()(
             sales: payload.method === "credit" ? s.sales : [...s.sales, sale],
             credits: newCredits,
             members: newMembers,
+            sessionHistory: [histEntry, ...s.sessionHistory],
           };
         }),
 
@@ -539,10 +547,11 @@ export const useStore = create<State>()(
         set((s) => {
           const startOfToday = new Date();
           startOfToday.setHours(0, 0, 0, 0);
-          // Keep historical sales (before today). Only clear TODAY's sales.
-          // Inventory (products), credits, members and consoles.totalMinutes are preserved.
+          // Solo limpia VENTAS y GASTOS de HOY. Preserva: inventario, fiados,
+          // clientes, totalMinutes históricos y sessionHistory.
           return {
             sales: s.sales.filter((sale) => sale.ts < startOfToday.getTime()),
+            expenses: s.expenses.filter((e) => e.ts < startOfToday.getTime()),
             consoles: s.consoles.map((c) => ({ ...c, session: undefined, charges: [] })),
           };
         }),
