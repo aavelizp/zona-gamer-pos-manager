@@ -115,6 +115,27 @@ export interface QueueEntry {
   ts: number;
 }
 
+export interface SessionHistoryEntry {
+  id: string;
+  ts: number;            // when the session was closed
+  consoleId: string;
+  consoleName: string;
+  customer?: string;
+  minutes: number;
+  amount: number;        // USD total cobrado por tiempo+extras
+  prepaid: boolean;
+}
+
+export interface Expense {
+  id: string;
+  ts: number;
+  description: string;
+  amount: number;        // USD
+  method: "cash" | "mobile"; // efectivo $ o pago móvil Bs
+  amountBs?: number;     // si fue pago móvil, monto original en Bs
+  rate: number;
+}
+
 interface State {
   rate: number;
   soundOn: boolean;
@@ -126,6 +147,8 @@ interface State {
   queue: QueueEntry[];
   members: Member[];
   maintenanceLogs: MaintenanceLog[];
+  sessionHistory: SessionHistoryEntry[];
+  expenses: Expense[];
 
   // setters
   setRate: (n: number) => void;
@@ -141,6 +164,9 @@ interface State {
   startSession: (consoleId: string, minutes?: number, customerName?: string) => void;
   extendSession: (consoleId: string, addMinutes: number) => void;
   markAlerted: (consoleId: string) => void;
+  markPreAlerted: (consoleId: string) => void;
+  pauseSession: (consoleId: string) => void;
+  resumeSession: (consoleId: string) => void;
 
   addSnackToConsole: (consoleId: string, productId: string, qty: number) => void;
   applyComboToConsole: (consoleId: string, comboId: string) => void;
