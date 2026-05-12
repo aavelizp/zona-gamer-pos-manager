@@ -143,11 +143,38 @@ export function CloseDayDialog({ open, onOpenChange }: Props) {
             </div>
           </div>
 
+          {/* Gastos del día */}
+          {report.todayExpenses.length > 0 && (
+            <div style={{ padding: 12, borderRadius: 8, border: "1px solid #ef4444", backgroundColor: "#fef2f2", marginBottom: 12 }}>
+              <h3 style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 13, textTransform: "uppercase", letterSpacing: 2, color: "#991b1b", margin: "0 0 8px" }}>
+                💸 Gastos del Día (Caja Chica)
+              </h3>
+              {report.todayExpenses.map((e) => (
+                <div key={e.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#0f172a", borderBottom: "1px dashed #fecaca", padding: "4px 0" }}>
+                  <span>{e.description} <span style={{ color: "#64748b" }}>({e.method === "cash" ? "Efectivo $" : "Pago Móvil Bs"})</span></span>
+                  <span style={{ fontFamily: "'Archivo Black', sans-serif" }}>
+                    {e.method === "cash" ? `-${fmtUsd(e.amount)}` : `-Bs ${(e.amountBs || 0).toLocaleString("es-VE")}`}
+                  </span>
+                </div>
+              ))}
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: "#991b1b", paddingTop: 8, marginTop: 4, borderTop: "1px solid #fca5a5" }}>
+                <span style={{ fontFamily: "'Archivo Black', sans-serif" }}>TOTAL GASTOS</span>
+                <span style={{ fontFamily: "'Archivo Black', sans-serif" }}>{fmtUsd(report.gastosTotalUsd)}</span>
+              </div>
+            </div>
+          )}
+
           {/* Cuadre */}
           <div style={{ padding: 12, borderRadius: 8, border: "1px solid #cbd5e1", backgroundColor: "#f1f5f9" }}>
-            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 2, color: "#475569", marginBottom: 4 }}>Total Esperado en Caja</div>
-            <div style={{ fontSize: 13, color: "#0f172a" }}>Efectivo $: <span style={{ fontFamily: "'Archivo Black', sans-serif" }}>{fmtUsd(report.cashUsd)}</span></div>
-            <div style={{ fontSize: 13, color: "#0f172a" }}>Pago Móvil Bs: <span style={{ fontFamily: "'Archivo Black', sans-serif" }}>Bs {report.mobileBs.toLocaleString("es-VE", { maximumFractionDigits: 2 })}</span></div>
+            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 2, color: "#475569", marginBottom: 4 }}>Total Esperado en Caja (Neto · post-gastos)</div>
+            <div style={{ fontSize: 13, color: "#0f172a" }}>
+              Efectivo $: <span style={{ fontFamily: "'Archivo Black', sans-serif" }}>{fmtUsd(report.cashUsd)}</span>
+              {report.gastosCashUsd > 0 && <span style={{ fontSize: 11, color: "#991b1b" }}> (bruto {fmtUsd(report.cashUsdGross)} − gastos {fmtUsd(report.gastosCashUsd)})</span>}
+            </div>
+            <div style={{ fontSize: 13, color: "#0f172a" }}>
+              Pago Móvil Bs: <span style={{ fontFamily: "'Archivo Black', sans-serif" }}>Bs {report.mobileBs.toLocaleString("es-VE", { maximumFractionDigits: 2 })}</span>
+              {report.gastosMobileBs > 0 && <span style={{ fontSize: 11, color: "#991b1b" }}> (bruto Bs {report.mobileBsGross.toLocaleString("es-VE")} − gastos Bs {report.gastosMobileBs.toLocaleString("es-VE")})</span>}
+            </div>
           </div>
         </div>
 
