@@ -12,7 +12,8 @@ import { WaitQueue } from "@/components/WaitQueue";
 import { CloseDayDialog } from "@/components/CloseDayDialog";
 import { MembersTab } from "@/components/MembersTab";
 import { MaintenanceTab } from "@/components/MaintenanceTab";
-import { Volume2, VolumeX, FileSpreadsheet, Gamepad2, Receipt } from "lucide-react";
+import { ExpenseDialog } from "@/components/ExpenseDialog";
+import { Volume2, VolumeX, FileSpreadsheet, Gamepad2, Receipt, Wallet } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -39,6 +40,7 @@ function Index() {
   const products = useStore((s) => s.products);
   const credits = useStore((s) => s.credits);
   const [closeOpen, setCloseOpen] = useState(false);
+  const [expenseOpen, setExpenseOpen] = useState(false);
 
   const today = useMemo(() => {
     const start = new Date(); start.setHours(0, 0, 0, 0);
@@ -86,6 +88,9 @@ function Index() {
             <Button variant="outline" size="sm" onClick={() => exportData({ sales, products, credits, rate })}>
               <FileSpreadsheet className="h-4 w-4 mr-1" />Excel
             </Button>
+            <Button variant="outline" size="sm" onClick={() => setExpenseOpen(true)}>
+              <Wallet className="h-4 w-4 mr-1" />Gasto
+            </Button>
             <Button size="sm" onClick={() => setCloseOpen(true)} className="bg-gradient-to-r from-primary to-accent text-primary-foreground font-display tracking-wider">
               <Receipt className="h-4 w-4 mr-1" />Cerrar Caja
             </Button>
@@ -130,6 +135,7 @@ function Index() {
         💾 Datos guardados localmente · Exporta a Excel para respaldo
       </footer>
       <CloseDayDialog open={closeOpen} onOpenChange={setCloseOpen} />
+      <ExpenseDialog open={expenseOpen} onOpenChange={setExpenseOpen} />
     </div>
   );
 }
