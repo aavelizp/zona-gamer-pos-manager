@@ -295,6 +295,40 @@ export const useStore = create<State>()(
           ),
         })),
 
+      markPreAlerted: (consoleId) =>
+        set((s) => ({
+          consoles: s.consoles.map((c) =>
+            c.id === consoleId && c.session ? { ...c, session: { ...c.session, preAlerted: true } } : c
+          ),
+        })),
+
+      pauseSession: (consoleId) =>
+        set((s) => ({
+          consoles: s.consoles.map((c) => {
+            if (c.id !== consoleId || !c.session || c.session.pausedAt) return c;
+            return { ...c, session: { ...c.session, pausedAt: Date.now() } };
+          }),
+        })),
+
+      resumeSession: (consoleId) =>
+        set((s) => ({
+          consoles: s.consoles.map((c) => {
+            if (c.id !== consoleId || !c.session || !c.session.pausedAt) return c;
+            const delta = Date.now() - c.session.pausedAt;
+            return {
+              ...c,
+              session: {
+                ...c.session,
+                startedAt: c.session.startedAt + delta,
+                endsAt: c.session.endsAt ? c.session.endsAt + delta : undefined,
+                pausedAt: undefined,
+                alerted: false,
+                preAlerted: false,
+              },
+            };
+          }),
+        })),
+
       addSnackToConsole: (consoleId, productId, qty) =>
         set((s) => {
           const product = s.products.find((p) => p.id === productId);
