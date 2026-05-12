@@ -655,6 +655,12 @@ export const useStore = create<State>()(
         const pendingExtras = c.charges.reduce((a, ch) => a + ch.amount, 0);
         if (pendingExtras > 0.001) return false;
         const mins = c.session.prepaidMinutes ?? 0;
+        const histEntry: SessionHistoryEntry = {
+          id: uid(), ts: Date.now(),
+          consoleId: c.id, consoleName: c.name,
+          customer: c.session.customerName,
+          minutes: mins, amount: 0, prepaid: true,
+        };
         set({
           consoles: s.consoles.map((x) =>
             x.id === consoleId
@@ -663,6 +669,7 @@ export const useStore = create<State>()(
                   maintenanceMinutes: (x.maintenanceMinutes || 0) + mins }
               : x
           ),
+          sessionHistory: [histEntry, ...s.sessionHistory],
         });
         return true;
       },
@@ -688,6 +695,54 @@ export const useStore = create<State>()(
             credits: newCredits,
           };
         }),
+
+      extendPaidSession: (consoleId, addMinutes, payload) =>
+        set((s) => {
+          const c = s.consoles.find((x) => x.id === consoleId);
+          if (!c || !c.session) return s;
+          const base = c.session.endsAt && c.session.endsAt > Date.now() ? c.session.endsAt : Date.now();
+          const newEnds = base + addMinutes * 60_000;
+          const sale: SaleRecord = {
+            id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name,
+            minutes: addMinutes, timeAmount: payload.total, extrasAmount: 0, total: payload.total,
+            cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, rate: s.rate,
+            method: payload.method, customer: payload.customer || c.session.customerName,
+            concept: "Consola",
+            items: [{ name: `Extensión ${c.name} (+${addMinutes} min)`, qty: 1, price: payload.total }],
+          };
+          const newCredits = payload.method === "credit"
+            ? [...s.credits, { id: uid(), customer: payload.customer || c.session.customerName || "Sin nombre", amount: payload.total, createdAt: Date.now(), note: `Extensión ${c.name}` }]
+            : s.credits;
+          return {
+            consoles: s.consoles.map((x) =>
+              x.id === consoleId
+                ? {
+                    ...x,
+                    session: {
+                      ...x.session!,
+                      mode: "fixed",
+                      endsAt: newEnds,
+                      prepaidMinutes: (x.session!.prepaidMinutes ?? 0) + addMinutes,
+                      alerted: false,
+                      preAlerted: false,
+                    },
+                  }
+                : x
+            ),
+            sales: payload.method === "credit" ? s.sales : [...s.sales, sale],
+            credits: newCredits,
+          };
+        }),
+
+      addExpense: (e) =>
+        set((s) => ({
+          expenses: [
+            { id: uid(), ts: Date.now(), rate: s.rate, ...e },
+            ...s.expenses,
+          ],
+        })),
+
+      removeExpense: (id) => set((s) => ({ expenses: s.expenses.filter((e) => e.id !== id) })),
     }),
     { name: "gamerzone-store-v1" }
   )
