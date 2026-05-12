@@ -755,7 +755,8 @@ export const fmtBs = (usd: number, rate: number) =>
 
 export const computeTimeAmount = (consoleObj: ConsoleState, nowMs: number): { minutes: number; amount: number } => {
   if (!consoleObj.session) return { minutes: 0, amount: 0 };
-  const elapsedMs = Math.max(0, nowMs - consoleObj.session.startedAt);
+  const ref = consoleObj.session.pausedAt ?? nowMs;
+  const elapsedMs = Math.max(0, ref - consoleObj.session.startedAt);
   const minutes = Math.ceil(elapsedMs / 60_000);
   const amount = (minutes / 60) * consoleObj.ratePerHour;
   return { minutes, amount };
