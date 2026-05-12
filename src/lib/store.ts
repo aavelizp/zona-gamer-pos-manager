@@ -26,9 +26,11 @@ export interface ConsoleSession {
   startedAt: number; // ms
   endsAt?: number;   // ms (for fixed)
   alerted?: boolean;
+  preAlerted?: boolean; // 5-min warning fired
   prepaid?: boolean; // true when paid up-front
   prepaidMinutes?: number;
   customerName?: string;
+  pausedAt?: number; // ms when paused; undefined when running
 }
 
 export interface ExtraCharge {
