@@ -201,6 +201,15 @@ interface State {
     consoleId: string,
     payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; total: number; customer?: string }
   ) => void;
+
+  extendPaidSession: (
+    consoleId: string,
+    addMinutes: number,
+    payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; total: number; customer?: string }
+  ) => void;
+
+  addExpense: (e: { description: string; amount: number; method: "cash" | "mobile"; amountBs?: number }) => void;
+  removeExpense: (id: string) => void;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -231,6 +240,8 @@ export const useStore = create<State>()(
       queue: [],
       members: [],
       maintenanceLogs: [],
+      sessionHistory: [],
+      expenses: [],
 
       setRate: (n) => set({ rate: Math.max(0, n) }),
       toggleSound: () => set((s) => ({ soundOn: !s.soundOn })),
