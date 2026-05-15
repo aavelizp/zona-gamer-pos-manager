@@ -132,6 +132,8 @@ function Index() {
           <TabsContent value="credits"><CreditsTab /></TabsContent>
           <TabsContent value="club"><MembersTab /></TabsContent>
           <TabsContent value="maintenance"><MaintenanceTab /></TabsContent>
+          <TabsContent value="expenses"><ExpensesTab /></TabsContent>
+          <TabsContent value="config"><BusinessConfigTab /></TabsContent>
         </Tabs>
       </main>
 
