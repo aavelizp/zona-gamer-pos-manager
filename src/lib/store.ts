@@ -754,12 +754,19 @@ export const useStore = create<State>()(
       addExpense: (e) =>
         set((s) => ({
           expenses: [
-            { id: uid(), ts: Date.now(), rate: s.rate, ...e },
+            { id: uid(), ts: e.ts ?? Date.now(), createdAt: Date.now(), rate: s.rate, ...e },
             ...s.expenses,
           ],
         })),
 
       removeExpense: (id) => set((s) => ({ expenses: s.expenses.filter((e) => e.id !== id) })),
+
+      setConsoleRate: (type, ratePerHour) =>
+        set((s) => ({
+          consoles: s.consoles.map((c) =>
+            c.type === type ? { ...c, ratePerHour: Math.max(0, ratePerHour) } : c
+          ),
+        })),
     }),
     { name: "gamerzone-store-v1" }
   )
