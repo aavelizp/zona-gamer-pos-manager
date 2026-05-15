@@ -564,11 +564,10 @@ export const useStore = create<State>()(
         set((s) => {
           const startOfToday = new Date();
           startOfToday.setHours(0, 0, 0, 0);
-          // Solo limpia VENTAS y GASTOS de HOY. Preserva: inventario, fiados,
-          // clientes, totalMinutes históricos y sessionHistory.
+          // Solo limpia VENTAS de HOY. Los GASTOS son permanentes (historial completo).
+          // Preserva: inventario, fiados, clientes, totalMinutes históricos, sessionHistory y expenses.
           return {
             sales: s.sales.filter((sale) => sale.ts < startOfToday.getTime()),
-            expenses: s.expenses.filter((e) => e.ts < startOfToday.getTime()),
             consoles: s.consoles.map((c) => ({ ...c, session: undefined, charges: [] })),
           };
         }),
