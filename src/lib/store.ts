@@ -126,14 +126,29 @@ export interface SessionHistoryEntry {
   prepaid: boolean;
 }
 
+export type ExpenseCategory =
+  | "Servicios"
+  | "Compras"
+  | "Mantenimiento"
+  | "Sueldos"
+  | "Limpieza"
+  | "Impuestos"
+  | "Otros";
+
+export const EXPENSE_CATEGORIES: ExpenseCategory[] = [
+  "Servicios", "Compras", "Mantenimiento", "Sueldos", "Limpieza", "Impuestos", "Otros",
+];
+
 export interface Expense {
   id: string;
-  ts: number;
+  ts: number;             // fecha del gasto (editable)
+  createdAt?: number;     // cuándo se registró (auto)
   description: string;
-  amount: number;        // USD
-  method: "cash" | "mobile"; // efectivo $ o pago móvil Bs
-  amountBs?: number;     // si fue pago móvil, monto original en Bs
+  amount: number;         // USD
+  method: "cash" | "mobile";
+  amountBs?: number;
   rate: number;
+  category?: ExpenseCategory;
 }
 
 interface State {
