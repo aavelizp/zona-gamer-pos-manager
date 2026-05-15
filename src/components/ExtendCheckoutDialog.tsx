@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { MixedPaymentInputs } from "@/components/MixedPaymentInputs";
 import { useStore, fmtUsd, fmtBs, type ConsoleState } from "@/lib/store";
 import { ReceiptDialog, type ReceiptData } from "@/components/Receipt";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
