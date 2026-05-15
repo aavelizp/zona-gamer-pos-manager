@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Wallet, AlertTriangle } from "lucide-react";
+import { MixedPaymentInputs } from "@/components/MixedPaymentInputs";
 
 export function CreditsTab() {
   const credits = useStore((s) => s.credits);
@@ -99,17 +100,13 @@ export function CreditsTab() {
                 </div>
               )}
               {method === "mixed" && (
-                <div className="space-y-2">
-                  <div><Label>Efectivo $</Label><Input type="number" step="0.01" value={cashUsd} onChange={(e) => setCashUsd(e.target.value)} /></div>
-                  <div>
-                    <Label>Pago Móvil Bs</Label>
-                    <Input type="number" step="0.01" value={mobileBs} onChange={(e) => setMobileBs(e.target.value)} />
-                    <p className="text-xs text-muted-foreground">≈ {fmtUsd(mobileUsd)}</p>
-                  </div>
-                  <div className={`text-sm ${covered ? "text-success" : "text-warning"}`}>
-                    Pagado: {fmtUsd(paid)} / {fmtUsd(total)} {covered ? "✓" : `· Falta ${fmtUsd(Math.max(0, remaining))}`}
-                  </div>
-                </div>
+                <MixedPaymentInputs
+                  total={total}
+                  cashUsd={cashUsd}
+                  mobileBs={mobileBs}
+                  setCashUsd={setCashUsd}
+                  setMobileBs={setMobileBs}
+                />
               )}
               {showChange && cashTarget > 0 && (
                 <div className="space-y-1 border border-border rounded-md p-3 bg-background/40">

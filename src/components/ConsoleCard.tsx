@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ExtendCheckoutDialog } from "@/components/ExtendCheckoutDialog";
+import { MixedPaymentInputs } from "@/components/MixedPaymentInputs";
 
 interface CustomerSearchProps {
   name: string; idDoc: string; phone: string;
@@ -362,20 +363,13 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
           )}
 
           {method === "mixed" && (
-            <div className="space-y-2">
-              <div>
-                <Label>Efectivo $</Label>
-                <Input type="number" step="0.01" value={cashUsd} onChange={(e) => setCashUsd(e.target.value)} />
-              </div>
-              <div>
-                <Label>Pago Móvil Bs</Label>
-                <Input type="number" step="0.01" value={mobileBs} onChange={(e) => setMobileBs(e.target.value)} />
-                <p className="text-xs text-muted-foreground">≈ {fmtUsd(mobileUsd)}</p>
-              </div>
-              <div className={`text-sm ${Math.abs(remaining) < 0.01 ? "text-success" : remaining > 0 ? "text-warning" : "text-accent"}`}>
-                {remaining > 0.01 ? `Falta: ${fmtUsd(remaining)} (${fmtBs(remaining, rate)})` : remaining < -0.01 ? `Vuelto: ${fmtUsd(-remaining)}` : "Pago exacto ✓"}
-              </div>
-            </div>
+            <MixedPaymentInputs
+              total={total}
+              cashUsd={cashUsd}
+              mobileBs={mobileBs}
+              setCashUsd={setCashUsd}
+              setMobileBs={setMobileBs}
+            />
           )}
           {showBill && cashTarget > 0 && (
             <div className="space-y-1 border border-border rounded-md p-3 bg-background/40">
@@ -393,7 +387,14 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
         </div>
         <DialogFooter className="flex-wrap gap-2">
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={submit} className="bg-gradient-to-r from-primary to-accent">
+          <Button
+            onClick={submit}
+            disabled={
+              (method === "mixed" && remaining > 0.01) ||
+              (method === "credit" && !name.trim())
+            }
+            className="bg-gradient-to-r from-primary to-accent"
+          >
             <Receipt className="h-4 w-4 mr-1" />Confirmar Pago
           </Button>
         </DialogFooter>
@@ -590,17 +591,13 @@ function PrepayCheckout({ open, onClose, consoleObj }: PrepayProps) {
                 </div>
               )}
               {method === "mixed" && (
-                <div className="space-y-2">
-                  <div><Label>Efectivo $</Label><Input type="number" step="0.01" value={cashUsd} onChange={(e) => setCashUsd(e.target.value)} /></div>
-                  <div>
-                    <Label>Pago Móvil Bs</Label>
-                    <Input type="number" step="0.01" value={mobileBs} onChange={(e) => setMobileBs(e.target.value)} />
-                    <p className="text-xs text-muted-foreground">≈ {fmtUsd(mobileUsd)}</p>
-                  </div>
-                  <div className={`text-sm ${Math.abs(remaining) < 0.01 ? "text-success" : remaining > 0 ? "text-warning" : "text-accent"}`}>
-                    Pagado: {fmtUsd(paid)} / {fmtUsd(total)} {paid + 0.01 >= total ? "✓" : `· Falta ${fmtUsd(Math.max(0, remaining))}`}
-                  </div>
-                </div>
+                <MixedPaymentInputs
+                  total={total}
+                  cashUsd={cashUsd}
+                  mobileBs={mobileBs}
+                  setCashUsd={setCashUsd}
+                  setMobileBs={setMobileBs}
+                />
               )}
               {showBill && cashTarget > 0 && (
                 <div className="space-y-1 border border-border rounded-md p-3 bg-background/40">
@@ -716,23 +713,26 @@ function PayExtrasDialog({ open, onClose, consoleObj }: PayExtrasProps) {
               </div>
             )}
             {method === "mixed" && (
-              <div className="space-y-2">
-                <div><Label>Efectivo $</Label><Input type="number" step="0.01" value={cashUsd} onChange={(e) => setCashUsd(e.target.value)} /></div>
-                <div>
-                  <Label>Pago Móvil Bs</Label>
-                  <Input type="number" step="0.01" value={mobileBs} onChange={(e) => setMobileBs(e.target.value)} />
-                  <p className="text-xs text-muted-foreground">≈ {fmtUsd(mobileUsd)}</p>
-                </div>
-                <div className={`text-sm ${remaining <= 0.01 ? "text-success" : "text-warning"}`}>
-                  {remaining > 0.01 ? `Falta: ${fmtUsd(remaining)}` : "Pago exacto ✓"}
-                </div>
-              </div>
+              <MixedPaymentInputs
+                total={total}
+                cashUsd={cashUsd}
+                mobileBs={mobileBs}
+                setCashUsd={setCashUsd}
+                setMobileBs={setMobileBs}
+              />
             )}
             {method === "credit" && !name.trim() && <p className="text-xs text-destructive">Indica el nombre del cliente para fiar.</p>}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={onClose}>Cancelar</Button>
-            <Button onClick={submit} className="bg-gradient-to-r from-primary to-accent">
+            <Button
+              onClick={submit}
+              disabled={
+                (method === "mixed" && remaining > 0.01) ||
+                (method === "credit" && !name.trim())
+              }
+              className="bg-gradient-to-r from-primary to-accent"
+            >
               <Receipt className="h-4 w-4 mr-1" />Confirmar Pago
             </Button>
           </DialogFooter>

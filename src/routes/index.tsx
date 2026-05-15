@@ -13,6 +13,8 @@ import { CloseDayDialog } from "@/components/CloseDayDialog";
 import { MembersTab } from "@/components/MembersTab";
 import { MaintenanceTab } from "@/components/MaintenanceTab";
 import { ExpenseDialog } from "@/components/ExpenseDialog";
+import { ExpensesTab } from "@/components/ExpensesTab";
+import { BusinessConfigTab } from "@/components/BusinessConfigTab";
 import { Volume2, VolumeX, FileSpreadsheet, Gamepad2, Receipt, Wallet } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -110,6 +112,8 @@ function Index() {
             <TabsTrigger value="credits">Fiados {credits.length > 0 && <span className="ml-1 text-accent">({credits.length})</span>}</TabsTrigger>
             <TabsTrigger value="club">🏆 Club Gamer</TabsTrigger>
             <TabsTrigger value="maintenance">🔧 Mantenimiento</TabsTrigger>
+            <TabsTrigger value="expenses">💸 Gastos</TabsTrigger>
+            <TabsTrigger value="config">⚙️ Configuración</TabsTrigger>
           </TabsList>
 
           <TabsContent value="dashboard">
@@ -128,6 +132,8 @@ function Index() {
           <TabsContent value="credits"><CreditsTab /></TabsContent>
           <TabsContent value="club"><MembersTab /></TabsContent>
           <TabsContent value="maintenance"><MaintenanceTab /></TabsContent>
+          <TabsContent value="expenses"><ExpensesTab /></TabsContent>
+          <TabsContent value="config"><BusinessConfigTab /></TabsContent>
         </Tabs>
       </main>
 

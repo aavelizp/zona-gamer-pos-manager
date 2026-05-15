@@ -126,14 +126,29 @@ export interface SessionHistoryEntry {
   prepaid: boolean;
 }
 
+export type ExpenseCategory =
+  | "Servicios"
+  | "Compras"
+  | "Mantenimiento"
+  | "Sueldos"
+  | "Limpieza"
+  | "Impuestos"
+  | "Otros";
+
+export const EXPENSE_CATEGORIES: ExpenseCategory[] = [
+  "Servicios", "Compras", "Mantenimiento", "Sueldos", "Limpieza", "Impuestos", "Otros",
+];
+
 export interface Expense {
   id: string;
-  ts: number;
+  ts: number;             // fecha del gasto (editable)
+  createdAt?: number;     // cuándo se registró (auto)
   description: string;
-  amount: number;        // USD
-  method: "cash" | "mobile"; // efectivo $ o pago móvil Bs
-  amountBs?: number;     // si fue pago móvil, monto original en Bs
+  amount: number;         // USD
+  method: "cash" | "mobile";
+  amountBs?: number;
   rate: number;
+  category?: ExpenseCategory;
 }
 
 interface State {
@@ -208,8 +223,10 @@ interface State {
     payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; total: number; customer?: string }
   ) => void;
 
-  addExpense: (e: { description: string; amount: number; method: "cash" | "mobile"; amountBs?: number }) => void;
+  addExpense: (e: { description: string; amount: number; method: "cash" | "mobile"; amountBs?: number; category?: ExpenseCategory; ts?: number }) => void;
   removeExpense: (id: string) => void;
+
+  setConsoleRate: (type: ConsoleType, ratePerHour: number) => void;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -547,11 +564,10 @@ export const useStore = create<State>()(
         set((s) => {
           const startOfToday = new Date();
           startOfToday.setHours(0, 0, 0, 0);
-          // Solo limpia VENTAS y GASTOS de HOY. Preserva: inventario, fiados,
-          // clientes, totalMinutes históricos y sessionHistory.
+          // Solo limpia VENTAS de HOY. Los GASTOS son permanentes (historial completo).
+          // Preserva: inventario, fiados, clientes, totalMinutes históricos, sessionHistory y expenses.
           return {
             sales: s.sales.filter((sale) => sale.ts < startOfToday.getTime()),
-            expenses: s.expenses.filter((e) => e.ts < startOfToday.getTime()),
             consoles: s.consoles.map((c) => ({ ...c, session: undefined, charges: [] })),
           };
         }),
@@ -734,15 +750,22 @@ export const useStore = create<State>()(
           };
         }),
 
-      addExpense: (e) =>
+      addExpense: ({ ts, ...rest }) =>
         set((s) => ({
           expenses: [
-            { id: uid(), ts: Date.now(), rate: s.rate, ...e },
+            { id: uid(), ts: ts ?? Date.now(), createdAt: Date.now(), rate: s.rate, ...rest },
             ...s.expenses,
           ],
         })),
 
       removeExpense: (id) => set((s) => ({ expenses: s.expenses.filter((e) => e.id !== id) })),
+
+      setConsoleRate: (type, ratePerHour) =>
+        set((s) => ({
+          consoles: s.consoles.map((c) =>
+            c.type === type ? { ...c, ratePerHour: Math.max(0, ratePerHour) } : c
+          ),
+        })),
     }),
     { name: "gamerzone-store-v1" }
   )

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { MixedPaymentInputs } from "@/components/MixedPaymentInputs";
 import { useStore, fmtUsd, fmtBs, type ConsoleState } from "@/lib/store";
 import { ReceiptDialog, type ReceiptData } from "@/components/Receipt";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -95,23 +96,26 @@ export function ExtendCheckoutDialog({ open, onClose, consoleObj, addMinutes }: 
               </div>
             )}
             {method === "mixed" && (
-              <div className="space-y-2">
-                <div><Label>Efectivo $</Label><Input type="number" step="0.01" value={cashUsd} onChange={(e) => setCashUsd(e.target.value)} /></div>
-                <div>
-                  <Label>Pago Móvil Bs</Label>
-                  <Input type="number" step="0.01" value={mobileBs} onChange={(e) => setMobileBs(e.target.value)} />
-                  <p className="text-xs text-muted-foreground">≈ {fmtUsd(mobileUsd)}</p>
-                </div>
-                <div className={`text-sm ${remaining <= 0.01 ? "text-success" : "text-warning"}`}>
-                  {remaining > 0.01 ? `Falta: ${fmtUsd(remaining)}` : "Pago exacto ✓"}
-                </div>
-              </div>
+              <MixedPaymentInputs
+                total={total}
+                cashUsd={cashUsd}
+                mobileBs={mobileBs}
+                setCashUsd={setCashUsd}
+                setMobileBs={setMobileBs}
+              />
             )}
             {method === "credit" && !name.trim() && <p className="text-xs text-destructive">Indica el nombre del cliente para fiar.</p>}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={onClose}>Cancelar</Button>
-            <Button onClick={submit} className="bg-gradient-to-r from-primary to-accent">
+            <Button
+              onClick={submit}
+              disabled={
+                (method === "mixed" && remaining > 0.01) ||
+                (method === "credit" && !name.trim())
+              }
+              className="bg-gradient-to-r from-primary to-accent"
+            >
               <Receipt className="h-4 w-4 mr-1" /> Cobrar y extender
             </Button>
           </DialogFooter>
