@@ -363,20 +363,13 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
           )}
 
           {method === "mixed" && (
-            <div className="space-y-2">
-              <div>
-                <Label>Efectivo $</Label>
-                <Input type="number" step="0.01" value={cashUsd} onChange={(e) => setCashUsd(e.target.value)} />
-              </div>
-              <div>
-                <Label>Pago Móvil Bs</Label>
-                <Input type="number" step="0.01" value={mobileBs} onChange={(e) => setMobileBs(e.target.value)} />
-                <p className="text-xs text-muted-foreground">≈ {fmtUsd(mobileUsd)}</p>
-              </div>
-              <div className={`text-sm ${Math.abs(remaining) < 0.01 ? "text-success" : remaining > 0 ? "text-warning" : "text-accent"}`}>
-                {remaining > 0.01 ? `Falta: ${fmtUsd(remaining)} (${fmtBs(remaining, rate)})` : remaining < -0.01 ? `Vuelto: ${fmtUsd(-remaining)}` : "Pago exacto ✓"}
-              </div>
-            </div>
+            <MixedPaymentInputs
+              total={total}
+              cashUsd={cashUsd}
+              mobileBs={mobileBs}
+              setCashUsd={setCashUsd}
+              setMobileBs={setMobileBs}
+            />
           )}
           {showBill && cashTarget > 0 && (
             <div className="space-y-1 border border-border rounded-md p-3 bg-background/40">
