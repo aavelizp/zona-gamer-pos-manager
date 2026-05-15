@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ExtendCheckoutDialog } from "@/components/ExtendCheckoutDialog";
+import { MixedPaymentInputs } from "@/components/MixedPaymentInputs";
 
 interface CustomerSearchProps {
   name: string; idDoc: string; phone: string;
