@@ -13,6 +13,8 @@ import { CloseDayDialog } from "@/components/CloseDayDialog";
 import { MembersTab } from "@/components/MembersTab";
 import { MaintenanceTab } from "@/components/MaintenanceTab";
 import { ExpenseDialog } from "@/components/ExpenseDialog";
+import { ExpensesTab } from "@/components/ExpensesTab";
+import { BusinessConfigTab } from "@/components/BusinessConfigTab";
 import { Volume2, VolumeX, FileSpreadsheet, Gamepad2, Receipt, Wallet } from "lucide-react";
 
 export const Route = createFileRoute("/")({
