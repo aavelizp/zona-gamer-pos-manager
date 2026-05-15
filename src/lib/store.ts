@@ -223,8 +223,10 @@ interface State {
     payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; total: number; customer?: string }
   ) => void;
 
-  addExpense: (e: { description: string; amount: number; method: "cash" | "mobile"; amountBs?: number }) => void;
+  addExpense: (e: { description: string; amount: number; method: "cash" | "mobile"; amountBs?: number; category?: ExpenseCategory; ts?: number }) => void;
   removeExpense: (id: string) => void;
+
+  setConsoleRate: (type: ConsoleType, ratePerHour: number) => void;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
