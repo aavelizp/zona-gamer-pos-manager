@@ -112,6 +112,8 @@ function Index() {
             <TabsTrigger value="credits">Fiados {credits.length > 0 && <span className="ml-1 text-accent">({credits.length})</span>}</TabsTrigger>
             <TabsTrigger value="club">🏆 Club Gamer</TabsTrigger>
             <TabsTrigger value="maintenance">🔧 Mantenimiento</TabsTrigger>
+            <TabsTrigger value="expenses">💸 Gastos</TabsTrigger>
+            <TabsTrigger value="config">⚙️ Configuración</TabsTrigger>
           </TabsList>
 
           <TabsContent value="dashboard">
