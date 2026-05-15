@@ -387,7 +387,14 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
         </div>
         <DialogFooter className="flex-wrap gap-2">
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={submit} className="bg-gradient-to-r from-primary to-accent">
+          <Button
+            onClick={submit}
+            disabled={
+              (method === "mixed" && remaining > 0.01) ||
+              (method === "credit" && !name.trim())
+            }
+            className="bg-gradient-to-r from-primary to-accent"
+          >
             <Receipt className="h-4 w-4 mr-1" />Confirmar Pago
           </Button>
         </DialogFooter>
