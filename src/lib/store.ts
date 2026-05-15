@@ -751,10 +751,10 @@ export const useStore = create<State>()(
           };
         }),
 
-      addExpense: (e) =>
+      addExpense: ({ ts, ...rest }) =>
         set((s) => ({
           expenses: [
-            { id: uid(), ts: e.ts ?? Date.now(), createdAt: Date.now(), rate: s.rate, ...e },
+            { id: uid(), ts: ts ?? Date.now(), createdAt: Date.now(), rate: s.rate, ...rest },
             ...s.expenses,
           ],
         })),
