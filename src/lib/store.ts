@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
+import { supabase } from "@/integrations/supabase/client";
 
 export type ProductId = string;
 export interface Product {
@@ -240,6 +241,27 @@ const defaultConsoles: ConsoleState[] = [
   { id: "ps5-2", name: "PS5 #2", type: "PS5", ratePerHour: 3, totalMinutes: 0, charges: [] },
 ];
 
+// [NUEVO] Motor de almacenamiento en la Nube
+const supabaseStorage = {
+  getItem: async (name: string) => {
+    const { data, error } = await supabase
+      .from('app_state')
+      .select('state')
+      .eq('id', name)
+      .single();
+    if (error || !data) return null;
+    return JSON.stringify(data.state);
+  },
+  setItem: async (name: string, value: string) => {
+    await supabase
+      .from('app_state')
+      .upsert({ id: name, state: JSON.parse(value) });
+  },
+  removeItem: async (name: string) => {
+    await supabase.from('app_state').delete().eq('id', name);
+  }
+};
+
 export const useStore = create<State>()(
   persist(
     (set, get) => ({
@@ -370,19 +392,16 @@ export const useStore = create<State>()(
         set((s) => {
           const combo = s.combos.find((c) => c.id === comboId);
           if (!combo) return s;
-          // verify stock
           for (const it of combo.items) {
             const p = s.products.find((pp) => pp.id === it.productId);
             if (!p || p.stock < it.qty) return s;
           }
           const consoleObj = s.consoles.find((c) => c.id === consoleId);
           if (!consoleObj) return s;
-          // Discount stock
           const newProducts = s.products.map((p) => {
             const it = combo.items.find((i) => i.productId === p.id);
             return it ? { ...p, stock: p.stock - it.qty } : p;
           });
-          // Apply hours: extend if running, otherwise start fixed
           const addMs = combo.hours * 60 * 60_000;
           const newSession: ConsoleSession = consoleObj.session
             ? {
@@ -452,7 +471,6 @@ export const useStore = create<State>()(
                 ]
               : s.credits;
 
-          // Loyalty: upsert member if customerInfo with name+phone provided
           let newMembers = s.members;
           const ci = payload.customerInfo;
           if (ci && ci.name?.trim() && ci.phone?.trim()) {
@@ -564,8 +582,6 @@ export const useStore = create<State>()(
         set((s) => {
           const startOfToday = new Date();
           startOfToday.setHours(0, 0, 0, 0);
-          // Solo limpia VENTAS de HOY. Los GASTOS son permanentes (historial completo).
-          // Preserva: inventario, fiados, clientes, totalMinutes históricos, sessionHistory y expenses.
           return {
             sales: s.sales.filter((sale) => sale.ts < startOfToday.getTime()),
             consoles: s.consoles.map((c) => ({ ...c, session: undefined, charges: [] })),
@@ -598,7 +614,6 @@ export const useStore = create<State>()(
           if (!c) return s;
           const combo = payload.comboId ? s.combos.find((cm) => cm.id === payload.comboId) : undefined;
 
-          // Stock check + deduction for combo
           let newProducts = s.products;
           const items: SaleRecord["items"] = [];
           if (combo) {
@@ -626,7 +641,6 @@ export const useStore = create<State>()(
             method: payload.method, customer: payload.customerInfo?.name,
             concept: "Consola", items,
           };
-          // Loyalty upsert
           let newMembers = s.members;
           const ci = payload.customerInfo;
           if (ci && ci.name?.trim() && ci.phone?.trim()) {
@@ -767,9 +781,25 @@ export const useStore = create<State>()(
           ),
         })),
     }),
-    { name: "gamerzone-store-v1" }
+    { 
+      name: "gamerzone-store-v1",
+      storage: createJSONStorage(() => supabaseStorage), // Reemplazamos el disco duro por Supabase
+    }
   )
 );
+
+// [NUEVO] El receptor de radio en vivo
+supabase
+  .channel('realtime-sync')
+  .on(
+    'postgres_changes',
+    { event: '*', schema: 'public', table: 'app_state' },
+    () => {
+      // Cuando otro dispositivo guarda en la base de datos, este dispositivo se recarga solo
+      useStore.persist.rehydrate();
+    }
+  )
+  .subscribe();
 
 // Helpers
 export const fmtUsd = (n: number) => `$${(n || 0).toFixed(2)}`;
