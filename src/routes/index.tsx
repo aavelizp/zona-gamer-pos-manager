@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
+import { Login } from "@/components/Login";
 import { useStore, fmtBs, fmtUsd } from "@/lib/store";
 import { exportData } from "@/lib/excel";
 import { Button } from "@/components/ui/button";
@@ -15,7 +17,7 @@ import { MaintenanceTab } from "@/components/MaintenanceTab";
 import { ExpenseDialog } from "@/components/ExpenseDialog";
 import { ExpensesTab } from "@/components/ExpensesTab";
 import { BusinessConfigTab } from "@/components/BusinessConfigTab";
-import { Volume2, VolumeX, FileSpreadsheet, Gamepad2, Receipt, Wallet } from "lucide-react";
+import { Volume2, VolumeX, FileSpreadsheet, Gamepad2, Receipt, Wallet, LogOut } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -33,6 +35,28 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
+  // LÓGICA DE SEGURIDAD (NUEVA)
+  const [session, setSession] = useState<any>(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  useEffect(() => {
+    // Revisar si ya hay una sesión guardada
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setIsCheckingAuth(false);
+    });
+
+    // Escuchar cuando el usuario entra o sale
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // ESTADO GLOBAL
   const rate = useStore((s) => s.rate);
   const setRate = useStore((s) => s.setRate);
   const soundOn = useStore((s) => s.soundOn);
@@ -49,7 +73,7 @@ function Index() {
     return sales.filter((s) => s.ts >= start.getTime()).reduce((a, s) => a + s.total, 0);
   }, [sales]);
 
-  // Suggested consoles (least used per type, only among free ones)
+  // Consolas sugeridas
   const suggested = useMemo(() => {
     const free = consoles.filter((c) => !c.session);
     const ps4 = free.filter((c) => c.type === "PS4").sort((a, b) => a.totalMinutes - b.totalMinutes)[0]?.id;
@@ -57,6 +81,22 @@ function Index() {
     return new Set([ps4, ps5].filter(Boolean) as string[]);
   }, [consoles]);
 
+  // PANTALLA DE CARGA INICIAL
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-[#0B0914] flex flex-col items-center justify-center font-display">
+        <Gamepad2 className="h-12 w-12 text-[#9E54FF] animate-pulse mb-4" />
+        <p className="text-[#9E54FF] tracking-widest animate-pulse">CARGANDO SISTEMA...</p>
+      </div>
+    );
+  }
+
+  // SI NO HAY SESIÓN, MOSTRAR LOGIN
+  if (!session) {
+    return <Login />;
+  }
+
+  // SI HAY SESIÓN, MOSTRAR EL SISTEMA COMPLETO
   return (
     <div className="min-h-screen bg-background bg-grid">
       {/* Header */}
@@ -83,7 +123,7 @@ function Index() {
                 className="h-7 w-24 bg-transparent border-0 font-display text-base focus-visible:ring-1"
               />
             </div>
-            <div className="hidden md:flex flex-col text-right text-xs">
+            <div className="hidden md:flex flex-col text-right text-xs mr-2">
               <span className="text-muted-foreground">Caja Hoy</span>
               <span className="font-display text-base">{fmtUsd(today)} <span className="text-accent">· {fmtBs(today, rate)}</span></span>
             </div>
@@ -98,6 +138,16 @@ function Index() {
             </Button>
             <Button variant={soundOn ? "default" : "outline"} size="icon" onClick={toggleSound}>
               {soundOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+            </Button>
+            {/* BOTÓN DE SALIR */}
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => supabase.auth.signOut()} 
+              className="text-muted-foreground hover:text-red-500 hover:bg-red-500/10 ml-2"
+              title="Cerrar Sesión"
+            >
+              <LogOut className="h-4 w-4" />
             </Button>
           </div>
         </div>
@@ -138,7 +188,7 @@ function Index() {
       </main>
 
       <footer className="text-center py-6 text-xs text-muted-foreground">
-        💾 Datos guardados localmente · Exporta a Excel para respaldo
+        💾 Conectado a la Nube (Supabase) · Sistema Protegido
       </footer>
       <CloseDayDialog open={closeOpen} onOpenChange={setCloseOpen} />
       <ExpenseDialog open={expenseOpen} onOpenChange={setExpenseOpen} />
