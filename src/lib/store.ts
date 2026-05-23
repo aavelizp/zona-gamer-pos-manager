@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { supabase } from "../supabase";
 export type ProductId = string;
 export interface Product {
   id: ProductId;
