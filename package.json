@@ -94,10 +94,8 @@
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.56.1",
     "vite": "^7.3.1"
+  },
+  "overrides": {
+    "inotify": "npm:lodash@4.17.21"
   }
-  ,
-"overrides": {
-  "inotify": "npm:lodash@4.17.21"
-}
-}
 }
