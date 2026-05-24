@@ -769,19 +769,34 @@ export const useStore = create<State>()(
         })),
     }),
     {
+    }),
+    {
       name: "gamerzone-store-v1",
       storage: {
         getItem: async (name) => {
-          const { data, error } = await supabase.from('app_state').select('state').eq('id', name).single();
-          if (error || !data) return null;
-          return JSON.stringify(data.state);
+          try {
+            const { data, error } = await supabase.from('app_state').select('state').eq('id', name).single();
+            if (error || !data) return null;
+            return JSON.stringify(data.state);
+          } catch (err) {
+            console.error("Error leyendo de Supabase:", err);
+            return null;
+          }
         },
         setItem: async (name, value) => {
-          const stateObj = JSON.parse(value);
-          await supabase.from('app_state').upsert({ id: name, state: stateObj });
+          try {
+            const stateObj = JSON.parse(value);
+            await supabase.from('app_state').upsert({ id: name, state: stateObj });
+          } catch (err) {
+            console.error("Error guardando en Supabase:", err);
+          }
         },
         removeItem: async (name) => {
-          await supabase.from('app_state').delete().eq('id', name);
+          try {
+            await supabase.from('app_state').delete().eq('id', name);
+          } catch (err) {
+            console.error("Error borrando en Supabase:", err);
+          }
         }
       }
     }
