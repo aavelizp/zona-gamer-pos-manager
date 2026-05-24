@@ -759,7 +759,7 @@ export const useStore = create<State>()(
           ],
         })),
 
-      setConsoleRate: (type, ratePerHour) =>
+        setConsoleRate: (type, ratePerHour) =>
         set((s) => ({
           consoles: s.consoles.map((c) =>
             c.type === type ? { ...c, ratePerHour: Math.max(0, ratePerHour) } : c
@@ -771,9 +771,10 @@ export const useStore = create<State>()(
       storage: {
         getItem: async (name) => {
           try {
-            const { data, error } = await supabase.from('app_state').select('state').eq('id', name).single();
+            // Cambiamos a maybeSingle() para evitar el error 406 si la base está vacía
+            const { data, error } = await supabase.from('app_state').select('state').eq('id', name).maybeSingle();
             if (error || !data) return null;
-            return JSON.stringify(data.state);
+            return data.state; // Lo devolvemos directo, sin "JSON.stringify"
           } catch (err) {
             console.error("Error leyendo de Supabase:", err);
             return null;
@@ -781,8 +782,8 @@ export const useStore = create<State>()(
         },
         setItem: async (name, value) => {
           try {
-            const stateObj = JSON.parse(value);
-            await supabase.from('app_state').upsert({ id: name, state: stateObj });
+            // "value" ya es un objeto perfecto. Quitamos el JSON.parse que rompía todo
+            await supabase.from('app_state').upsert({ id: name, state: value });
           } catch (err) {
             console.error("Error guardando en Supabase:", err);
           }
@@ -812,6 +813,7 @@ export const computeTimeAmount = (consoleObj: ConsoleState, nowMs: number): { mi
   const amount = (minutes / 60) * consoleObj.ratePerHour;
   return { minutes, amount };
 };
+
 // ==========================================
 // ANTENA DE TIEMPO REAL (Sincronización en vivo)
 // ==========================================
@@ -823,11 +825,12 @@ supabase
     (payload) => {
       console.log("📡 ¡SEÑAL RECIBIDA DESDE LA NUBE!", payload);
       
-      if (payload.new && (payload.new as any).state) {
-        useStore.setState((payload.new as any).state);
-        console.log("✅ Pantalla actualizada con éxito");
-      } else {
-        console.warn("⚠️ La señal llegó vacía. Revisa la seguridad en Supabase.");
+      // Zustand guarda los datos envueltos, así que extraemos el núcleo directo (.state.state)
+      const newState = payload.new && (payload.new as any).state ? (payload.new as any).state.state : null;
+      
+      if (newState) {
+        useStore.setState(newState);
+        console.log("✅ Pantalla actualizada en vivo con éxito");
       }
     }
   )
