@@ -812,3 +812,19 @@ export const computeTimeAmount = (consoleObj: ConsoleState, nowMs: number): { mi
   const amount = (minutes / 60) * consoleObj.ratePerHour;
   return { minutes, amount };
 };
+// ==========================================
+// ANTENA DE TIEMPO REAL (Sincronización en vivo)
+// ==========================================
+supabase
+  .channel('escuchar-nube')
+  .on(
+    'postgres_changes',
+    { event: '*', schema: 'public', table: 'app_state', filter: 'id=eq.gamerzone-store-v1' },
+    (payload) => {
+      // Cuando la nube avisa que hay un cambio, actualizamos la pantalla automáticamente
+      if (payload.new && (payload.new as any).state) {
+        useStore.setState((payload.new as any).state);
+      }
+    }
+  )
+  .subscribe();
