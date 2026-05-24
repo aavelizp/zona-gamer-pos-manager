@@ -819,12 +819,18 @@ supabase
   .channel('escuchar-nube')
   .on(
     'postgres_changes',
-    { event: '*', schema: 'public', table: 'app_state', filter: 'id=eq.gamerzone-store-v1' },
+    { event: '*', schema: 'public', table: 'app_state' },
     (payload) => {
-      // Cuando la nube avisa que hay un cambio, actualizamos la pantalla automáticamente
+      console.log("📡 ¡SEÑAL RECIBIDA DESDE LA NUBE!", payload);
+      
       if (payload.new && (payload.new as any).state) {
         useStore.setState((payload.new as any).state);
+        console.log("✅ Pantalla actualizada con éxito");
+      } else {
+        console.warn("⚠️ La señal llegó vacía. Revisa la seguridad en Supabase.");
       }
     }
   )
-  .subscribe();
+  .subscribe((status) => {
+    console.log("🔌 Estado de conexión de la antena:", status);
+  });
