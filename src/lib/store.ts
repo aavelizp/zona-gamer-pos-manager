@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { supabase } from "./supabase";
+import { supabase } from "../supabase";
 
 export type ProductId = string;
 export interface Product {
@@ -759,16 +759,12 @@ export const useStore = create<State>()(
           ],
         })),
 
-      removeExpense: (id) => set((s) => ({ expenses: s.expenses.filter((e) => e.id !== id) })),
-
       setConsoleRate: (type, ratePerHour) =>
         set((s) => ({
           consoles: s.consoles.map((c) =>
             c.type === type ? { ...c, ratePerHour: Math.max(0, ratePerHour) } : c
           ),
         })),
-    }),
-    {
     }),
     {
       name: "gamerzone-store-v1",
