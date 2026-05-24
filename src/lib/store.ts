@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { supabase } from "./supabase";
+
 export type ProductId = string;
 export interface Product {
   id: ProductId;
@@ -766,7 +768,23 @@ export const useStore = create<State>()(
           ),
         })),
     }),
-    { name: "gamerzone-store-v1" }
+    {
+      name: "gamerzone-store-v1",
+      storage: {
+        getItem: async (name) => {
+          const { data, error } = await supabase.from('app_state').select('state').eq('id', name).single();
+          if (error || !data) return null;
+          return JSON.stringify(data.state);
+        },
+        setItem: async (name, value) => {
+          const stateObj = JSON.parse(value);
+          await supabase.from('app_state').upsert({ id: name, state: stateObj });
+        },
+        removeItem: async (name) => {
+          await supabase.from('app_state').delete().eq('id', name);
+        }
+      }
+    }
   )
 );
 
