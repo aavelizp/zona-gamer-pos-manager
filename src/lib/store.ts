@@ -758,7 +758,6 @@ export const useStore = create<State>()(
             ...s.expenses,
           ],
         })),
-
         setConsoleRate: (type, ratePerHour) =>
         set((s) => ({
           consoles: s.consoles.map((c) =>
@@ -771,29 +770,29 @@ export const useStore = create<State>()(
       storage: {
         getItem: async (name) => {
           try {
-            // Cambiamos a maybeSingle() para evitar el error 406 si la base está vacía
             const { data, error } = await supabase.from('app_state').select('state').eq('id', name).maybeSingle();
             if (error || !data) return null;
-            return data.state; // Lo devolvemos directo, sin "JSON.stringify"
+            return data.state;
           } catch (err) {
-            console.error("Error leyendo de Supabase:", err);
             return null;
           }
         },
         setItem: async (name, value) => {
+          // 🛑 SEMÁFORO: Si el cambio vino del otro aparato, NO lo volvemos a subir
+          if ((window as any).isSincronizando) return;
+          
           try {
-            // "value" ya es un objeto perfecto. Quitamos el JSON.parse que rompía todo
-            await supabase.from('app_state').upsert({ id: name, state: value });
+            // Asegurarnos de subir los datos limpios
+            const safeValue = typeof value === 'string' ? JSON.parse(value) : value;
+            await supabase.from('app_state').upsert({ id: name, state: safeValue });
           } catch (err) {
-            console.error("Error guardando en Supabase:", err);
+            console.error("Error guardando:", err);
           }
         },
         removeItem: async (name) => {
           try {
             await supabase.from('app_state').delete().eq('id', name);
-          } catch (err) {
-            console.error("Error borrando en Supabase:", err);
-          }
+          } catch (err) {}
         }
       }
     }
@@ -813,8 +812,9 @@ export const computeTimeAmount = (consoleObj: ConsoleState, nowMs: number): { mi
   const amount = (minutes / 60) * consoleObj.ratePerHour;
   return { minutes, amount };
 };
+
 // ==========================================
-// ANTENA DE TIEMPO REAL (Sincronización en vivo)
+// ANTENA DE TIEMPO REAL CON SEMÁFORO
 // ==========================================
 supabase
   .channel('escuchar-nube')
@@ -822,29 +822,28 @@ supabase
     'postgres_changes',
     { event: '*', schema: 'public', table: 'app_state' },
     (payload) => {
-      // 1. Extraemos los datos de forma segura
       let rawState = payload.new ? (payload.new as any).state : null;
-      
-      // Por si la nube lo envía como texto envuelto, lo desenvolvemos
       if (typeof rawState === 'string') {
         try { rawState = JSON.parse(rawState); } catch(e) {}
       }
-
+      
       const newState = rawState ? rawState.state : null;
       
       if (newState) {
-        // 2. ESCUDO ANTI-BUCLES INFINITOS:
-        // Convertimos a texto el estado actual y el que acaba de llegar de la nube
         const estadoActual = JSON.stringify(useStore.getState());
         const estadoNube = JSON.stringify(newState);
         
-        // Solo actualizamos la pantalla si la nube trae datos REALMENTE nuevos (ej. desde el teléfono)
         if (estadoActual !== estadoNube) {
+          // 1. Ponemos el semáforo en ROJO (prohibido subir datos)
+          (window as any).isSincronizando = true;
+          
+          // 2. Actualizamos la pantalla
           useStore.setState(newState);
-          console.log("✅ Sincronización en vivo aplicada.");
-        } else {
-          // Si los datos son idénticos, fue un eco de nosotros mismos. Lo ignoramos.
-          console.log("🛡️ Eco ignorado (tu PC ya tiene estos datos).");
+          
+          // 3. Volvemos a poner el semáforo en VERDE medio segundo después
+          setTimeout(() => {
+            (window as any).isSincronizando = false;
+          }, 500);
         }
       }
     }
