@@ -813,7 +813,6 @@ export const computeTimeAmount = (consoleObj: ConsoleState, nowMs: number): { mi
   const amount = (minutes / 60) * consoleObj.ratePerHour;
   return { minutes, amount };
 };
-
 // ==========================================
 // ANTENA DE TIEMPO REAL (Sincronización en vivo)
 // ==========================================
@@ -823,17 +822,31 @@ supabase
     'postgres_changes',
     { event: '*', schema: 'public', table: 'app_state' },
     (payload) => {
-      console.log("📡 ¡SEÑAL RECIBIDA DESDE LA NUBE!", payload);
+      // 1. Extraemos los datos de forma segura
+      let rawState = payload.new ? (payload.new as any).state : null;
       
-      // Zustand guarda los datos envueltos, así que extraemos el núcleo directo (.state.state)
-      const newState = payload.new && (payload.new as any).state ? (payload.new as any).state.state : null;
+      // Por si la nube lo envía como texto envuelto, lo desenvolvemos
+      if (typeof rawState === 'string') {
+        try { rawState = JSON.parse(rawState); } catch(e) {}
+      }
+
+      const newState = rawState ? rawState.state : null;
       
       if (newState) {
-        useStore.setState(newState);
-        console.log("✅ Pantalla actualizada en vivo con éxito");
+        // 2. ESCUDO ANTI-BUCLES INFINITOS:
+        // Convertimos a texto el estado actual y el que acaba de llegar de la nube
+        const estadoActual = JSON.stringify(useStore.getState());
+        const estadoNube = JSON.stringify(newState);
+        
+        // Solo actualizamos la pantalla si la nube trae datos REALMENTE nuevos (ej. desde el teléfono)
+        if (estadoActual !== estadoNube) {
+          useStore.setState(newState);
+          console.log("✅ Sincronización en vivo aplicada.");
+        } else {
+          // Si los datos son idénticos, fue un eco de nosotros mismos. Lo ignoramos.
+          console.log("🛡️ Eco ignorado (tu PC ya tiene estos datos).");
+        }
       }
     }
   )
-  .subscribe((status) => {
-    console.log("🔌 Estado de conexión de la antena:", status);
-  });
+  .subscribe();
