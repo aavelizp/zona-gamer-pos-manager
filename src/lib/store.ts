@@ -781,13 +781,22 @@ export const useStore = create<State>()(
           // 🛑 SEMÁFORO: Si el cambio vino del otro aparato, NO lo volvemos a subir
           if ((window as any).isSincronizando) return;
           
-          try {
-            // Asegurarnos de subir los datos limpios
-            const safeValue = typeof value === 'string' ? JSON.parse(value) : value;
-            await supabase.from('app_state').upsert({ id: name, state: safeValue });
-          } catch (err) {
-            console.error("Error guardando:", err);
-          }
+          // Guardamos el valor pendiente en la memoria temporal
+          (window as any).estadoPendiente = value;
+
+          // 🕒 RELOJ INTELIGENTE (Debounce): Si sigues escribiendo, se reinicia el reloj
+          if ((window as any).relojSubida) clearTimeout((window as any).relojSubida);
+
+          // Esperamos casi 1 segundo desde la última tecla antes de enviar a la nube
+          (window as any).relojSubida = setTimeout(async () => {
+            try {
+              const valorFinal = (window as any).estadoPendiente;
+              const safeValue = typeof valorFinal === 'string' ? JSON.parse(valorFinal) : valorFinal;
+              await supabase.from('app_state').upsert({ id: name, state: safeValue });
+            } catch (err) {
+              console.error("Error guardando:", err);
+            }
+          }, 800); 
         },
         removeItem: async (name) => {
           try {
@@ -834,13 +843,13 @@ supabase
         const estadoNube = JSON.stringify(newState);
         
         if (estadoActual !== estadoNube) {
-          // 1. Ponemos el semáforo en ROJO (prohibido subir datos)
+          // 1. Semáforo en ROJO
           (window as any).isSincronizando = true;
           
-          // 2. Actualizamos la pantalla
+          // 2. Actualizamos la pantalla suavemente
           useStore.setState(newState);
           
-          // 3. Volvemos a poner el semáforo en VERDE medio segundo después
+          // 3. Semáforo en VERDE 
           setTimeout(() => {
             (window as any).isSincronizando = false;
           }, 500);
