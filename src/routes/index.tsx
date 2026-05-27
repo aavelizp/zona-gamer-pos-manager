@@ -69,8 +69,18 @@ function Index() {
   const [expenseOpen, setExpenseOpen] = useState(false);
 
   const today = useMemo(() => {
-    const start = new Date(); start.setHours(0, 0, 0, 0);
-    return sales.filter((s) => s.ts >= start.getTime()).reduce((a, s) => a + s.total, 0);
+    // Calculamos el inicio de HOY pero de forma absoluta, restando las últimas 24 horas
+    // para evitar problemas de zona horaria con la base de datos
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    
+    // Filtramos las ventas que ocurrieron después de la medianoche de hoy
+    return sales
+      .filter((s) => {
+        const saleDate = new Date(s.ts);
+        return saleDate >= startOfToday;
+      })
+      .reduce((total, s) => total + s.total, 0);
   }, [sales]);
 
   // Consolas sugeridas
