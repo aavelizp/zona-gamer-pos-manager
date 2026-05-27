@@ -225,8 +225,6 @@ interface State {
   ) => void;
 
   addExpense: (e: { description: string; amount: number; method: "cash" | "mobile"; amountBs?: number; category?: ExpenseCategory; ts?: number }) => void;
-  removeExpense: (id: string) => void;
-
   setConsoleRate: (type: ConsoleType, ratePerHour: number) => void;
 }
 
@@ -371,19 +369,16 @@ export const useStore = create<State>()(
         set((s) => {
           const combo = s.combos.find((c) => c.id === comboId);
           if (!combo) return s;
-          // verify stock
           for (const it of combo.items) {
             const p = s.products.find((pp) => pp.id === it.productId);
             if (!p || p.stock < it.qty) return s;
           }
           const consoleObj = s.consoles.find((c) => c.id === consoleId);
           if (!consoleObj) return s;
-          // Discount stock
           const newProducts = s.products.map((p) => {
             const it = combo.items.find((i) => i.productId === p.id);
             return it ? { ...p, stock: p.stock - it.qty } : p;
           });
-          // Apply hours: extend if running, otherwise start fixed
           const addMs = combo.hours * 60 * 60_000;
           const newSession: ConsoleSession = consoleObj.session
             ? {
@@ -453,7 +448,6 @@ export const useStore = create<State>()(
                 ]
               : s.credits;
 
-          // Loyalty: upsert member if customerInfo with name+phone provided
           let newMembers = s.members;
           const ci = payload.customerInfo;
           if (ci && ci.name?.trim() && ci.phone?.trim()) {
@@ -559,14 +553,12 @@ export const useStore = create<State>()(
               : m
           ),
         })),
-      removeMember: (memberId) => set((s) => ({ members: s.members.filter((m) => m.id !== memberId) })),
+      removeMember: (memberId) => set({ members: get().members.filter((m) => m.id !== memberId) }),
 
       closeDay: () =>
         set((s) => {
           const startOfToday = new Date();
           startOfToday.setHours(0, 0, 0, 0);
-          // Solo limpia VENTAS de HOY. Los GASTOS son permanentes (historial completo).
-          // Preserva: inventario, fiados, clientes, totalMinutes históricos, sessionHistory y expenses.
           return {
             sales: s.sales.filter((sale) => sale.ts < startOfToday.getTime()),
             consoles: s.consoles.map((c) => ({ ...c, session: undefined, charges: [] })),
@@ -599,7 +591,6 @@ export const useStore = create<State>()(
           if (!c) return s;
           const combo = payload.comboId ? s.combos.find((cm) => cm.id === payload.comboId) : undefined;
 
-          // Stock check + deduction for combo
           let newProducts = s.products;
           const items: SaleRecord["items"] = [];
           if (combo) {
@@ -627,7 +618,6 @@ export const useStore = create<State>()(
             method: payload.method, customer: payload.customerInfo?.name,
             concept: "Consola", items,
           };
-          // Loyalty upsert
           let newMembers = s.members;
           const ci = payload.customerInfo;
           if (ci && ci.name?.trim() && ci.phone?.trim()) {
@@ -758,7 +748,8 @@ export const useStore = create<State>()(
             ...s.expenses,
           ],
         })),
-        setConsoleRate: (type, ratePerHour) =>
+
+      setConsoleRate: (type, ratePerHour) =>
         set((s) => ({
           consoles: s.consoles.map((c) =>
             c.type === type ? { ...c, ratePerHour: Math.max(0, ratePerHour) } : c
@@ -769,36 +760,42 @@ export const useStore = create<State>()(
       name: "gamerzone-store-v1",
       storage: {
         getItem: async (name) => {
+          // 1. Intentar descargar lo más nuevo de la nube
           try {
             const { data, error } = await supabase.from('app_state').select('state').eq('id', name).maybeSingle();
-            if (error || !data) return null;
-            return data.state;
+            if (!error && data && data.state) {
+              localStorage.setItem(name, JSON.stringify(data.state));
+              return data.state;
+            }
           } catch (err) {
-            return null;
+            console.log("Offline: Usando copia del disco local.");
           }
+          // 2. Respaldo inmediato si falla el internet
+          const local = localStorage.getItem(name);
+          return local ? JSON.parse(local) : null;
         },
         setItem: async (name, value) => {
-          // 🛑 SEMÁFORO: Si el cambio vino del otro aparato, NO lo volvemos a subir
+          // Guardar SIEMPRE en disco local primero (Inmune a apagones)
+          const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
+          localStorage.setItem(name, stringValue);
+
           if ((window as any).isSincronizando) return;
-          
-          // Guardamos el valor pendiente en la memoria temporal
           (window as any).estadoPendiente = value;
 
-          // 🕒 RELOJ INTELIGENTE (Debounce): Si sigues escribiendo, se reinicia el reloj
           if ((window as any).relojSubida) clearTimeout((window as any).relojSubida);
 
-          // Esperamos casi 1 segundo desde la última tecla antes de enviar a la nube
           (window as any).relojSubida = setTimeout(async () => {
             try {
               const valorFinal = (window as any).estadoPendiente;
               const safeValue = typeof valorFinal === 'string' ? JSON.parse(valorFinal) : valorFinal;
               await supabase.from('app_state').upsert({ id: name, state: safeValue });
             } catch (err) {
-              console.error("Error guardando:", err);
+              console.warn("Sin conexión: Datos guardados localmente. Se subirán al recuperar internet.");
             }
           }, 800); 
         },
         removeItem: async (name) => {
+          localStorage.removeItem(name);
           try {
             await supabase.from('app_state').delete().eq('id', name);
           } catch (err) {}
@@ -823,7 +820,7 @@ export const computeTimeAmount = (consoleObj: ConsoleState, nowMs: number): { mi
 };
 
 // ==========================================
-// ANTENA DE TIEMPO REAL CON SEMÁFORO
+// ANTENA EN VIVO E INYECTOR AL VOLVER ONLINE
 // ==========================================
 supabase
   .channel('escuchar-nube')
@@ -835,26 +832,32 @@ supabase
       if (typeof rawState === 'string') {
         try { rawState = JSON.parse(rawState); } catch(e) {}
       }
-      
       const newState = rawState ? rawState.state : null;
-      
       if (newState) {
         const estadoActual = JSON.stringify(useStore.getState());
         const estadoNube = JSON.stringify(newState);
-        
         if (estadoActual !== estadoNube) {
-          // 1. Semáforo en ROJO
           (window as any).isSincronizando = true;
-          
-          // 2. Actualizamos la pantalla suavemente
           useStore.setState(newState);
-          
-          // 3. Semáforo en VERDE 
-          setTimeout(() => {
-            (window as any).isSincronizando = false;
-          }, 500);
+          localStorage.setItem("gamerzone-store-v1", JSON.stringify(rawState));
+          setTimeout(() => { (window as any).isSincronizando = false; }, 500);
         }
       }
     }
   )
   .subscribe();
+
+// Escuchador automático de retorno de internet
+window.addEventListener('online', async () => {
+  console.log("🌐 ¡Internet recuperado! Sincronizando datos con la nube...");
+  try {
+    const localData = localStorage.getItem('gamerzone-store-v1');
+    if (localData) {
+      const parsed = JSON.parse(localData);
+      await supabase.from('app_state').upsert({ id: 'gamerzone-store-v1', state: parsed });
+      console.log("✅ Servidor actualizado con los datos offline.");
+    }
+  } catch (err) {
+    console.error("Error en sincronización automática:", err);
+  }
+});

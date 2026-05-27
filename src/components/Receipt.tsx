@@ -21,7 +21,10 @@ export interface ReceiptData {
   customer: { name: string; idDoc?: string; phone?: string };
 }
 
-const INSTAGRAM = "@twins_gamer";
+// 1. Aquí actualizamos el nombre de usuario
+const INSTAGRAM = "@twinszonagamer";
+// 2. Aquí agregamos el enlace directo exacto
+const INSTAGRAM_LINK = "https://www.instagram.com/twinszonagamer?igsh=MWd2cnU5eW4yYnh4Zw==";
 const LOCAL = "TWINS GAMER";
 
 export function ReceiptDialog({ open, onClose, data }: { open: boolean; onClose: () => void; data: ReceiptData | null }) {
@@ -29,7 +32,8 @@ export function ReceiptDialog({ open, onClose, data }: { open: boolean; onClose:
   const [qr, setQr] = useState<string>("");
 
   useEffect(() => {
-    QRCode.toDataURL(`https://instagram.com/${INSTAGRAM.replace("@", "")}`, { margin: 1, width: 160, color: { dark: "#1a0b2e", light: "#ffffff" } })
+    // 3. Generamos el QR usando el nuevo enlace
+    QRCode.toDataURL(INSTAGRAM_LINK, { margin: 1, width: 160, color: { dark: "#1a0b2e", light: "#ffffff" } })
       .then(setQr).catch(() => setQr(""));
   }, []);
 
