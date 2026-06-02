@@ -12,7 +12,8 @@ import { InventoryTab, CombosTab } from "@/components/InventoryCombos";
 import { CreditsTab } from "@/components/CreditsTab";
 import { WaitQueue } from "@/components/WaitQueue";
 import { CloseDayDialog } from "@/components/CloseDayDialog";
-import { MembersTab } from "@/components/MembersTab";
+import { MembersTab } from "@/components/MembersTab"; // Muestra Club Gamer
+import { ClientsTab } from "@/components/ClientsTab"; // 👈 NUEVO: Muestra base global de clientes
 import { MaintenanceTab } from "@/components/MaintenanceTab";
 import { ExpenseDialog } from "@/components/ExpenseDialog";
 import { ExpensesTab } from "@/components/ExpensesTab";
@@ -25,13 +26,12 @@ export const Route = createFileRoute("/")({
     meta: [
       { title: "GamerZone POS · Control de Tiempos" },
       { name: "description", content: "Sistema POS y gestión de consolas." },
-      { name: "theme-color", content: "#1a0b2e" } // 👈 Color morado para el navegador del celular
+      { name: "theme-color", content: "#1a0b2e" }
     ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Archivo+Black&family=Hind:wght@400;500;600;700&display=swap" },
-      // 👈 Aquí le decimos al teléfono dónde está el logo
       { rel: "icon", type: "image/png", href: "/logo.png" },
       { rel: "apple-touch-icon", href: "/logo.png" } 
     ],
@@ -39,8 +39,7 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-// 🚨 RESTRICCIÓN DE SEGURIDAD: Coloca aquí exactamente tus 2 correos
-const CORREOS_AUTORIZADOS = ["aavelizp0107@gmail.com", "dsideregtstovar@gmail.com"];
+const CORREOS_AUTORIZADOS = ["aavelizp0107@gmail.com", "tu_segundo_correo@gmail.com"];
 
 function Index() {
   const [session, setSession] = useState<any>(null);
@@ -169,7 +168,8 @@ function Index() {
             <TabsTrigger value="inventory">Inventario</TabsTrigger>
             <TabsTrigger value="combos">Combos</TabsTrigger>
             <TabsTrigger value="credits">Fiados {credits.length > 0 && <span className="ml-1 text-accent">({credits.length})</span>}</TabsTrigger>
-            <TabsTrigger value="club">👥 Clientes</TabsTrigger>
+            <TabsTrigger value="club">🏆 Club Gamer</TabsTrigger> {/* 👈 DEVUELTA A LA VIDA */}
+            <TabsTrigger value="clients">👥 Clientes</TabsTrigger> {/* 👈 NUEVA PESTAÑA DE GESTIÓN */}
             <TabsTrigger value="maintenance">🔧 Mantenimiento</TabsTrigger>
             <TabsTrigger value="expenses">💸 Gastos</TabsTrigger>
             <TabsTrigger value="config">⚙️ Configuración</TabsTrigger>
@@ -189,7 +189,8 @@ function Index() {
           <TabsContent value="inventory"><InventoryTab /></TabsContent>
           <TabsContent value="combos"><CombosTab /></TabsContent>
           <TabsContent value="credits"><CreditsTab /></TabsContent>
-          <TabsContent value="club"><MembersTab /></TabsContent>
+          <TabsContent value="club"><MembersTab /></TabsContent> {/* Muestra solo jugadores acumulados */}
+          <TabsContent value="clients"><ClientsTab /></TabsContent> {/* 👈 Panel de administración y creación manual */}
           <TabsContent value="maintenance"><MaintenanceTab /></TabsContent>
           <TabsContent value="expenses"><ExpensesTab /></TabsContent>
           <TabsContent value="config"><BusinessConfigTab /></TabsContent>
