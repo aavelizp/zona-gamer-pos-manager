@@ -38,7 +38,6 @@ export interface ExtraCharge {
   label: string;
   amount: number; // USD
   ts: number;
-  // for inventory restock on revert (not implemented)
   productId?: ProductId;
   qty?: number;
 }
@@ -79,7 +78,7 @@ export interface SaleRecord {
   rate: number;
   method: PaymentMethod;
   customer?: string;
-  concept: string; // "Consola", "Deuda Cobrada"
+  concept: string; // "Consola", "Deuda Cobrada", "Venta Directa"
   items: { name: string; qty: number; price: number }[];
 }
 
@@ -192,6 +191,9 @@ interface State {
     payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; customer?: string; total: number; timeAmount: number; extrasAmount: number; minutes: number; customerInfo?: CustomerInfo }
   ) => void;
 
+  // NUEVA: Venta directa (sin consola)
+  directSale: (payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; total: number; customer?: string; items: { productId: string; qty: number; price: number; name: string }[] }) => void;
+
   payCredit: (
     creditId: string,
     payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; amount: number }
@@ -202,6 +204,10 @@ interface State {
 
   redeemReward: (memberId: string) => void;
   removeMember: (memberId: string) => void;
+  
+  // NUEVAS: Gestión de Clientes
+  addMember: (data: { name: string; idDoc?: string; phone?: string }) => void;
+  updateMember: (memberId: string, data: Partial<Member>) => void;
 
   closeDay: () => void;
 
@@ -514,6 +520,44 @@ export const useStore = create<State>()(
           };
         }),
 
+      // FUNCION NUEVA: Venta Directa
+      directSale: (payload) =>
+        set((s) => {
+          let newProducts = s.products;
+          for (const it of payload.items) {
+            newProducts = newProducts.map((p) =>
+              p.id === it.productId ? { ...p, stock: p.stock - it.qty } : p
+            );
+          }
+          const sale: SaleRecord = {
+            id: uid(),
+            ts: Date.now(),
+            timeAmount: 0,
+            extrasAmount: payload.total,
+            total: payload.total,
+            cashUsd: payload.cashUsd,
+            mobileBs: payload.mobileBs,
+            rate: s.rate,
+            method: payload.method,
+            customer: payload.customer,
+            concept: "Venta Directa",
+            items: payload.items.map((it) => ({ name: it.name, qty: it.qty, price: it.price })),
+          };
+          const newCredits =
+            payload.method === "credit"
+              ? [
+                  ...s.credits,
+                  { id: uid(), customer: payload.customer || "Sin nombre", amount: payload.total, createdAt: Date.now(), note: "Venta Directa" },
+                ]
+              : s.credits;
+
+          return {
+            products: newProducts,
+            sales: [...s.sales, sale],
+            credits: newCredits,
+          };
+        }),
+
       payCredit: (creditId, payload) =>
         set((s) => {
           const credit = s.credits.find((c) => c.id === creditId);
@@ -554,6 +598,30 @@ export const useStore = create<State>()(
           ),
         })),
       removeMember: (memberId) => set({ members: get().members.filter((m) => m.id !== memberId) }),
+
+      // FUNCIONES NUEVAS: Clientes Manuales
+      addMember: (data) =>
+        set((s) => {
+          // Evitar teléfonos duplicados
+          if (data.phone && s.members.some((m) => m.phone === data.phone)) return s;
+          const newMember: Member = {
+            id: uid(),
+            name: data.name,
+            idDoc: data.idDoc,
+            phone: data.phone,
+            totalMinutes: 0,
+            rewardMinutes: 0,
+            pendingRewards: 0,
+            createdAt: Date.now(),
+            lastVisit: Date.now(),
+          };
+          return { members: [...s.members, newMember] };
+        }),
+
+      updateMember: (memberId, data) =>
+        set((s) => ({
+          members: s.members.map((m) => (m.id === memberId ? { ...m, ...data } : m)),
+        })),
 
       closeDay: () =>
         set((s) => {
@@ -760,7 +828,6 @@ export const useStore = create<State>()(
       name: "gamerzone-store-v1",
       storage: {
         getItem: async (name) => {
-          // 1. Intentar descargar lo más nuevo de la nube
           try {
             const { data, error } = await supabase.from('app_state').select('state').eq('id', name).maybeSingle();
             if (!error && data && data.state) {
@@ -770,12 +837,10 @@ export const useStore = create<State>()(
           } catch (err) {
             console.log("Offline: Usando copia del disco local.");
           }
-          // 2. Respaldo inmediato si falla el internet
           const local = localStorage.getItem(name);
           return local ? JSON.parse(local) : null;
         },
         setItem: async (name, value) => {
-          // Guardar SIEMPRE en disco local primero (Inmune a apagones)
           const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
           localStorage.setItem(name, stringValue);
 
@@ -847,7 +912,6 @@ supabase
   )
   .subscribe();
 
-// Escuchador automático de retorno de internet
 window.addEventListener('online', async () => {
   console.log("🌐 ¡Internet recuperado! Sincronizando datos con la nube...");
   try {

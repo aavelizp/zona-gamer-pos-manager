@@ -17,13 +17,14 @@ import { MaintenanceTab } from "@/components/MaintenanceTab";
 import { ExpenseDialog } from "@/components/ExpenseDialog";
 import { ExpensesTab } from "@/components/ExpensesTab";
 import { BusinessConfigTab } from "@/components/BusinessConfigTab";
-import { Volume2, VolumeX, FileSpreadsheet, Gamepad2, Receipt, Wallet, LogOut } from "lucide-react";
+import { DirectSaleDialog } from "@/components/DirectSaleDialog"; // 👈 COMPONENTE NUEVO
+import { Volume2, VolumeX, FileSpreadsheet, Gamepad2, Receipt, Wallet, LogOut, ShoppingCart } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "GamerZone POS · Control de Tiempos" },
-      { name: "description", content: "Sistema POS y gestión de consolas para zona gamer en Venezuela. Cobros mixtos $/Bs, fiados, inventario y combos." },
+      { name: "description", content: "Sistema POS y gestión de consolas para zona gamer en Venezuela." },
     ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -35,28 +36,22 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
-  // LÓGICA DE SEGURIDAD (NUEVA)
   const [session, setSession] = useState<any>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
   useEffect(() => {
-    // Revisar si ya hay una sesión guardada
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setIsCheckingAuth(false);
     });
 
-    // Escuchar cuando el usuario entra o sale
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  // ESTADO GLOBAL
   const rate = useStore((s) => s.rate);
   const setRate = useStore((s) => s.setRate);
   const soundOn = useStore((s) => s.soundOn);
@@ -65,16 +60,14 @@ function Index() {
   const sales = useStore((s) => s.sales);
   const products = useStore((s) => s.products);
   const credits = useStore((s) => s.credits);
+  
   const [closeOpen, setCloseOpen] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
+  const [saleOpen, setSaleOpen] = useState(false); // 👈 ESTADO PARA ABRIR LA VENTA
 
   const today = useMemo(() => {
-    // Calculamos el inicio de HOY pero de forma absoluta, restando las últimas 24 horas
-    // para evitar problemas de zona horaria con la base de datos
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
-    
-    // Filtramos las ventas que ocurrieron después de la medianoche de hoy
     return sales
       .filter((s) => {
         const saleDate = new Date(s.ts);
@@ -83,7 +76,6 @@ function Index() {
       .reduce((total, s) => total + s.total, 0);
   }, [sales]);
 
-  // Consolas sugeridas
   const suggested = useMemo(() => {
     const free = consoles.filter((c) => !c.session);
     const ps4 = free.filter((c) => c.type === "PS4").sort((a, b) => a.totalMinutes - b.totalMinutes)[0]?.id;
@@ -91,7 +83,6 @@ function Index() {
     return new Set([ps4, ps5].filter(Boolean) as string[]);
   }, [consoles]);
 
-  // PANTALLA DE CARGA INICIAL
   if (isCheckingAuth) {
     return (
       <div className="min-h-screen bg-[#0B0914] flex flex-col items-center justify-center font-display">
@@ -101,15 +92,12 @@ function Index() {
     );
   }
 
-  // SI NO HAY SESIÓN, MOSTRAR LOGIN
   if (!session) {
     return <Login />;
   }
 
-  // SI HAY SESIÓN, MOSTRAR EL SISTEMA COMPLETO
   return (
     <div className="min-h-screen bg-background bg-grid">
-      {/* Header */}
       <header className="border-b border-border/60 bg-card/40 backdrop-blur sticky top-0 z-30">
         <div className="max-w-[1600px] mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
@@ -137,6 +125,12 @@ function Index() {
               <span className="text-muted-foreground">Caja Hoy</span>
               <span className="font-display text-base">{fmtUsd(today)} <span className="text-accent">· {fmtBs(today, rate)}</span></span>
             </div>
+            
+            {/* 👈 BOTÓN DE VENTA RÁPIDA */}
+            <Button variant="outline" size="sm" onClick={() => setSaleOpen(true)} className="border-green-500/30 text-green-400 hover:bg-green-500/10 hover:text-green-300">
+              <ShoppingCart className="h-4 w-4 mr-1" />Venta Rápida
+            </Button>
+
             <Button variant="outline" size="sm" onClick={() => exportData({ sales, products, credits, rate })}>
               <FileSpreadsheet className="h-4 w-4 mr-1" />Excel
             </Button>
@@ -149,7 +143,6 @@ function Index() {
             <Button variant={soundOn ? "default" : "outline"} size="icon" onClick={toggleSound}>
               {soundOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
             </Button>
-            {/* BOTÓN DE SALIR */}
             <Button 
               variant="ghost" 
               size="icon" 
@@ -170,7 +163,7 @@ function Index() {
             <TabsTrigger value="inventory">Inventario</TabsTrigger>
             <TabsTrigger value="combos">Combos</TabsTrigger>
             <TabsTrigger value="credits">Fiados {credits.length > 0 && <span className="ml-1 text-accent">({credits.length})</span>}</TabsTrigger>
-            <TabsTrigger value="club">🏆 Club Gamer</TabsTrigger>
+            <TabsTrigger value="club">👥 Clientes</TabsTrigger>
             <TabsTrigger value="maintenance">🔧 Mantenimiento</TabsTrigger>
             <TabsTrigger value="expenses">💸 Gastos</TabsTrigger>
             <TabsTrigger value="config">⚙️ Configuración</TabsTrigger>
@@ -198,8 +191,11 @@ function Index() {
       </main>
 
       <footer className="text-center py-6 text-xs text-muted-foreground">
-        💾 Conectado a la Nube (Supabase) · Sistema Protegido
+        💾 Sistema Híbrido: Local + Nube · Twins Gamer POS
       </footer>
+      
+      {/* 👈 VENTANAS EMERGENTES INVISIBLES HASTA QUE SE LLAMAN */}
+      <DirectSaleDialog open={saleOpen} onOpenChange={setSaleOpen} />
       <CloseDayDialog open={closeOpen} onOpenChange={setCloseOpen} />
       <ExpenseDialog open={expenseOpen} onOpenChange={setExpenseOpen} />
     </div>

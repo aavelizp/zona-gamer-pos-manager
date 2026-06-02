@@ -1,74 +1,208 @@
+import { useState } from "react";
 import { useStore } from "@/lib/store";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Gift, Trophy, Trash2, Phone } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Edit, Gift, Trash2, Search, UserPlus, UserCheck } from "lucide-react";
 
 export function MembersTab() {
   const members = useStore((s) => s.members);
-  const redeem = useStore((s) => s.redeemReward);
-  const remove = useStore((s) => s.removeMember);
+  const addMember = useStore((s) => (s as any).addMember);
+  const updateMember = useStore((s) => (s as any).updateMember);
+  const redeemReward = useStore((s) => s.redeemReward);
+  const removeMember = useStore((s) => s.removeMember);
 
-  const sorted = [...members].sort((a, b) => b.totalMinutes - a.totalMinutes);
+  // Estados
+  const [search, setSearch] = useState("");
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingMember, setEditingMember] = useState<any>(null); // null = Crear nuevo
+  const [form, setForm] = useState({ name: "", idDoc: "", phone: "" });
+
+  // Filtro de búsqueda
+  const filtered = members.filter((m) =>
+    m.name.toLowerCase().includes(search.toLowerCase()) ||
+    (m.idDoc && m.idDoc.includes(search)) ||
+    (m.phone && m.phone.includes(search))
+  );
+
+  const handleOpenNew = () => {
+    setEditingMember(null);
+    setForm({ name: "", idDoc: "", phone: "" });
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEdit = (m: any) => {
+    setEditingMember(m);
+    setForm({ name: m.name, idDoc: m.idDoc || "", phone: m.phone || "" });
+    setIsModalOpen(true);
+  };
+
+  const handleSave = () => {
+    if (!form.name.trim()) return;
+    
+    if (editingMember) {
+      // Actualizar cliente existente
+      updateMember(editingMember.id, form);
+    } else {
+      // Crear cliente nuevo a mano
+      addMember(form);
+    }
+    
+    setIsModalOpen(false);
+  };
 
   return (
-    <Card className="p-4">
-      <div className="flex items-center gap-2 mb-3">
-        <Trophy className="h-5 w-5 text-gold" />
-        <h3 className="font-display text-lg">Club Gamer · Fidelización ({members.length})</h3>
+    <div className="space-y-4">
+      {/* Barra Superior: Búsqueda y Botón Nuevo */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 w-full max-w-md bg-secondary/20 rounded-md px-3 py-1.5 border border-border/40">
+          <Search className="h-4 w-4 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Buscar por nombre, cédula o teléfono..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="bg-transparent border-0 text-sm focus:outline-none w-full text-foreground placeholder:text-muted-foreground"
+          />
+        </div>
+        <Button onClick={handleOpenNew} className="bg-primary hover:bg-primary/90 text-primary-foreground font-display tracking-wide">
+          <UserPlus className="h-4 w-4 mr-2" />
+          Nuevo Cliente
+        </Button>
       </div>
-      <p className="text-xs text-muted-foreground mb-3">
-        Por cada 10 horas acumuladas, el cliente gana <span className="text-gold font-semibold">1 HORA GRATIS</span>.
-      </p>
-      <div className="space-y-2">
-        {sorted.map((m, i) => {
-          const hours = Math.floor(m.totalMinutes / 60);
-          const minutes = m.totalMinutes % 60;
-          const progress = Math.min(100, (m.rewardMinutes / 600) * 100);
-          return (
-            <div key={m.id} className="grid grid-cols-[auto_1fr_auto_auto] gap-3 items-center p-3 rounded-md bg-secondary/40">
-              <div className="font-display text-2xl text-muted-foreground w-8 text-center">#{i + 1}</div>
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="font-semibold">{m.name}</p>
-                  {m.pendingRewards > 0 && (
-                    <Badge className="bg-gold text-background animate-pulse">
-                      <Gift className="h-3 w-3 mr-1" />REGALO: {m.pendingRewards}H GRATIS
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground flex items-center gap-2">
-                  {m.phone && <><Phone className="h-3 w-3" />{m.phone}</>}
-                  {m.idDoc && <span>· {m.idDoc}</span>}
-                </p>
-                <div className="mt-1 h-1.5 bg-background rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-primary to-accent" style={{ width: `${progress}%` }} />
-                </div>
-                <p className="text-[10px] text-muted-foreground mt-0.5">
-                  {Math.floor(m.rewardMinutes / 60)}h {m.rewardMinutes % 60}m / 10h para próximo regalo
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="font-display text-lg">{hours}h {minutes}m</p>
-                <p className="text-xs text-accent">Histórico</p>
-              </div>
-              <div className="flex flex-col gap-1">
-                {m.pendingRewards > 0 && (
-                  <Button size="sm" className="bg-gold text-background hover:bg-gold/80" onClick={() => redeem(m.id)}>
-                    <Gift className="h-4 w-4 mr-1" />Canjear
-                  </Button>
-                )}
-                <Button size="sm" variant="ghost" onClick={() => { if (confirm(`¿Eliminar a ${m.name}?`)) remove(m.id); }}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
+
+      {/* Tabla del Club Gamer */}
+      <div className="rounded-md border border-border bg-card overflow-hidden">
+        <table className="w-full text-sm text-left">
+          <thead className="bg-muted/50 text-muted-foreground uppercase text-xs font-display tracking-wider border-b border-border">
+            <tr>
+              <th className="p-3">Cliente</th>
+              <th className="p-3">Documento / CI</th>
+              <th className="p-3">Teléfono</th>
+              <th className="p-3 text-center">Tiempo Jugado</th>
+              <th className="p-3 text-center">Recompensas</th>
+              <th className="p-3 text-center">Última Visita</th>
+              <th className="p-3 text-right">Acciones</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border/60">
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="text-center p-8 text-muted-foreground">
+                  No se encontraron clientes registrados con esos criterios.
+                </td>
+              </tr>
+            ) : (
+              filtered.map((m) => (
+                <tr key={m.id} className="hover:bg-muted/20 transition-colors">
+                  <td className="p-3 font-semibold text-foreground">{m.name}</td>
+                  <td className="p-3 text-muted-foreground">{m.idDoc || "—"}</td>
+                  <td className="p-3 text-muted-foreground">{m.phone || "—"}</td>
+                  <td className="p-3 text-center font-display text-primary">
+                    {Math.floor(m.totalMinutes / 60)}h {m.totalMinutes % 60}m
+                  </td>
+                  <td className="p-3 text-center">
+                    {m.pendingRewards > 0 ? (
+                      <span className="inline-flex items-center gap-1 bg-green-500/10 text-green-400 font-display px-2 py-0.5 rounded text-xs border border-green-500/20">
+                        <Gift className="h-3 w-3" /> {m.pendingRewards} disp.
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">0 acumuladas</span>
+                    )}
+                  </td>
+                  <td className="p-3 text-center text-xs text-muted-foreground">
+                    {new Date(m.lastVisit).toLocaleDateString("es-VE")}
+                  </td>
+                  <td className="p-3 text-right">
+                    <div className="flex items-center justify-end gap-1.5">
+                      {m.pendingRewards > 0 && (
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8 text-green-400 hover:text-green-300 hover:bg-green-500/10"
+                          onClick={() => redeemReward(m.id)}
+                          title="Canjear Hora de Regalo"
+                        >
+                          <Gift className="h-4 w-4" />
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+                        onClick={() => handleOpenEdit(m)}
+                        title="Editar Datos"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                        onClick={() => {
+                          if (confirm(`¿Seguro que deseas eliminar el perfil de ${m.name}?`)) {
+                            removeMember(m.id);
+                          }
+                        }}
+                        title="Eliminar Cliente"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Modal / Ventana Emergente para Crear o Editar */}
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display flex items-center gap-2">
+              {editingMember ? <UserCheck className="h-5 w-5 text-primary" /> : <UserPlus className="h-5 w-5 text-primary" />}
+              {editingMember ? "Modificar Cliente" : "Registrar Nuevo Cliente"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-sm">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Nombre del Cliente *</label>
+              <Input
+                type="text"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder="Ej. Carlos Mendoza"
+              />
             </div>
-          );
-        })}
-        {members.length === 0 && (
-          <p className="text-sm text-muted-foreground">Aún no hay miembros. Se crean automáticamente al cobrar con nombre + teléfono.</p>
-        )}
-      </div>
-    </Card>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Cédula de Identidad / RIF</label>
+              <Input
+                type="text"
+                value={form.idDoc}
+                onChange={(e) => setForm({ ...form, idDoc: e.target.value })}
+                placeholder="Ej. V-25123456"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Número de Teléfono</label>
+              <Input
+                type="text"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                placeholder="Ej. 04125556677"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSave} className="bg-primary hover:bg-primary/90" disabled={!form.name.trim()}>
+              {editingMember ? "Guardar Cambios" : "Registrar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
