@@ -5,7 +5,7 @@ import { playAlert, playPreAlert } from "@/lib/sound";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Star, Gamepad2, Sparkles, Package, Coins, ShoppingBag, Receipt, Plus, Search, X, User, AlertTriangle, Pause, Play } from "lucide-react";
+import { Star, Gamepad2, Sparkles, Package, Coins, ShoppingBag, Receipt, Plus, Search, X, User, AlertTriangle, Pause, Play, Trash2 } from "lucide-react";
 import { ReceiptDialog, type ReceiptData } from "@/components/Receipt";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -754,6 +754,7 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
   const markPreAlerted = useStore((s) => s.markPreAlerted);
   const pauseSession = useStore((s) => s.pauseSession);
   const resumeSession = useStore((s) => s.resumeSession);
+  const cancelSession = useStore((s) => (s as any).cancelSession); // 👈 FUNCIÓN CANCELAR EXTRAÍDA
   const now = useNow();
 
   const [snackOpen, setSnackOpen] = useState(false);
@@ -784,7 +785,7 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
     }
   }, [expired, session, soundOn, markAlerted, consoleObj.id]);
 
-  // Pre-alert at 5 min remaining (fixed sessions only, not paused, not yet expired)
+  // Pre-alert at 5 min remaining
   const preAlertActive = isFixed && !paused && !expired && remainingMs > 0 && remainingMs <= 5 * 60_000;
   useEffect(() => {
     if (preAlertActive && session && !session.preAlerted) {
@@ -817,9 +818,9 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
   };
 
   return (
-    <Card className={`relative p-4 border-2 ${statusBg} ${isPS5 ? "border-gold/70 ring-1 ring-gold/30" : ""} bg-card transition-all`}>
+    <Card className={`relative p-4 border-2 ${statusBg} ${isPS5 ? "border-gold/70 ring-1 ring-gold/30" : ""} bg-card transition-all flex flex-col h-full`}>
       {isPS5 && <div className="absolute inset-0 rounded-xl pointer-events-none glow-gold opacity-30" />}
-      <div className="relative space-y-3">
+      <div className="relative space-y-3 flex-1">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-2">
             {isPS5 ? <Sparkles className="h-5 w-5 text-gold" /> : <Gamepad2 className="h-5 w-5 text-primary" />}
@@ -838,7 +839,6 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
           </div>
         </div>
 
-        {/* Customer name banner */}
         <div className={`flex items-center gap-2 rounded-md px-3 py-2 border ${occupied && customerName ? "bg-primary/15 border-primary/40" : "bg-secondary/30 border-border/40"}`}>
           <User className={`h-4 w-4 ${occupied && customerName ? "text-primary" : "text-muted-foreground"}`} />
           <span className={`text-sm font-semibold truncate ${occupied && customerName ? "text-foreground" : "text-muted-foreground italic"}`}>
@@ -873,7 +873,6 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
           )}
         </div>
 
-        {/* Pending extras balance — visible always when occupied */}
         {occupied && (
           <div className={`rounded-md p-2 border ${pendingExtras > 0 ? "bg-warning/10 border-warning/40" : "bg-secondary/20 border-border/40"}`}>
             <div className="flex justify-between items-center">
@@ -891,7 +890,7 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
         )}
 
         {!occupied ? (
-          <div className="space-y-2">
+          <div className="space-y-2 mt-auto">
             <div className="grid grid-cols-3 gap-2">
               <Button size="sm" variant="outline" onClick={() => startSession(consoleObj.id)}>Libre</Button>
               <Button size="sm" onClick={() => startSession(consoleObj.id, 30)}>30 min</Button>
@@ -902,7 +901,7 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
             </Button>
           </div>
         ) : (
-          <>
+          <div className="space-y-2 mt-auto">
             <div className="grid grid-cols-2 gap-2">
               {isPrepaid ? (
                 <>
@@ -938,21 +937,39 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
                 ))}
               </div>
             )}
+            
+            {/* 👈 SECCIÓN DE BOTONES DE COBRO Y CANCELAR */}
             {isPrepaid && pendingExtras > 0.001 && (
               <Button className="w-full" variant="default" onClick={() => setPayExtrasOpen(true)}>
                 <Coins className="h-4 w-4 mr-2" /> Cobrar Adicional {fmtUsd(pendingExtras)}
               </Button>
             )}
-            {isPrepaid ? (
-              <Button className="w-full" variant="secondary" onClick={tryRelease} disabled={pendingExtras > 0.001}>
-                <Coins className="h-4 w-4 mr-2" /> Liberar (Prepagado · {session?.prepaidMinutes} min)
+            <div className="flex gap-2">
+              {isPrepaid ? (
+                <Button className="flex-1" variant="secondary" onClick={tryRelease} disabled={pendingExtras > 0.001}>
+                  <Coins className="h-4 w-4 mr-2" /> Liberar ({session?.prepaidMinutes} min)
+                </Button>
+              ) : (
+                <Button className="flex-1 glow-primary" onClick={() => setCheckoutOpen(true)}>
+                  <Coins className="h-4 w-4 mr-2" /> Cobrar {fmtUsd(total)}
+                </Button>
+              )}
+              
+              {/* 👈 BOTÓN DE CANCELAR (BORRAR) SESIÓN */}
+              <Button 
+                variant="outline" 
+                className="px-3 border-red-500/40 text-red-400 hover:bg-red-500/15 hover:text-red-300"
+                onClick={() => {
+                  if (confirm(`⚠️ ¿Seguro que deseas CANCELAR la sesión de ${consoleObj.name}? Se borrará el tiempo y los snacks sin cobrar nada.`)) {
+                    cancelSession(consoleObj.id);
+                  }
+                }}
+                title="Cancelar sesión (borrar sin cobrar)"
+              >
+                <Trash2 className="h-4 w-4" />
               </Button>
-            ) : (
-              <Button className="w-full glow-primary" onClick={() => setCheckoutOpen(true)}>
-                <Coins className="h-4 w-4 mr-2" /> Cobrar {fmtUsd(total)}
-              </Button>
-            )}
-          </>
+            </div>
+          </div>
         )}
       </div>
 
@@ -973,5 +990,4 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
   );
 }
 
-// Re-exports used by other files
 export { useNow, formatDuration };

@@ -17,14 +17,14 @@ import { MaintenanceTab } from "@/components/MaintenanceTab";
 import { ExpenseDialog } from "@/components/ExpenseDialog";
 import { ExpensesTab } from "@/components/ExpensesTab";
 import { BusinessConfigTab } from "@/components/BusinessConfigTab";
-import { DirectSaleDialog } from "@/components/DirectSaleDialog"; // 👈 COMPONENTE NUEVO
+import { DirectSaleDialog } from "@/components/DirectSaleDialog";
 import { Volume2, VolumeX, FileSpreadsheet, Gamepad2, Receipt, Wallet, LogOut, ShoppingCart } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "GamerZone POS · Control de Tiempos" },
-      { name: "description", content: "Sistema POS y gestión de consolas para zona gamer en Venezuela." },
+      { name: "description", content: "Sistema POS y gestión de consolas." },
     ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -35,18 +35,33 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
+// 🚨 RESTRICCIÓN DE SEGURIDAD: Coloca aquí exactamente tus 2 correos
+const CORREOS_AUTORIZADOS = ["aavelizp0107@gmail.com", "dsideregtstovar@gmail.com"];
+
 function Index() {
   const [session, setSession] = useState<any>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
+    const checkUser = async (sessionData: any) => {
+      if (sessionData?.user?.email) {
+        if (!CORREOS_AUTORIZADOS.includes(sessionData.user.email)) {
+          alert(`🚨 Acceso Denegado: El correo ${sessionData.user.email} no tiene permisos para entrar al sistema.`);
+          await supabase.auth.signOut();
+          setSession(null);
+        } else {
+          setSession(sessionData);
+        }
+      } else {
+        setSession(null);
+      }
       setIsCheckingAuth(false);
-    });
+    };
+
+    supabase.auth.getSession().then(({ data }) => checkUser(data.session));
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
+      checkUser(session);
     });
 
     return () => subscription.unsubscribe();
@@ -63,7 +78,7 @@ function Index() {
   
   const [closeOpen, setCloseOpen] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
-  const [saleOpen, setSaleOpen] = useState(false); // 👈 ESTADO PARA ABRIR LA VENTA
+  const [saleOpen, setSaleOpen] = useState(false);
 
   const today = useMemo(() => {
     const startOfToday = new Date();
@@ -87,7 +102,7 @@ function Index() {
     return (
       <div className="min-h-screen bg-[#0B0914] flex flex-col items-center justify-center font-display">
         <Gamepad2 className="h-12 w-12 text-[#9E54FF] animate-pulse mb-4" />
-        <p className="text-[#9E54FF] tracking-widest animate-pulse">CARGANDO SISTEMA...</p>
+        <p className="text-[#9E54FF] tracking-widest animate-pulse">VERIFICANDO SEGURIDAD...</p>
       </div>
     );
   }
@@ -113,20 +128,13 @@ function Index() {
           <div className="flex items-center gap-2 ml-auto flex-wrap">
             <div className="flex items-center gap-2 bg-secondary/40 rounded-md px-3 py-1.5">
               <span className="text-xs text-muted-foreground">Tasa Bs/$</span>
-              <Input
-                type="number"
-                step="0.01"
-                value={rate}
-                onChange={(e) => setRate(parseFloat(e.target.value) || 0)}
-                className="h-7 w-24 bg-transparent border-0 font-display text-base focus-visible:ring-1"
-              />
+              <Input type="number" step="0.01" value={rate} onChange={(e) => setRate(parseFloat(e.target.value) || 0)} className="h-7 w-24 bg-transparent border-0 font-display text-base focus-visible:ring-1" />
             </div>
             <div className="hidden md:flex flex-col text-right text-xs mr-2">
               <span className="text-muted-foreground">Caja Hoy</span>
               <span className="font-display text-base">{fmtUsd(today)} <span className="text-accent">· {fmtBs(today, rate)}</span></span>
             </div>
             
-            {/* 👈 BOTÓN DE VENTA RÁPIDA */}
             <Button variant="outline" size="sm" onClick={() => setSaleOpen(true)} className="border-green-500/30 text-green-400 hover:bg-green-500/10 hover:text-green-300">
               <ShoppingCart className="h-4 w-4 mr-1" />Venta Rápida
             </Button>
@@ -143,13 +151,7 @@ function Index() {
             <Button variant={soundOn ? "default" : "outline"} size="icon" onClick={toggleSound}>
               {soundOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
             </Button>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              onClick={() => supabase.auth.signOut()} 
-              className="text-muted-foreground hover:text-red-500 hover:bg-red-500/10 ml-2"
-              title="Cerrar Sesión"
-            >
+            <Button variant="ghost" size="icon" onClick={() => supabase.auth.signOut()} className="text-muted-foreground hover:text-red-500 hover:bg-red-500/10 ml-2" title="Cerrar Sesión">
               <LogOut className="h-4 w-4" />
             </Button>
           </div>
@@ -194,7 +196,6 @@ function Index() {
         💾 Sistema Híbrido: Local + Nube · Twins Gamer POS
       </footer>
       
-      {/* 👈 VENTANAS EMERGENTES INVISIBLES HASTA QUE SE LLAMAN */}
       <DirectSaleDialog open={saleOpen} onOpenChange={setSaleOpen} />
       <CloseDayDialog open={closeOpen} onOpenChange={setCloseOpen} />
       <ExpenseDialog open={expenseOpen} onOpenChange={setExpenseOpen} />
