@@ -25,11 +25,15 @@ export const Route = createFileRoute("/")({
     meta: [
       { title: "GamerZone POS · Control de Tiempos" },
       { name: "description", content: "Sistema POS y gestión de consolas." },
+      { name: "theme-color", content: "#1a0b2e" } // 👈 Color morado para el navegador del celular
     ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Archivo+Black&family=Hind:wght@400;500;600;700&display=swap" },
+      // 👈 Aquí le decimos al teléfono dónde está el logo
+      { rel: "icon", type: "image/png", href: "/logo.png" },
+      { rel: "apple-touch-icon", href: "/logo.png" } 
     ],
   }),
   component: Index,
