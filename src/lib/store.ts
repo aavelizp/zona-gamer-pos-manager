@@ -220,14 +220,29 @@ interface State {
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
+// Mantenemos los ID originales para no romper el historial de ventas, pero cambiamos el nombre visible.
 const defaultConsoles: ConsoleState[] = [
-  { id: "ps4-3", name: "PS4 #3", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] },
-  { id: "ps4-4", name: "PS4 #4", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] },
-  { id: "ps4-5", name: "PS4 #5", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] },
-  { id: "ps4-6", name: "PS4 #6", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] },
+  { id: "ps4-1", name: "PS4 #3", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] },
+  { id: "ps4-2", name: "PS4 #4", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] },
+  { id: "ps4-3", name: "PS4 #5", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] },
+  { id: "ps4-4", name: "PS4 #6", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] },
   { id: "ps5-1", name: "PS5 #1", type: "PS5", ratePerHour: 3, totalMinutes: 0, charges: [] },
   { id: "ps5-2", name: "PS5 #2", type: "PS5", ratePerHour: 3, totalMinutes: 0, charges: [] },
 ];
+
+// 💉 LA VACUNA: Esta función renombra las consolas antiguas para que siempre se vean como 3, 4, 5 y 6.
+const vaccinateZustandPayload = (payload: any) => {
+  if (payload && payload.state && payload.state.consoles) {
+    payload.state.consoles = payload.state.consoles.map((c: any) => {
+      if (c.id === "ps4-1") c.name = "PS4 #3";
+      if (c.id === "ps4-2") c.name = "PS4 #4";
+      if (c.id === "ps4-3") c.name = "PS4 #5";
+      if (c.id === "ps4-4") c.name = "PS4 #6";
+      return c;
+    });
+  }
+  return payload;
+};
 
 export const useStore = create<State>()(
   persist(
@@ -415,9 +430,20 @@ export const useStore = create<State>()(
         getItem: async (name) => {
           try {
             const { data, error } = await supabase.from('app_state').select('state').eq('id', name).maybeSingle();
-            if (!error && data && data.state) { localStorage.setItem(name, JSON.stringify(data.state)); return data.state; }
+            if (!error && data && data.state) { 
+              const safeData = vaccinateZustandPayload(data.state);
+              localStorage.setItem(name, JSON.stringify(safeData)); 
+              return safeData; 
+            }
           } catch (err) {}
-          const local = localStorage.getItem(name); return local ? JSON.parse(local) : null;
+          const local = localStorage.getItem(name); 
+          if (local) {
+            try {
+              const parsed = JSON.parse(local);
+              return vaccinateZustandPayload(parsed);
+            } catch(e) {}
+          }
+          return null;
         },
         setItem: async (name, value) => {
           const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
@@ -456,6 +482,7 @@ export const computeTimeAmount = (consoleObj: ConsoleState, nowMs: number): { mi
 supabase.channel('escuchar-nube').on('postgres_changes', { event: '*', schema: 'public', table: 'app_state' }, (payload) => {
   let rawState = payload.new ? (payload.new as any).state : null;
   if (typeof rawState === 'string') { try { rawState = JSON.parse(rawState); } catch(e) {} }
+  rawState = vaccinateZustandPayload(rawState);
   const newState = rawState ? rawState.state : null;
   if (newState) {
     const estadoActual = JSON.stringify(useStore.getState());

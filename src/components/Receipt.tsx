@@ -56,26 +56,33 @@ export function ReceiptDialog({ open, onClose, data }: { open: boolean; onClose:
     pdf.save(`${fileBase}.pdf`);
   };
 
+  const methodLabel = data.method === "full" ? "Pago Completo" : data.method === "mixed" ? "Pago Mixto" : data.method === "cash_bs" ? "Efectivo Bs" : "Fiado";
+
   const sendDirectWhatsApp = () => {
     const phone = (data.customer.phone || "").replace(/\D/g, "");
-    
     const listaArticulos = data.items.map(it => `• ${it.name}: $${it.price.toFixed(2)}`).join('\n');
     
+    const mixedDetails = [];
+    if (data.cashUsd > 0) mixedDetails.push(`  - Efectivo $: $${data.cashUsd.toFixed(2)}`);
+    if (data.cashBs && data.cashBs > 0) mixedDetails.push(`  - Efectivo Bs: Bs ${data.cashBs.toFixed(2)}`);
+    if (data.mobileBs > 0) mixedDetails.push(`  - Pago Móvil: Bs ${data.mobileBs.toFixed(2)}`);
+
     const msg = encodeURIComponent(
       `¡Hola ${data.customer.name || 'Gamer'}! 🎮\n\n` +
       `Aquí tienes tu recibo digital de *${LOCAL}*:\n` +
       `===========================\n` +
       `${listaArticulos}\n` +
       `===========================\n` +
-      `*TOTAL:* ${fmtUsd(data.total)} (${fmtBs(data.total, data.rate)})\n\n` +
-      `¡Gracias por jugar con nosotros! 🕹️\n` +
+      `*TOTAL:* ${fmtUsd(data.total)} (${fmtBs(data.total, data.rate)})\n` +
+      `*Método:* ${methodLabel}\n` +
+      (data.method === "mixed" ? `${mixedDetails.join('\n')}\n` : '') +
+      `\n¡Gracias por jugar con nosotros! 🕹️\n` +
       `Síguenos en Instagram: ${INSTAGRAM}`
     );
     
-    window.open(`https://wa.me/${phone}?text=${msg}`, "_blank");
+    // Asume número venezolano por defecto añadiendo '58'
+    window.open(`https://wa.me/58${phone}?text=${msg}`, "_blank");
   };
-
-  const methodLabel = data.method === "full" ? "Pago Completo" : data.method === "mixed" ? "Pago Mixto" : data.method === "cash_bs" ? "Efectivo Bs" : "Fiado";
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -124,8 +131,9 @@ export function ReceiptDialog({ open, onClose, data }: { open: boolean; onClose:
             <p>{methodLabel}</p>
             {data.method === "mixed" && (
               <div className="text-xs text-zinc-600">
-                <p>Efectivo $: ${data.cashUsd.toFixed(2)}</p>
-                <p>Pago Móvil: Bs {data.mobileBs.toFixed(2)}</p>
+                {data.cashUsd > 0 && <p>Efectivo $: ${data.cashUsd.toFixed(2)}</p>}
+                {data.cashBs && data.cashBs > 0 ? <p>Efectivo Bs: Bs {data.cashBs.toFixed(2)}</p> : null}
+                {data.mobileBs > 0 && <p>Pago Móvil: Bs {data.mobileBs.toFixed(2)}</p>}
               </div>
             )}
             {data.method === "cash_bs" && (
@@ -151,7 +159,7 @@ export function ReceiptDialog({ open, onClose, data }: { open: boolean; onClose:
           <Button variant="outline" size="sm" onClick={downloadPng}><FileImage className="h-4 w-4 mr-1" />PNG</Button>
           <Button variant="outline" size="sm" onClick={downloadPdf}><FileText className="h-4 w-4 mr-1" />PDF</Button>
           <Button size="sm" onClick={sendDirectWhatsApp} disabled={!data.customer.phone} className="bg-green-600 hover:bg-green-700">
-            <MessageCircle className="h-4 w-4 mr-1" />Enviar por WhatsApp
+            <MessageCircle className="h-4 w-4 mr-1" />WhatsApp (Chat Directo)
           </Button>
           <Button variant="ghost" size="sm" onClick={onClose}>Cerrar</Button>
         </DialogFooter>
