@@ -186,6 +186,9 @@ interface State {
 
   addSnackToConsole: (consoleId: string, productId: string, qty: number) => void;
   applyComboToConsole: (consoleId: string, comboId: string) => void;
+  
+  // 👈 NUEVA FUNCIÓN PARA EL CONTROL ADICIONAL
+  addExtraController: (consoleId: string) => void;
 
   finalizeConsole: (
     consoleId: string,
@@ -220,7 +223,6 @@ interface State {
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-// Mantenemos los ID originales para no romper el historial de ventas, pero cambiamos el nombre visible.
 const defaultConsoles: ConsoleState[] = [
   { id: "ps4-1", name: "PS4 #3", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] },
   { id: "ps4-2", name: "PS4 #4", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] },
@@ -230,7 +232,6 @@ const defaultConsoles: ConsoleState[] = [
   { id: "ps5-2", name: "PS5 #2", type: "PS5", ratePerHour: 3, totalMinutes: 0, charges: [] },
 ];
 
-// 💉 LA VACUNA: Esta función renombra las consolas antiguas para que siempre se vean como 3, 4, 5 y 6.
 const vaccinateZustandPayload = (payload: any) => {
   if (payload && payload.state && payload.state.consoles) {
     payload.state.consoles = payload.state.consoles.map((c: any) => {
@@ -318,6 +319,22 @@ export const useStore = create<State>()(
           const newSession: ConsoleSession = consoleObj.session ? { ...consoleObj.session, mode: "fixed", endsAt: (consoleObj.session.endsAt && consoleObj.session.endsAt > Date.now() ? consoleObj.session.endsAt : Date.now()) + addMs, alerted: false } : { mode: "fixed", startedAt: Date.now(), endsAt: Date.now() + addMs };
           return { products: newProducts, consoles: s.consoles.map((c) => c.id === consoleId ? { ...c, session: combo.hours > 0 ? newSession : c.session, charges: [ ...c.charges, { label: `Combo: ${combo.name}`, amount: combo.price, ts: Date.now() } ] } : c ) };
         }),
+
+      // 👈 LÓGICA QUE INYECTA $1 DE CARGO AUTOMÁTICO
+      addExtraController: (consoleId) =>
+        set((s) => ({
+          consoles: s.consoles.map((c) =>
+            c.id === consoleId
+              ? {
+                  ...c,
+                  charges: [
+                    ...c.charges,
+                    { label: "Control Adicional", amount: 1, ts: Date.now() },
+                  ],
+                }
+              : c
+          ),
+        })),
 
       finalizeConsole: (consoleId, payload) =>
         set((s) => {
