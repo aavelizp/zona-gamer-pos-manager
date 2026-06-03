@@ -4,7 +4,7 @@ import { toPng } from "html-to-image";
 import jsPDF from "jspdf";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { FileImage, FileText, Share2 } from "lucide-react";
+import { FileImage, FileText, MessageCircle } from "lucide-react";
 import { fmtUsd, fmtBs } from "@/lib/store";
 
 export interface ReceiptData {
@@ -15,9 +15,10 @@ export interface ReceiptData {
   timeAmount: number;
   items: { name: string; qty: number; price: number }[];
   total: number;
-  method: "full" | "mixed" | "credit";
+  method: "full" | "mixed" | "credit" | "cash_bs";
   cashUsd: number;
   mobileBs: number;
+  cashBs?: number;
   customer: { name: string; idDoc?: string; phone?: string };
 }
 
@@ -55,33 +56,26 @@ export function ReceiptDialog({ open, onClose, data }: { open: boolean; onClose:
     pdf.save(`${fileBase}.pdf`);
   };
 
-  // 👈 NUEVA FUNCIÓN QUE COMPARTE LA FOTO DIRECTO AL CELULAR
-  const shareReceipt = async () => {
-    if (!ref.current) return;
-    try {
-      const url = await toPng(ref.current, { pixelRatio: 2, backgroundColor: "#ffffff" });
-      const response = await fetch(url);
-      const blob = await response.blob();
-      const file = new File([blob], `${fileBase}.png`, { type: "image/png" });
-
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: `Recibo de ${LOCAL}`,
-          text: `¡Hola ${data.customer.name || 'Gamer'}! 🎮 Aquí tienes tu recibo. Total: ${fmtUsd(data.total)}`,
-        });
-      } else {
-        // En computadora, se manda como mensaje normal
-        const phone = (data.customer.phone || "").replace(/\D/g, "");
-        const msg = encodeURIComponent(`¡Hola ${data.customer.name}! 🎮 Aquí tu recibo de ${LOCAL}.\nTotal: ${fmtUsd(data.total)} (${fmtBs(data.total, data.rate)})\n¡Gracias por jugar con nosotros!\nIG: ${INSTAGRAM}`);
-        window.open(`https://wa.me/${phone}?text=${msg}`, "_blank");
-      }
-    } catch (err) {
-      console.error("Error al compartir recibo:", err);
-    }
+  const sendDirectWhatsApp = () => {
+    const phone = (data.customer.phone || "").replace(/\D/g, "");
+    
+    const listaArticulos = data.items.map(it => `• ${it.name}: $${it.price.toFixed(2)}`).join('\n');
+    
+    const msg = encodeURIComponent(
+      `¡Hola ${data.customer.name || 'Gamer'}! 🎮\n\n` +
+      `Aquí tienes tu recibo digital de *${LOCAL}*:\n` +
+      `===========================\n` +
+      `${listaArticulos}\n` +
+      `===========================\n` +
+      `*TOTAL:* ${fmtUsd(data.total)} (${fmtBs(data.total, data.rate)})\n\n` +
+      `¡Gracias por jugar con nosotros! 🕹️\n` +
+      `Síguenos en Instagram: ${INSTAGRAM}`
+    );
+    
+    window.open(`https://wa.me/${phone}?text=${msg}`, "_blank");
   };
 
-  const methodLabel = data.method === "full" ? "Pago Completo" : data.method === "mixed" ? "Pago Mixto" : "Fiado";
+  const methodLabel = data.method === "full" ? "Pago Completo" : data.method === "mixed" ? "Pago Mixto" : data.method === "cash_bs" ? "Efectivo Bs" : "Fiado";
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -130,8 +124,13 @@ export function ReceiptDialog({ open, onClose, data }: { open: boolean; onClose:
             <p>{methodLabel}</p>
             {data.method === "mixed" && (
               <div className="text-xs text-zinc-600">
-                <p>Efectivo: ${data.cashUsd.toFixed(2)}</p>
+                <p>Efectivo $: ${data.cashUsd.toFixed(2)}</p>
                 <p>Pago Móvil: Bs {data.mobileBs.toFixed(2)}</p>
+              </div>
+            )}
+            {data.method === "cash_bs" && (
+              <div className="text-xs text-zinc-600">
+                <p>Efectivo Bs: Bs {(data.total * data.rate).toFixed(2)}</p>
               </div>
             )}
           </div>
@@ -151,8 +150,8 @@ export function ReceiptDialog({ open, onClose, data }: { open: boolean; onClose:
         <DialogFooter className="flex-wrap gap-2 sm:justify-between">
           <Button variant="outline" size="sm" onClick={downloadPng}><FileImage className="h-4 w-4 mr-1" />PNG</Button>
           <Button variant="outline" size="sm" onClick={downloadPdf}><FileText className="h-4 w-4 mr-1" />PDF</Button>
-          <Button size="sm" onClick={shareReceipt} className="bg-green-600 hover:bg-green-700">
-            <Share2 className="h-4 w-4 mr-1" />Compartir / WhatsApp
+          <Button size="sm" onClick={sendDirectWhatsApp} disabled={!data.customer.phone} className="bg-green-600 hover:bg-green-700">
+            <MessageCircle className="h-4 w-4 mr-1" />Enviar por WhatsApp
           </Button>
           <Button variant="ghost" size="sm" onClick={onClose}>Cerrar</Button>
         </DialogFooter>

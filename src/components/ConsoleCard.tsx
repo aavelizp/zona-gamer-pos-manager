@@ -239,7 +239,7 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
   const total = timeAmount + extrasAmount;
 
   const [method, setMethod] = useState<"full" | "mixed" | "credit">("full");
-  const [fullPayMode, setFullPayMode] = useState<"cash" | "mobile">("cash");
+  const [fullPayMode, setFullPayMode] = useState<"cash" | "mobile" | "cash_bs">("cash");
   const [cashUsd, setCashUsd] = useState("");
   const [mobileBs, setMobileBs] = useState("");
   const [billReceived, setBillReceived] = useState("");
@@ -247,7 +247,6 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
   const [idDoc, setIdDoc] = useState("");
   const [phone, setPhone] = useState("");
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
-  // Once true, on receipt close we finalize+release the console
   const [pendingFinalize, setPendingFinalize] = useState(false);
 
   useEffect(() => {
@@ -263,16 +262,17 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
   const paid = method === "full" ? total : method === "mixed" ? cashUsdN + mobileUsd : 0;
   const remaining = total - paid;
 
-  // Resolve cash/mobile breakdown for both store + receipt
   const resolvedCashUsd = method === "full" ? (fullPayMode === "cash" ? total : 0) : method === "mixed" ? cashUsdN : 0;
   const resolvedMobileBs = method === "full" ? (fullPayMode === "mobile" ? total * rate : 0) : method === "mixed" ? mobileBsN : 0;
+  const resolvedCashBs = method === "full" ? (fullPayMode === "cash_bs" ? total * rate : 0) : 0;
 
-  // Change calc
   const billN = parseFloat(billReceived) || 0;
   const cashTarget = method === "full" && fullPayMode === "cash" ? total : method === "mixed" ? cashUsdN : 0;
   const rawChange = billN - cashTarget;
   const showBill = (method === "full" && fullPayMode === "cash") || (method === "mixed" && cashTarget > 0);
   const changeDisplay = rawChange < 1 ? "$0 (Sin cambio en centavos)" : fmtUsd(rawChange);
+
+  const finalMethod = method === "full" && fullPayMode === "cash_bs" ? "cash_bs" : method;
 
   const buildReceipt = (): ReceiptData => ({
     ts: Date.now(), rate, consoleName: consoleObj.name, minutes,
@@ -281,17 +281,19 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
       ...(timeAmount > 0 ? [{ name: `Tiempo ${consoleObj.name} (${minutes} min)`, qty: 1, price: timeAmount }] : []),
       ...consoleObj.charges.map((ch) => ({ name: ch.label, qty: 1, price: ch.amount })),
     ],
-    total, method,
+    total, method: finalMethod,
     cashUsd: resolvedCashUsd,
     mobileBs: resolvedMobileBs,
+    cashBs: resolvedCashBs,
     customer: { name: name.trim() || "Consumidor Final", idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined },
   });
 
   const doFinalize = () => {
     finalize(consoleObj.id, {
-      method,
+      method: finalMethod,
       cashUsd: resolvedCashUsd,
       mobileBs: resolvedMobileBs,
+      cashBs: resolvedCashBs,
       customer: method === "credit" ? name.trim() : undefined,
       customerInfo: name.trim() ? { name: name.trim(), idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined } : undefined,
       total, timeAmount, extrasAmount, minutes,
@@ -301,7 +303,6 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
   const submit = () => {
     if (method === "credit" && !name.trim()) return;
     if (method === "mixed" && remaining > 0.01) return;
-    // Open receipt; release console only when receipt is closed
     setReceipt(buildReceipt());
     setPendingFinalize(true);
   };
@@ -343,7 +344,7 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
           {method === "full" && (
             <div className="space-y-2 border border-border rounded-md p-3 bg-background/40">
               <Label className="text-xs uppercase tracking-wider text-accent font-semibold">¿Cómo pagó?</Label>
-              <RadioGroup value={fullPayMode} onValueChange={(v) => setFullPayMode(v as "cash" | "mobile")} className="grid grid-cols-2 gap-2">
+              <RadioGroup value={fullPayMode} onValueChange={(v) => setFullPayMode(v as any)} className="grid grid-cols-1 gap-2">
                 <label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "cash" ? "border-primary bg-primary/10" : "border-border"}`}>
                   <RadioGroupItem value="cash" />
                   <div>
@@ -355,6 +356,13 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
                   <RadioGroupItem value="mobile" />
                   <div>
                     <p className="text-sm font-semibold">Pago Móvil Bs</p>
+                    <p className="text-[10px] text-muted-foreground">{fmtBs(total, rate)}</p>
+                  </div>
+                </label>
+                <label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "cash_bs" ? "border-primary bg-primary/10" : "border-border"}`}>
+                  <RadioGroupItem value="cash_bs" />
+                  <div>
+                    <p className="text-sm font-semibold">Efectivo Bs 💵</p>
                     <p className="text-[10px] text-muted-foreground">{fmtBs(total, rate)}</p>
                   </div>
                 </label>
@@ -423,7 +431,7 @@ function PrepayCheckout({ open, onClose, consoleObj }: PrepayProps) {
   const [chosenMinutes, setChosenMinutes] = useState<number>(60);
   const [chosenCombo, setChosenCombo] = useState<Combo | null>(null);
   const [method, setMethod] = useState<"full" | "mixed">("full");
-  const [fullPayMode, setFullPayMode] = useState<"cash" | "mobile">("cash");
+  const [fullPayMode, setFullPayMode] = useState<"cash" | "mobile" | "cash_bs">("cash");
   const [cashUsd, setCashUsd] = useState("");
   const [mobileBs, setMobileBs] = useState("");
   const [billReceived, setBillReceived] = useState("");
@@ -453,12 +461,15 @@ function PrepayCheckout({ open, onClose, consoleObj }: PrepayProps) {
   const remaining = total - paid;
   const resolvedCashUsd = method === "full" ? (fullPayMode === "cash" ? total : 0) : cashUsdN;
   const resolvedMobileBs = method === "full" ? (fullPayMode === "mobile" ? total * rate : 0) : mobileBsN;
+  const resolvedCashBs = method === "full" ? (fullPayMode === "cash_bs" ? total * rate : 0) : 0;
 
   const billN = parseFloat(billReceived) || 0;
   const cashTarget = method === "full" && fullPayMode === "cash" ? total : method === "mixed" ? cashUsdN : 0;
   const rawChange = billN - cashTarget;
   const showBill = (method === "full" && fullPayMode === "cash") || (method === "mixed" && cashTarget > 0);
-  const changeDisplay = rawChange < 1 ? "$0 (Sin cambio en centavos)" : fmtUsd(rawChange);
+  const changeDisplay = rawChange < 1 ? "$0" : fmtUsd(rawChange);
+
+  const finalMethod = method === "full" && fullPayMode === "cash_bs" ? "cash_bs" : method;
 
   const canApplyCombo = (c: Combo) =>
     c.items.every((it) => (products.find((p) => p.id === it.productId)?.stock ?? 0) >= it.qty);
@@ -476,8 +487,8 @@ function PrepayCheckout({ open, onClose, consoleObj }: PrepayProps) {
       : [{ name: `Prepago ${consoleObj.name} (${minutes} min)`, qty: 1, price: total }];
     setReceipt({
       ts: Date.now(), rate, consoleName: consoleObj.name, minutes,
-      timeAmount: total, items, total, method,
-      cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs,
+      timeAmount: total, items, total, method: finalMethod,
+      cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, cashBs: resolvedCashBs,
       customer: { name: name.trim() || "Consumidor Final", idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined },
     });
     setPending(true);
@@ -487,7 +498,7 @@ function PrepayCheckout({ open, onClose, consoleObj }: PrepayProps) {
     setReceipt(null);
     if (pending) {
       prepay(consoleObj.id, minutes, {
-        method, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, total,
+        method: finalMethod, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, cashBs: resolvedCashBs, total,
         customerInfo: name.trim() ? { name: name.trim(), idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined } : undefined,
         comboId: chosenCombo?.id,
       });
@@ -585,9 +596,10 @@ function PrepayCheckout({ open, onClose, consoleObj }: PrepayProps) {
                 <Button variant={method === "mixed" ? "default" : "outline"} onClick={() => setMethod("mixed")}>Mixto</Button>
               </div>
               {method === "full" && (
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <Button size="sm" variant={fullPayMode === "cash" ? "default" : "outline"} onClick={() => setFullPayMode("cash")}>Efectivo $</Button>
-                  <Button size="sm" variant={fullPayMode === "mobile" ? "default" : "outline"} onClick={() => setFullPayMode("mobile")}>Pago Móvil Bs</Button>
+                  <Button size="sm" variant={fullPayMode === "mobile" ? "default" : "outline"} onClick={() => setFullPayMode("mobile")}>Pago Móvil</Button>
+                  <Button size="sm" variant={fullPayMode === "cash_bs" ? "default" : "outline"} onClick={() => setFullPayMode("cash_bs")}>Efectivo Bs</Button>
                 </div>
               )}
               {method === "mixed" && (
@@ -638,7 +650,7 @@ function PayExtrasDialog({ open, onClose, consoleObj }: PayExtrasProps) {
   const payExtras = useStore((s) => s.payExtras);
   const total = consoleObj.charges.reduce((a, c) => a + c.amount, 0);
   const [method, setMethod] = useState<"full" | "mixed" | "credit">("full");
-  const [fullPayMode, setFullPayMode] = useState<"cash" | "mobile">("cash");
+  const [fullPayMode, setFullPayMode] = useState<"cash" | "mobile" | "cash_bs">("cash");
   const [cashUsd, setCashUsd] = useState("");
   const [mobileBs, setMobileBs] = useState("");
   const [name, setName] = useState("");
@@ -657,8 +669,11 @@ function PayExtrasDialog({ open, onClose, consoleObj }: PayExtrasProps) {
   const mobileUsd = rate > 0 ? mobileBsN / rate : 0;
   const paid = method === "full" ? total : method === "mixed" ? cashUsdN + mobileUsd : 0;
   const remaining = total - paid;
+  
   const resolvedCashUsd = method === "full" ? (fullPayMode === "cash" ? total : 0) : method === "mixed" ? cashUsdN : 0;
   const resolvedMobileBs = method === "full" ? (fullPayMode === "mobile" ? total * rate : 0) : method === "mixed" ? mobileBsN : 0;
+  const resolvedCashBs = method === "full" ? (fullPayMode === "cash_bs" ? total * rate : 0) : 0;
+  const finalMethod = method === "full" && fullPayMode === "cash_bs" ? "cash_bs" : method;
 
   const submit = () => {
     if (method === "mixed" && remaining > 0.01) return;
@@ -666,7 +681,7 @@ function PayExtrasDialog({ open, onClose, consoleObj }: PayExtrasProps) {
     setReceipt({
       ts: Date.now(), rate, consoleName: consoleObj.name, minutes: 0, timeAmount: 0,
       items: consoleObj.charges.map((ch) => ({ name: ch.label, qty: 1, price: ch.amount })),
-      total, method, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs,
+      total, method: finalMethod, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, cashBs: resolvedCashBs,
       customer: { name: name.trim() || "Consumidor Final" },
     });
     setPending(true);
@@ -675,7 +690,7 @@ function PayExtrasDialog({ open, onClose, consoleObj }: PayExtrasProps) {
   const handleReceiptClose = () => {
     setReceipt(null);
     if (pending) {
-      payExtras(consoleObj.id, { method, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, total, customer: name.trim() || undefined });
+      payExtras(consoleObj.id, { method: finalMethod, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, total, customer: name.trim() || undefined });
       setPending(false);
       onClose();
       toast.success("Adicionales cobrados. La sesión sigue activa.");
@@ -707,9 +722,10 @@ function PayExtrasDialog({ open, onClose, consoleObj }: PayExtrasProps) {
               <Button variant={method === "credit" ? "default" : "outline"} onClick={() => setMethod("credit")}>Fiado</Button>
             </div>
             {method === "full" && (
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <Button size="sm" variant={fullPayMode === "cash" ? "default" : "outline"} onClick={() => setFullPayMode("cash")}>Efectivo $</Button>
-                <Button size="sm" variant={fullPayMode === "mobile" ? "default" : "outline"} onClick={() => setFullPayMode("mobile")}>Pago Móvil Bs</Button>
+                <Button size="sm" variant={fullPayMode === "mobile" ? "default" : "outline"} onClick={() => setFullPayMode("mobile")}>Pago Móvil</Button>
+                <Button size="sm" variant={fullPayMode === "cash_bs" ? "default" : "outline"} onClick={() => setFullPayMode("cash_bs")}>Efectivo Bs</Button>
               </div>
             )}
             {method === "mixed" && (
@@ -754,7 +770,7 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
   const markPreAlerted = useStore((s) => s.markPreAlerted);
   const pauseSession = useStore((s) => s.pauseSession);
   const resumeSession = useStore((s) => s.resumeSession);
-  const cancelSession = useStore((s) => (s as any).cancelSession); // 👈 FUNCIÓN CANCELAR EXTRAÍDA
+  const cancelSession = useStore((s) => (s as any).cancelSession);
   const now = useNow();
 
   const [snackOpen, setSnackOpen] = useState(false);
@@ -777,7 +793,6 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
   const extras = consoleObj.charges.reduce((a, c) => a + c.amount, 0);
   const total = timeAmount + extras;
 
-  // Alert when expired
   useEffect(() => {
     if (expired && session && !session.alerted) {
       if (soundOn) playAlert();
@@ -785,7 +800,6 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
     }
   }, [expired, session, soundOn, markAlerted, consoleObj.id]);
 
-  // Pre-alert at 5 min remaining
   const preAlertActive = isFixed && !paused && !expired && remainingMs > 0 && remainingMs <= 5 * 60_000;
   useEffect(() => {
     if (preAlertActive && session && !session.preAlerted) {
@@ -938,7 +952,6 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
               </div>
             )}
             
-            {/* 👈 SECCIÓN DE BOTONES DE COBRO Y CANCELAR */}
             {isPrepaid && pendingExtras > 0.001 && (
               <Button className="w-full" variant="default" onClick={() => setPayExtrasOpen(true)}>
                 <Coins className="h-4 w-4 mr-2" /> Cobrar Adicional {fmtUsd(pendingExtras)}
@@ -955,7 +968,6 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
                 </Button>
               )}
               
-              {/* 👈 BOTÓN DE CANCELAR (BORRAR) SESIÓN */}
               <Button 
                 variant="outline" 
                 className="px-3 border-red-500/40 text-red-400 hover:bg-red-500/15 hover:text-red-300"
