@@ -28,14 +28,15 @@ export function MembersTab() {
         />
       </div>
 
-      {/* Salón de la Fama / Club Gamer con Línea de Llenado */}
+      {/* Salón de la Fama / Club Gamer con Línea de Llenado Extensa */}
       <div className="rounded-md border border-border bg-card overflow-hidden">
         <table className="w-full text-sm text-left">
           <thead className="bg-muted/50 text-muted-foreground uppercase text-xs font-display tracking-wider border-b border-border">
             <tr>
-              <th className="p-3">Gamer</th>
-              <th className="p-3 w-1/2">Línea de Participación (Meta: 10h)</th>
-              <th className="p-3 text-right">Premios</th>
+              <th className="p-3 whitespace-nowrap">Gamer</th>
+              {/* Le decimos a esta columna que ocupe TODO el ancho posible */}
+              <th className="p-3 w-full">Línea de Participación (Meta: 10h)</th>
+              <th className="p-3 text-right whitespace-nowrap">Premios</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border/60">
@@ -54,13 +55,13 @@ export function MembersTab() {
                   <tr key={m.id} className="hover:bg-muted/20 transition-colors">
                     
                     {/* Nombre del Jugador */}
-                    <td className="p-3 font-semibold text-foreground text-base">
+                    <td className="p-3 font-semibold text-foreground text-base whitespace-nowrap">
                       {m.name}
                     </td>
 
-                    {/* Línea de Llenado Visual */}
+                    {/* Línea de Llenado Expandida */}
                     <td className="p-3 align-middle">
-                      <div className="max-w-xs">
+                      <div className="w-full pr-4 md:pr-8">
                         <div className="flex justify-between text-[11px] mb-1 font-medium">
                           <span className="text-primary">
                             {Math.floor(m.rewardMinutes / 60)}h {m.rewardMinutes % 60}m
@@ -84,7 +85,7 @@ export function MembersTab() {
                     </td>
 
                     {/* Botón de Canje o Estatus */}
-                    <td className="p-3 text-right">
+                    <td className="p-3 text-right whitespace-nowrap">
                       {m.pendingRewards > 0 ? (
                         <div className="flex flex-col items-end gap-2">
                           <span className="inline-flex items-center gap-1 bg-yellow-500/20 text-yellow-500 font-display px-2 py-0.5 rounded text-xs border border-yellow-500/30 animate-pulse">
