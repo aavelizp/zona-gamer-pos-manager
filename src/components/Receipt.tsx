@@ -68,16 +68,11 @@ export function ReceiptDialog({ open, onClose, data }: { open: boolean; onClose:
     if (data.mobileBs > 0) mixedDetails.push(`  - Pago Móvil: Bs ${data.mobileBs.toFixed(2)}`);
 
     const msg = encodeURIComponent(
-      `¡Hola ${data.customer.name || 'Gamer'}! 🎮\n\n` +
-      `Aquí tienes tu recibo digital de *${LOCAL}*:\n` +
-      `===========================\n` +
+      `👾 ¡Hola ${data.customer.name || 'Gamer'}! 👾\n\n` +
+      `Aquí tienes tu recibo digital de *${LOCAL}* 🧾:\n\n` +
       `${listaArticulos}\n` +
-      `===========================\n` +
-      `*TOTAL:* ${fmtUsd(data.total)} (${fmtBs(data.total, data.rate)})\n` +
-      `*Método:* ${methodLabel}\n` +
-      (data.method === "mixed" ? `${mixedDetails.join('\n')}\n` : '') +
-      `\n¡Gracias por jugar con nosotros! 🕹️\n` +
-      `Síguenos en Instagram: ${INSTAGRAM}`
+      `¡Gracias por jugar con nosotros! 🎮🔥\n` +
+      `Síguenos en Instagram: ${INSTAGRAM_LINK}`
     );
     
     // Asume número venezolano por defecto añadiendo '58'
