@@ -118,12 +118,12 @@ function Index() {
   return (
     <div className="min-h-screen bg-background bg-grid relative">
       
-      {/* 👈 MARCA DE AGUA EN TODA LA APLICACIÓN (MÁS GRANDE, MÁS OPACIDAD Y CON BRILLO) */}
+      {/* 👈 MARCA DE AGUA AL 15% DE OPACIDAD CON RESPLANDOR AJUSTADO */}
       <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden">
         <img 
           src="/logo.png" 
           alt="Marca de agua Twins Gamer" 
-          className="w-[800px] h-[800px] object-contain opacity-[0.08] drop-shadow-[0_0_40px_rgba(158,84,255,0.3)]" 
+          className="w-[800px] h-[800px] object-contain opacity-[0.15] drop-shadow-[0_0_50px_rgba(158,84,255,0.4)]" 
         />
       </div>
 
