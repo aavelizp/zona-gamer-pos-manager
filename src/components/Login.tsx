@@ -1,98 +1,86 @@
-import { useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
+import { Lock, Mail } from "lucide-react";
 
 export function Login() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [isSignUp, setIsSignUp] = useState(false);
 
-  const handleAuth = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
-
-    try {
-      if (isSignUp) {
-        const { error } = await supabase.auth.signUp({ email, password });
-        if (error) throw error;
-        alert('¡Registro exitoso! Ya puedes iniciar sesión.');
-        setIsSignUp(false);
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-      }
-    } catch (err: any) {
-      setError(err.message || 'Error al autenticar');
-    } finally {
-      setLoading(false);
+    
+    // Iniciar sesión con correo y contraseña
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    
+    if (error) {
+      toast.error("Acceso denegado: Revisa tu correo o contraseña.");
+    } else {
+      toast.success("¡Bienvenido a Twins Gamer!");
     }
+    setLoading(false);
   };
 
   return (
-    <div className="min-h-screen bg-[#0B0914] flex items-center justify-center p-4 font-sans">
-      <div className="bg-[#13111C] border border-[#2D2445] rounded-xl p-8 w-full max-w-md shadow-2xl">
-        <div className="text-center mb-8 flex flex-col items-center">
-          {/* Icono de control simulado */}
-          <div className="w-12 h-12 bg-[#2D2445] rounded-full flex items-center justify-center mb-4">
-            <span className="text-[#9E54FF] text-2xl">🎮</span>
-          </div>
-          <h1 className="text-2xl font-black text-white tracking-wider mb-1">
-            TWINS GAMER
-          </h1>
-          <p className="text-xs text-gray-400 tracking-widest uppercase">POS · Venezuela</p>
+    <div className="min-h-screen bg-[#0B0914] flex flex-col items-center justify-center p-4 relative overflow-hidden bg-grid">
+      
+      {/* 👈 MARCA DE AGUA GIGANTE DE FONDO EN EL LOGIN */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
+        <img src="/logo.png" alt="Fondo" className="w-[800px] h-[800px] object-contain opacity-[0.03]" />
+      </div>
+      
+      {/* TARJETA DE LOGIN */}
+      <div className="w-full max-w-md bg-[#131022]/80 backdrop-blur-xl border border-[#9E54FF]/30 p-8 rounded-2xl shadow-[0_0_40px_rgba(158,84,255,0.15)] relative z-10">
+        <div className="flex flex-col items-center mb-8">
+          {/* 👈 TU LOGO BRILLANTE EN EL CENTRO */}
+          <img 
+            src="/logo.png" 
+            alt="Twins Gamer" 
+            className="w-32 h-32 object-contain drop-shadow-[0_0_20px_rgba(158,84,255,0.6)] mb-4" 
+          />
+          <h1 className="font-display text-3xl tracking-wider text-white">TWINS GAMER</h1>
+          <p className="text-[#9E54FF] text-xs uppercase tracking-widest mt-1 font-semibold">Sistema POS Integrado</p>
         </div>
-
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/50 text-red-400 p-3 rounded-lg mb-6 text-sm text-center">
-            {error}
+        
+        <form onSubmit={handleLogin} className="space-y-4">
+          <div className="space-y-2">
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+              <Input 
+                type="email" 
+                placeholder="Correo administrador" 
+                value={email} 
+                onChange={(e) => setEmail(e.target.value)} 
+                className="pl-10 h-12 bg-black/40 border-zinc-700/50 text-white placeholder:text-zinc-500 focus:border-[#9E54FF]" 
+                required 
+              />
+            </div>
           </div>
-        )}
-
-        <form onSubmit={handleAuth} className="space-y-5">
-          <div>
-            <label className="block text-xs font-semibold mb-2 text-gray-300 uppercase tracking-wider">Usuario / Correo</label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-[#0B0914] border border-[#2D2445] rounded-lg p-3 text-white focus:outline-none focus:border-[#9E54FF] transition-colors"
-              placeholder="admin@twinsgamer.com"
-            />
+          <div className="space-y-2">
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+              <Input 
+                type="password" 
+                placeholder="Contraseña secreta" 
+                value={password} 
+                onChange={(e) => setPassword(e.target.value)} 
+                className="pl-10 h-12 bg-black/40 border-zinc-700/50 text-white placeholder:text-zinc-500 focus:border-[#9E54FF]" 
+                required 
+              />
+            </div>
           </div>
-
-          <div>
-            <label className="block text-xs font-semibold mb-2 text-gray-300 uppercase tracking-wider">Contraseña</label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-[#0B0914] border border-[#2D2445] rounded-lg p-3 text-white focus:outline-none focus:border-[#9E54FF] transition-colors"
-              placeholder="••••••••"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-gradient-to-r from-[#FF5E98] to-[#9E54FF] text-white font-bold rounded-lg p-3 hover:opacity-90 transition-opacity disabled:opacity-50 mt-4"
+          <Button 
+            type="submit" 
+            disabled={loading} 
+            className="w-full h-12 bg-gradient-to-r from-[#9E54FF] to-[#00E5FF] text-white font-display tracking-widest text-sm hover:opacity-90 transition-opacity mt-2"
           >
-            {loading ? 'Cargando...' : isSignUp ? 'Crear Cuenta Administrador' : 'Iniciar Sesión'}
-          </button>
+            {loading ? "CONECTANDO..." : "ENTRAR AL SISTEMA"}
+          </Button>
         </form>
-
-        <div className="mt-6 text-center">
-          <button
-            type="button"
-            onClick={() => setIsSignUp(!isSignUp)}
-            className="text-xs text-gray-500 hover:text-white transition-colors"
-          >
-            {isSignUp ? '¿Ya tienes cuenta? Inicia sesión' : 'Crear nueva cuenta'}
-          </button>
-        </div>
       </div>
     </div>
   );

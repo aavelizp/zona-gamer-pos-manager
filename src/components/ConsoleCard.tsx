@@ -5,7 +5,7 @@ import { playAlert, playPreAlert } from "@/lib/sound";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Star, Gamepad2, Sparkles, Package, Coins, ShoppingBag, Receipt, Plus, Search, X, User, AlertTriangle, Pause, Play, Trash2 } from "lucide-react";
+import { Star, Gamepad2, Sparkles, Package, Coins, ShoppingBag, Receipt, Plus, Search, X, User, AlertTriangle, Pause, Play, Trash2, ArrowRightLeft } from "lucide-react";
 import { ReceiptDialog, type ReceiptData } from "@/components/Receipt";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -213,6 +213,41 @@ function ComboPicker({ consoleId, open, onClose }: SnackPickerProps) {
   );
 }
 
+// 👈 NUEVA PANTALLA DE TRANSFERENCIA
+function TransferDialog({ consoleId, open, onClose }: { consoleId: string; open: boolean; onClose: () => void }) {
+  const consoles = useStore((s) => s.consoles);
+  const transferSession = useStore((s) => (s as any).transferSession);
+  
+  // Mostrar solo consolas desocupadas que no sean la misma
+  const available = consoles.filter((c) => !c.session && c.id !== consoleId);
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-xs">
+        <DialogHeader><DialogTitle className="font-display">Mover a otra consola</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">El tiempo jugado y los snacks se sumarán automáticamente a la nueva consola.</p>
+          <div className="grid grid-cols-2 gap-2">
+            {available.map((c) => (
+              <Button key={c.id} variant="outline" className={c.type === "PS5" ? "border-gold/50 text-gold hover:bg-gold/10" : "border-primary/50 text-primary hover:bg-primary/10"} 
+                onClick={() => {
+                  if (confirm(`¿Estás seguro de mover la sesión a la ${c.name}?`)) {
+                    transferSession(consoleId, c.id);
+                    toast.success(`Sesión movida exitosamente a ${c.name}`);
+                    onClose();
+                  }
+              }}>
+                {c.name}
+              </Button>
+            ))}
+            {available.length === 0 && <p className="col-span-2 text-sm text-center text-muted-foreground mt-4">Todas las demás consolas están ocupadas.</p>}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 interface CheckoutProps { open: boolean; onClose: () => void; consoleObj: ConsoleState; }
 function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
   const rate = useStore((s) => s.rate);
@@ -263,18 +298,25 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
   const finalMethod = method === "full" && fullPayMode === "cash_bs" ? "cash_bs" : method;
 
   const buildReceipt = (): ReceiptData => ({
-    ts: Date.now(), rate, consoleName: consoleObj.name, minutes, timeAmount,
+    ts: Date.now(), rate, consoleName: consoleObj.name, minutes,
+    timeAmount,
     items: [
       ...(timeAmount > 0 ? [{ name: `Tiempo ${consoleObj.name} (${minutes} min)`, qty: 1, price: timeAmount }] : []),
       ...consoleObj.charges.map((ch) => ({ name: ch.label, qty: 1, price: ch.amount })),
     ],
-    total, method: finalMethod, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, cashBs: resolvedCashBs,
+    total, method: finalMethod,
+    cashUsd: resolvedCashUsd,
+    mobileBs: resolvedMobileBs,
+    cashBs: resolvedCashBs,
     customer: { name: name.trim() || "Consumidor Final", idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined },
   });
 
   const doFinalize = () => {
     finalize(consoleObj.id, {
-      method: finalMethod, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, cashBs: resolvedCashBs,
+      method: finalMethod,
+      cashUsd: resolvedCashUsd,
+      mobileBs: resolvedMobileBs,
+      cashBs: resolvedCashBs,
       customer: method === "credit" ? name.trim() : undefined,
       customerInfo: name.trim() ? { name: name.trim(), idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined } : undefined,
       total, timeAmount, extrasAmount, minutes,
@@ -290,7 +332,11 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
 
   const handleReceiptClose = () => {
     setReceipt(null);
-    if (pendingFinalize) { doFinalize(); setPendingFinalize(false); onClose(); }
+    if (pendingFinalize) {
+      doFinalize();
+      setPendingFinalize(false);
+      onClose();
+    }
   };
 
   return (
@@ -547,11 +593,13 @@ function PayExtrasDialog({ open, onClose, consoleObj }: PayExtrasProps) {
 interface ConsoleCardProps { consoleObj: ConsoleState; suggested: boolean; }
 export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
   const rate = useStore((s) => s.rate); const soundOn = useStore((s) => s.soundOn); const startSession = useStore((s) => s.startSession); const extendSession = useStore((s) => s.extendSession); const markAlerted = useStore((s) => s.markAlerted); const markPreAlerted = useStore((s) => s.markPreAlerted); const pauseSession = useStore((s) => s.pauseSession); const resumeSession = useStore((s) => s.resumeSession); const cancelSession = useStore((s) => (s as any).cancelSession); 
-  // 👈 AQUÍ TRAEMOS LA FUNCIÓN DE AGREGAR EL CONTROL ADICIONAL 
   const addExtraController = useStore((s) => (s as any).addExtraController); 
   const now = useNow();
 
-  const [snackOpen, setSnackOpen] = useState(false); const [comboOpen, setComboOpen] = useState(false); const [checkoutOpen, setCheckoutOpen] = useState(false); const [prepayOpen, setPrepayOpen] = useState(false); const [extendOpen, setExtendOpen] = useState<null | number>(null); const releaseConsole = useStore((s) => s.releaseConsole);
+  const [snackOpen, setSnackOpen] = useState(false); const [comboOpen, setComboOpen] = useState(false); const [checkoutOpen, setCheckoutOpen] = useState(false); const [prepayOpen, setPrepayOpen] = useState(false); const [extendOpen, setExtendOpen] = useState<null | number>(null); 
+  const [transferOpen, setTransferOpen] = useState(false); // 👈 ESTADO PARA ABRIR MENÚ DE TRANSFERENCIA
+  
+  const releaseConsole = useStore((s) => s.releaseConsole);
 
   const isPS5 = consoleObj.type === "PS5"; const session = consoleObj.session; const occupied = !!session; const paused = !!session?.pausedAt; const isFixed = session?.mode === "fixed"; const refNow = paused ? session!.pausedAt! : now; const remainingMs = session?.endsAt ? session.endsAt - refNow : 0; const expired = isFixed && remainingMs <= 0 && !paused; const elapsedMs = session ? refNow - session.startedAt : 0; const { amount: timeAmount, minutes } = computeTimeAmount(consoleObj, now); const extras = consoleObj.charges.reduce((a, c) => a + c.amount, 0); const total = timeAmount + extras;
 
@@ -601,17 +649,17 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
               {isPrepaid ? ( <><Button size="sm" variant="secondary" onClick={() => setExtendOpen(15)}>+15 min (cobrar)</Button><Button size="sm" variant="secondary" onClick={() => setExtendOpen(30)}>+30 min (cobrar)</Button></> ) : ( <><Button size="sm" variant="secondary" onClick={() => extendSession(consoleObj.id, 15)}>+15 min</Button><Button size="sm" variant="secondary" onClick={() => extendSession(consoleObj.id, 30)}>+30 min</Button></> )}
             </div>
             
-            {/* 👈 NUEVA CUADRÍCULA DE 4 BOTONES INCLUYENDO CONTROL ADICIONAL */}
-            <div className="grid grid-cols-2 gap-2">
+            {/* 👈 AQUÍ INCLUIMOS EL BOTÓN PARA "MOVER" */}
+            <div className="grid grid-cols-3 gap-2">
               <Button size="sm" variant="outline" onClick={() => setSnackOpen(true)}><ShoppingBag className="h-4 w-4 mr-1" />Snack</Button>
               <Button size="sm" variant="outline" onClick={() => setComboOpen(true)}><Package className="h-4 w-4 mr-1" />Combo</Button>
-              <Button size="sm" variant="outline" className="border-primary/30 text-primary hover:bg-primary/10" onClick={() => {
-                if (confirm(`¿Añadir 1 Control Adicional por $1.00 a ${consoleObj.name}?`)) {
-                  addExtraController(consoleObj.id);
-                  toast.success("Control añadido al recibo");
-                }
-              }}><Gamepad2 className="h-4 w-4 mr-1" />Control +$1</Button>
-              {paused ? ( <Button size="sm" variant="default" className="bg-warning text-foreground hover:bg-warning/90" onClick={() => resumeSession(consoleObj.id)}><Play className="h-4 w-4 mr-1" />Reanudar</Button> ) : ( <Button size="sm" variant="outline" onClick={() => pauseSession(consoleObj.id)}><Pause className="h-4 w-4 mr-1" />Pausa</Button> )}
+              <Button size="sm" variant="outline" className="border-primary/30 text-primary hover:bg-primary/10 px-1" onClick={() => {
+                if (confirm(`¿Añadir 1 Control Adicional por $1.00 a ${consoleObj.name}?`)) { addExtraController(consoleObj.id); toast.success("Control añadido al recibo"); }
+              }}><Gamepad2 className="h-4 w-4 mr-1" />Ctrl +$1</Button>
+              
+              <Button size="sm" variant="outline" onClick={() => setTransferOpen(true)} className="border-white/20 hover:bg-white/10"><ArrowRightLeft className="h-4 w-4 mr-1" />Mover</Button>
+              
+              {paused ? ( <Button size="sm" variant="default" className="col-span-2 bg-warning text-foreground hover:bg-warning/90" onClick={() => resumeSession(consoleObj.id)}><Play className="h-4 w-4 mr-1" />Reanudar</Button> ) : ( <Button size="sm" variant="outline" className="col-span-2" onClick={() => pauseSession(consoleObj.id)}><Pause className="h-4 w-4 mr-1" />Pausar Tiempo</Button> )}
             </div>
 
             {consoleObj.charges.length > 0 && ( <div className="text-xs text-muted-foreground space-y-0.5 max-h-16 overflow-auto">{consoleObj.charges.map((c, i) => ( <div key={i} className="flex justify-between"><span>{c.label}</span><span>{fmtUsd(c.amount)}</span></div> ))}</div> )}
@@ -629,6 +677,7 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
       <Checkout open={checkoutOpen} onClose={() => setCheckoutOpen(false)} consoleObj={consoleObj} />
       <PrepayCheckout open={prepayOpen} onClose={() => setPrepayOpen(false)} consoleObj={consoleObj} />
       <PayExtrasDialog open={payExtrasOpen} onClose={() => setPayExtrasOpen(false)} consoleObj={consoleObj} />
+      <TransferDialog consoleId={consoleObj.id} open={transferOpen} onClose={() => setTransferOpen(false)} />
       {extendOpen !== null && ( <ExtendCheckoutDialog open={true} onClose={() => setExtendOpen(null)} consoleObj={consoleObj} addMinutes={extendOpen} /> )}
     </Card>
   );

@@ -187,8 +187,10 @@ interface State {
   addSnackToConsole: (consoleId: string, productId: string, qty: number) => void;
   applyComboToConsole: (consoleId: string, comboId: string) => void;
   
-  // 👈 NUEVA FUNCIÓN PARA EL CONTROL ADICIONAL
   addExtraController: (consoleId: string) => void;
+  
+  // 👈 NUEVA FUNCIÓN PARA MOVER SESIONES ENTRE CONSOLAS
+  transferSession: (originId: string, destId: string) => void;
 
   finalizeConsole: (
     consoleId: string,
@@ -320,21 +322,61 @@ export const useStore = create<State>()(
           return { products: newProducts, consoles: s.consoles.map((c) => c.id === consoleId ? { ...c, session: combo.hours > 0 ? newSession : c.session, charges: [ ...c.charges, { label: `Combo: ${combo.name}`, amount: combo.price, ts: Date.now() } ] } : c ) };
         }),
 
-      // 👈 LÓGICA QUE INYECTA $1 DE CARGO AUTOMÁTICO
       addExtraController: (consoleId) =>
         set((s) => ({
           consoles: s.consoles.map((c) =>
             c.id === consoleId
-              ? {
-                  ...c,
-                  charges: [
-                    ...c.charges,
-                    { label: "Control Adicional", amount: 1, ts: Date.now() },
-                  ],
-                }
+              ? { ...c, charges: [ ...c.charges, { label: "Control Adicional", amount: 1, ts: Date.now() } ] }
               : c
           ),
         })),
+
+      // 👈 LA LÓGICA MÁGICA DE TRANSFERENCIA
+      transferSession: (originId, destId) => set((s) => {
+        const origin = s.consoles.find(c => c.id === originId);
+        const dest = s.consoles.find(c => c.id === destId);
+        if (!origin || !origin.session || !dest || dest.session) return s;
+
+        const nowMs = Date.now();
+        const ref = origin.session.pausedAt ?? nowMs;
+        const elapsedMs = Math.max(0, ref - origin.session.startedAt);
+        const minutes = Math.ceil(elapsedMs / 60_000);
+        const amount = (minutes / 60) * origin.ratePerHour;
+
+        const newCharges = [...dest.charges, ...origin.charges];
+        // Si no era prepagado, cobramos el tiempo exacto jugado en la consola origen como "Cargo Extra"
+        if (!origin.session.prepaid && amount > 0.01) {
+          newCharges.push({
+            label: `Tiempo ${origin.name} (${minutes} min)`,
+            amount: +(amount.toFixed(2)),
+            ts: nowMs
+          });
+        }
+
+        let newEndsAt = undefined;
+        let newStartedAt = nowMs;
+        let newPausedAt = origin.session.pausedAt ? nowMs : undefined;
+
+        if (origin.session.mode === "fixed" && origin.session.endsAt) {
+          const remainingMs = Math.max(0, origin.session.endsAt - ref);
+          newEndsAt = nowMs + remainingMs;
+        }
+
+        const newSession: ConsoleSession = {
+          ...origin.session,
+          startedAt: newStartedAt,
+          endsAt: newEndsAt,
+          pausedAt: newPausedAt,
+        };
+
+        return {
+          consoles: s.consoles.map(c => {
+            if (c.id === originId) return { ...c, session: undefined, charges: [], totalMinutes: c.totalMinutes + minutes, maintenanceMinutes: (c.maintenanceMinutes || 0) + minutes };
+            if (c.id === destId) return { ...c, session: newSession, charges: newCharges };
+            return c;
+          })
+        };
+      }),
 
       finalizeConsole: (consoleId, payload) =>
         set((s) => {
