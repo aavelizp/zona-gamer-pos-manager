@@ -6,7 +6,7 @@ export type ProductId = string;
 export interface Product {
   id: ProductId;
   name: string;
-  price: number; // USD
+  price: number;
   stock: number;
 }
 
@@ -14,7 +14,7 @@ export interface ComboItem { productId: ProductId; qty: number; }
 export interface Combo {
   id: string;
   name: string;
-  price: number; // USD
+  price: number;
   hours: number;
   items: ComboItem[];
 }
@@ -24,8 +24,8 @@ export type SessionMode = "free" | "fixed";
 
 export interface ConsoleSession {
   mode: SessionMode;
-  startedAt: number; // ms
-  endsAt?: number;   // ms (for fixed)
+  startedAt: number; 
+  endsAt?: number;   
   alerted?: boolean;
   preAlerted?: boolean;
   prepaid?: boolean;
@@ -36,7 +36,7 @@ export interface ConsoleSession {
 
 export interface ExtraCharge {
   label: string;
-  amount: number; // USD
+  amount: number;
   ts: number;
   productId?: ProductId;
   qty?: number;
@@ -46,8 +46,8 @@ export interface ConsoleState {
   id: string;
   name: string;
   type: ConsoleType;
-  ratePerHour: number; // USD
-  totalMinutes: number; // historical
+  ratePerHour: number;
+  totalMinutes: number;
   maintenanceMinutes?: number;
   session?: ConsoleSession;
   charges: ExtraCharge[];
@@ -58,7 +58,7 @@ export interface MaintenanceLog {
   consoleId: string;
   consoleName: string;
   description: string;
-  date: number; // ms
+  date: number;
   minutesAtService: number;
 }
 
@@ -86,7 +86,7 @@ export interface SaleRecord {
 export interface Credit {
   id: string;
   customer: string;
-  amount: number; // USD remaining
+  amount: number;
   createdAt: number;
   note?: string;
 }
@@ -188,8 +188,6 @@ interface State {
   applyComboToConsole: (consoleId: string, comboId: string) => void;
   
   addExtraController: (consoleId: string) => void;
-  
-  // 👈 NUEVA FUNCIÓN PARA MOVER SESIONES ENTRE CONSOLAS
   transferSession: (originId: string, destId: string) => void;
 
   finalizeConsole: (
@@ -221,6 +219,10 @@ interface State {
 
   addExpense: (e: { description: string; amount: number; method: "cash" | "mobile"; amountBs?: number; category?: ExpenseCategory; ts?: number }) => void;
   setConsoleRate: (type: ConsoleType, ratePerHour: number) => void;
+
+  // 👈 NUEVAS FUNCIONES DE BORRADO
+  deleteSale: (saleId: string) => void;
+  resetConsoleStats: (consoleId: string) => void;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -331,7 +333,6 @@ export const useStore = create<State>()(
           ),
         })),
 
-      // 👈 LA LÓGICA MÁGICA DE TRANSFERENCIA
       transferSession: (originId, destId) => set((s) => {
         const origin = s.consoles.find(c => c.id === originId);
         const dest = s.consoles.find(c => c.id === destId);
@@ -344,13 +345,8 @@ export const useStore = create<State>()(
         const amount = (minutes / 60) * origin.ratePerHour;
 
         const newCharges = [...dest.charges, ...origin.charges];
-        // Si no era prepagado, cobramos el tiempo exacto jugado en la consola origen como "Cargo Extra"
         if (!origin.session.prepaid && amount > 0.01) {
-          newCharges.push({
-            label: `Tiempo ${origin.name} (${minutes} min)`,
-            amount: +(amount.toFixed(2)),
-            ts: nowMs
-          });
+          newCharges.push({ label: `Tiempo ${origin.name} (${minutes} min)`, amount: +(amount.toFixed(2)), ts: nowMs });
         }
 
         let newEndsAt = undefined;
@@ -362,12 +358,7 @@ export const useStore = create<State>()(
           newEndsAt = nowMs + remainingMs;
         }
 
-        const newSession: ConsoleSession = {
-          ...origin.session,
-          startedAt: newStartedAt,
-          endsAt: newEndsAt,
-          pausedAt: newPausedAt,
-        };
+        const newSession: ConsoleSession = { ...origin.session, startedAt: newStartedAt, endsAt: newEndsAt, pausedAt: newPausedAt };
 
         return {
           consoles: s.consoles.map(c => {
@@ -482,6 +473,13 @@ export const useStore = create<State>()(
       extendPaidSession: (consoleId, addMinutes, payload) => set((s) => { const c = s.consoles.find((x) => x.id === consoleId); if (!c || !c.session) return s; const base = c.session.endsAt && c.session.endsAt > Date.now() ? c.session.endsAt : Date.now(); const newEnds = base + addMinutes * 60_000; const sale: SaleRecord = { id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, minutes: addMinutes, timeAmount: payload.total, extrasAmount: 0, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, rate: s.rate, method: payload.method, customer: payload.customer || c.session.customerName, concept: "Consola", items: [{ name: `Extensión ${c.name} (+${addMinutes} min)`, qty: 1, price: payload.total }] }; const newCredits = payload.method === "credit" ? [...s.credits, { id: uid(), customer: payload.customer || c.session.customerName || "Sin nombre", amount: payload.total, createdAt: Date.now(), note: `Extensión ${c.name}` }] : s.credits; return { consoles: s.consoles.map((x) => x.id === consoleId ? { ...x, session: { ...x.session!, mode: "fixed", endsAt: newEnds, prepaidMinutes: (x.session!.prepaidMinutes ?? 0) + addMinutes, alerted: false, preAlerted: false } } : x ), sales: payload.method === "credit" ? s.sales : [...s.sales, sale], credits: newCredits }; }),
       addExpense: ({ ts, ...rest }) => set((s) => ({ expenses: [ { id: uid(), ts: ts ?? Date.now(), createdAt: Date.now(), rate: s.rate, ...rest }, ...s.expenses ] })),
       setConsoleRate: (type, ratePerHour) => set((s) => ({ consoles: s.consoles.map((c) => c.type === type ? { ...c, ratePerHour: Math.max(0, ratePerHour) } : c ) })),
+      
+      // 👈 IMPLEMENTACIÓN DE LAS FUNCIONES DE BORRADO Y RESET
+      deleteSale: (id) => set((s) => ({ sales: s.sales.filter((x) => x.id !== id) })),
+      resetConsoleStats: (consoleId) => set((s) => ({
+        consoles: s.consoles.map((c) => c.id === consoleId ? { ...c, totalMinutes: 0, maintenanceMinutes: 0 } : c),
+        sessionHistory: s.sessionHistory.filter((h) => h.consoleId !== consoleId)
+      })),
     }),
     {
       name: "gamerzone-store-v1",
