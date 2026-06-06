@@ -101,7 +101,6 @@ function Index() {
     return new Set([ps4, ps5].filter(Boolean) as string[]);
   }, [consoles]);
 
-  // PANTALLA DE CARGA (Con tu logo latiendo)
   if (isCheckingAuth) {
     return (
       <div className="min-h-screen bg-[#0B0914] flex flex-col items-center justify-center font-display relative overflow-hidden bg-grid">
@@ -119,12 +118,12 @@ function Index() {
   return (
     <div className="min-h-screen bg-background bg-grid relative">
       
-      {/* 👈 MARCA DE AGUA EN TODA LA APLICACIÓN (INTOCABLE PARA EL USUARIO) */}
+      {/* 👈 MARCA DE AGUA EN TODA LA APLICACIÓN (MÁS GRANDE, MÁS OPACIDAD Y CON BRILLO) */}
       <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden">
         <img 
           src="/logo.png" 
           alt="Marca de agua Twins Gamer" 
-          className="w-[600px] h-[600px] object-contain opacity-[0.03]" 
+          className="w-[800px] h-[800px] object-contain opacity-[0.08] drop-shadow-[0_0_40px_rgba(158,84,255,0.3)]" 
         />
       </div>
 
@@ -133,7 +132,6 @@ function Index() {
         <header className="border-b border-border/60 bg-card/40 backdrop-blur sticky top-0 z-30">
           <div className="max-w-[1600px] mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
             
-            {/* 👈 LOGO EN LA BARRA SUPERIOR SUSTITUYENDO AL GAMEPAD */}
             <div className="flex items-center gap-2">
               <div className="h-10 w-10 p-1 rounded-lg bg-primary/20 grid place-items-center glow-primary">
                 <img src="/logo.png" alt="Logo Header" className="w-full h-full object-contain" />
