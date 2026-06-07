@@ -1,3 +1,17 @@
+¡Ese es un error súper común! Y como en toda auditoría, si hacemos un movimiento por error, el sistema debe permitirnos hacer el "reverso contable" exacto.
+
+Cuando registras un mantenimiento, el sistema hace dos cosas: crea el registro de texto y pone el cronómetro de suciedad de la consola en 0.
+
+Acabo de programar una función especial que hace exactamente el reverso: elimina el registro falso y le devuelve a la consola las horas de uso que tenía antes de que lo resetearas, dejándolo exactamente como estaba.
+
+Solo vamos a actualizar 2 archivos:
+
+🗄️ 1. Archivo: src/lib/store.ts
+(Agregamos la función deleteMaintenanceLog al final de nuestra base de datos)
+
+Abre store.ts, borra todo y pega este código completo:
+
+TypeScript
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { supabase } from "./supabase";
@@ -76,11 +90,8 @@ export interface SaleRecord {
   cashUsd: number;
   mobileBs: number;
   cashBs?: number;
-  
-  // 👈 NUEVAS COLUMNAS DE AUDITORÍA BANCARIA
   mobileBank?: string;
   mobileRef?: string;
-
   rate: number;
   method: PaymentMethod;
   customer?: string;
@@ -194,7 +205,6 @@ interface State {
   addExtraController: (consoleId: string) => void;
   transferSession: (originId: string, destId: string) => void;
 
-  // 👈 SE ACTUALIZAN TODOS LOS PAGOS PARA RECIBIR BANCO Y REF
   finalizeConsole: (
     consoleId: string,
     payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; cashBs?: number; customer?: string; total: number; timeAmount: number; extrasAmount: number; minutes: number; customerInfo?: CustomerInfo }
@@ -221,6 +231,9 @@ interface State {
   closeDay: () => void;
 
   registerMaintenance: (consoleId: string, description: string, date: number) => void;
+  
+  // 👈 NUEVA FUNCIÓN PARA REVERSAR MANTENIMIENTO
+  deleteMaintenanceLog: (logId: string) => void;
 
   prepaySession: (consoleId: string, minutes: number, payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; cashBs?: number; total: number; customerInfo?: CustomerInfo; comboId?: string }) => void;
   releaseConsole: (consoleId: string) => boolean;
@@ -498,7 +511,34 @@ export const useStore = create<State>()(
 
       closeDay: () => set((s) => { const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0); return { sales: s.sales.filter((sale) => sale.ts < startOfToday.getTime()), consoles: s.consoles.map((c) => ({ ...c, session: undefined, charges: [] })) }; }),
 
-      registerMaintenance: (consoleId, description, date) => set((s) => { const c = s.consoles.find((x) => x.id === consoleId); if (!c) return s; const log: MaintenanceLog = { id: uid(), consoleId: c.id, consoleName: c.name, description, date, minutesAtService: c.totalMinutes }; return { consoles: s.consoles.map((x) => x.id === consoleId ? { ...x, maintenanceMinutes: 0 } : x ), maintenanceLogs: [log, ...s.maintenanceLogs] }; }),
+      registerMaintenance: (consoleId, description, date) => set((s) => { 
+        const c = s.consoles.find((x) => x.id === consoleId); 
+        if (!c) return s; 
+        const log: MaintenanceLog = { id: uid(), consoleId: c.id, consoleName: c.name, description, date, minutesAtService: c.maintenanceMinutes || 0 }; 
+        return { 
+          consoles: s.consoles.map((x) => x.id === consoleId ? { ...x, maintenanceMinutes: 0 } : x ), 
+          maintenanceLogs: [log, ...s.maintenanceLogs] 
+        }; 
+      }),
+      
+      // 👈 LA MAGIA: BORRAR MANTENIMIENTO Y DEVOLVERLE LAS HORAS A LA CONSOLA
+      deleteMaintenanceLog: (logId) => set((s) => {
+        const log = s.maintenanceLogs.find(l => l.id === logId);
+        if (!log) return s;
+        
+        // Buscamos la consola y le sumamos de vuelta las horas que tenía antes del reset
+        const consoles = s.consoles.map(c => {
+           if (c.id === log.consoleId) {
+               return { ...c, maintenanceMinutes: (c.maintenanceMinutes || 0) + log.minutesAtService };
+           }
+           return c;
+        });
+  
+        return {
+          maintenanceLogs: s.maintenanceLogs.filter(l => l.id !== logId),
+          consoles
+        };
+      }),
 
       prepaySession: (consoleId, minutes, payload) => set((s) => {
           const c = s.consoles.find((x) => x.id === consoleId);
@@ -548,7 +588,7 @@ export const useStore = create<State>()(
       extendPaidSession: (consoleId, addMinutes, payload) => set((s) => { const c = s.consoles.find((x) => x.id === consoleId); if (!c || !c.session) return s; const base = c.session.endsAt && c.session.endsAt > Date.now() ? c.session.endsAt : Date.now(); const newEnds = base + addMinutes * 60_000; const sale: SaleRecord = { id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, minutes: addMinutes, timeAmount: payload.total, extrasAmount: 0, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, rate: s.rate, method: payload.method, customer: payload.customer || c.session.customerName, concept: "Consola", items: [{ name: `Extensión ${c.name} (+${addMinutes} min)`, qty: 1, price: payload.total }] }; const newCredits = payload.method === "credit" ? [...s.credits, { id: uid(), customer: payload.customer || c.session.customerName || "Sin nombre", amount: payload.total, createdAt: Date.now(), note: `Extensión ${c.name}` }] : s.credits; return { consoles: s.consoles.map((x) => x.id === consoleId ? { ...x, session: { ...x.session!, mode: "fixed", endsAt: newEnds, prepaidMinutes: (x.session!.prepaidMinutes ?? 0) + addMinutes, alerted: false, preAlerted: false } } : x ), sales: payload.method === "credit" ? s.sales : [...s.sales, sale], credits: newCredits }; }),
       addExpense: ({ ts, ...rest }) => set((s) => ({ expenses: [ { id: uid(), ts: ts ?? Date.now(), createdAt: Date.now(), rate: s.rate, ...rest }, ...s.expenses ] })),
       setConsoleRate: (type, ratePerHour) => set((s) => ({ consoles: s.consoles.map((c) => c.type === type ? { ...c, ratePerHour: Math.max(0, ratePerHour) } : c ) })),
-      
+
       deleteSale: (id) => set((s) => ({ sales: s.sales.filter((x) => x.id !== id) })),
       resetConsoleStats: (consoleId) => set((s) => ({
         consoles: s.consoles.map((c) => c.id === consoleId ? { ...c, totalMinutes: 0, maintenanceMinutes: 0 } : c),
