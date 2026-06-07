@@ -1,15 +1,13 @@
-¡Ese es un error súper común! Y como en toda auditoría, si hacemos un movimiento por error, el sistema debe permitirnos hacer el "reverso contable" exacto.
+¡Ya vi exactamente lo que pasó! Y la culpa fue mía por no ser más claro en las instrucciones.
 
-Cuando registras un mantenimiento, el sistema hace dos cosas: crea el registro de texto y pone el cronómetro de suciedad de la consola en 0.
+Si te fijas en la línea que dice el error:
+1 | ¡Ese es un error súper común! Y como en toda auditoría...
 
-Acabo de programar una función especial que hace exactamente el reverso: elimina el registro falso y le devuelve a la consola las horas de uso que tenía antes de que lo resetearas, dejándolo exactamente como estaba.
+¿Qué pasó? Al copiar el código de mi respuesta anterior, sin querer seleccionaste también el texto de saludo que yo te escribí arriba del recuadro negro, y lo pegaste todo junto dentro del archivo store.ts. Como el servidor intentó leer mi texto en español como si fuera lenguaje de programación, se confundió y tiró el error.
 
-Solo vamos a actualizar 2 archivos:
+¡No te preocupes, se arregla en 10 segundos!
 
-🗄️ 1. Archivo: src/lib/store.ts
-(Agregamos la función deleteMaintenanceLog al final de nuestra base de datos)
-
-Abre store.ts, borra todo y pega este código completo:
+Abre tu archivo src/lib/store.ts, borra absolutamente TODO lo que tiene adentro, y pega ÚNICAMENTE lo que está dentro de este recuadro negro de código:
 
 TypeScript
 import { create } from "zustand";
@@ -231,8 +229,6 @@ interface State {
   closeDay: () => void;
 
   registerMaintenance: (consoleId: string, description: string, date: number) => void;
-  
-  // 👈 NUEVA FUNCIÓN PARA REVERSAR MANTENIMIENTO
   deleteMaintenanceLog: (logId: string) => void;
 
   prepaySession: (consoleId: string, minutes: number, payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; cashBs?: number; total: number; customerInfo?: CustomerInfo; comboId?: string }) => void;
@@ -521,12 +517,10 @@ export const useStore = create<State>()(
         }; 
       }),
       
-      // 👈 LA MAGIA: BORRAR MANTENIMIENTO Y DEVOLVERLE LAS HORAS A LA CONSOLA
       deleteMaintenanceLog: (logId) => set((s) => {
         const log = s.maintenanceLogs.find(l => l.id === logId);
         if (!log) return s;
         
-        // Buscamos la consola y le sumamos de vuelta las horas que tenía antes del reset
         const consoles = s.consoles.map(c => {
            if (c.id === log.consoleId) {
                return { ...c, maintenanceMinutes: (c.maintenanceMinutes || 0) + log.minutesAtService };
