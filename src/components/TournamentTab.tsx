@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { MixedPaymentInputs } from "@/components/MixedPaymentInputs";
-import { Trophy, Users, Plus, Trash2, CheckCircle2, AlertTriangle, Receipt, Swords, Undo2, RotateCcw, Calendar, ListOrdered } from "lucide-react";
+import { Trophy, Users, Plus, Trash2, CheckCircle2, AlertTriangle, Receipt, Swords, Undo2, RotateCcw, Calendar, ListOrdered, Percent } from "lucide-react";
 import { toast } from "sonner";
 
 export function TournamentTab() {
@@ -16,6 +16,7 @@ export function TournamentTab() {
   const matches = useStore((s) => s.matches || []);
   
   const createTournament = useStore((s) => (s as any).createTournament);
+  const updateTournamentPrize = useStore((s) => (s as any).updateTournamentPrize);
   const deleteTournament = useStore((s) => (s as any).deleteTournament);
   const enrollParticipant = useStore((s) => (s as any).enrollParticipant);
   const removeParticipant = useStore((s) => (s as any).removeParticipant);
@@ -26,10 +27,10 @@ export function TournamentTab() {
   const revertTournamentToRegistering = useStore((s) => (s as any).revertTournamentToRegistering);
   const rate = useStore((s) => s.rate);
 
-  // 👈 NUEVOS ESTADOS DE CONFIGURACIÓN
   const [tName, setTName] = useState(""); const [tGame, setTGame] = useState(""); const [tMax, setTMax] = useState(16); const [tFee, setTFee] = useState(5);
   const [tFormat, setTFormat] = useState<"single_elimination" | "league">("single_elimination");
   const [tDates, setTDates] = useState("");
+  const [tPrizePct, setTPrizePct] = useState(70); // 👈 ESTADO PARA EL PORCENTAJE (70% por defecto)
 
   const [enrollModal, setEnrollModal] = useState<{ open: boolean; tId: string | null; participantId?: string }>({ open: false, tId: null });
   const [playerName, setPlayerName] = useState(""); const [paymentType, setPaymentType] = useState<"pending" | "pay_now">("pending");
@@ -38,12 +39,9 @@ export function TournamentTab() {
   const [mobileBank, setMobileBank] = useState(""); const [mobileRef, setMobileRef] = useState("");
 
   const handleCreate = () => { 
-    if (!tName || !tGame || tMax < 2 || !tDates) {
-      toast.error("Por favor llena todos los campos, incluyendo los días del torneo.");
-      return;
-    }
-    createTournament({ name: tName, game: tGame, maxPlayers: tMax, entryFee: tFee, format: tFormat, dateRange: tDates }); 
-    setTName(""); setTGame(""); setTMax(16); setTFee(5); setTDates("");
+    if (!tName || !tGame || tMax < 2 || !tDates || tPrizePct < 1 || tPrizePct > 100) { toast.error("Revisa todos los campos. El porcentaje debe estar entre 1 y 100."); return; }
+    createTournament({ name: tName, game: tGame, maxPlayers: tMax, entryFee: tFee, prizePercentage: tPrizePct, format: tFormat, dateRange: tDates }); 
+    setTName(""); setTGame(""); setTMax(16); setTFee(5); setTDates(""); setTPrizePct(70);
     toast.success("Torneo creado exitosamente"); 
   };
 
@@ -91,22 +89,17 @@ export function TournamentTab() {
               <div><Label className="text-xs uppercase">Juego</Label><Input value={tGame} onChange={(e)=>setTGame(e.target.value)} placeholder="Ej: EA FC 26" /></div>
             </div>
 
-            {/* 👈 NUEVOS CONTROLES DE FECHA Y FORMATO */}
             <div className="grid grid-cols-2 gap-4 border-y border-border py-4">
-              <div>
-                <Label className="text-xs uppercase flex items-center gap-1 text-accent"><Calendar className="h-3 w-3"/> Días del Torneo</Label>
-                <Input value={tDates} onChange={(e)=>setTDates(e.target.value)} placeholder="Ej: Viernes 10 al Domingo 12" className="mt-1" />
-              </div>
-              <div>
-                <Label className="text-xs uppercase flex items-center gap-1 text-accent"><ListOrdered className="h-3 w-3"/> Formato</Label>
-                <select className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm mt-1 focus:ring-1 focus:ring-primary" value={tFormat} onChange={(e) => setTFormat(e.target.value as any)}>
-                  <option value="single_elimination">Árbol (Eliminación Directa)</option>
-                  <option value="league">Liga / Puntos (Próximamente)</option>
-                </select>
-              </div>
+              <div><Label className="text-xs uppercase flex items-center gap-1 text-accent"><Calendar className="h-3 w-3"/> Días del Torneo</Label><Input value={tDates} onChange={(e)=>setTDates(e.target.value)} placeholder="Ej: Viernes al Domingo" className="mt-1" /></div>
+              <div><Label className="text-xs uppercase flex items-center gap-1 text-accent"><ListOrdered className="h-3 w-3"/> Formato</Label><select className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm mt-1 focus:ring-1 focus:ring-primary" value={tFormat} onChange={(e) => setTFormat(e.target.value as any)}><option value="single_elimination">Eliminación Directa</option><option value="league">Liga / Puntos</option></select></div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4"><div><Label className="text-xs uppercase">Cupo Límite</Label><Input type="number" min={2} value={tMax} onChange={(e)=>setTMax(parseInt(e.target.value)||16)} /></div><div><Label className="text-xs uppercase">Inscripción ($)</Label><Input type="number" min={0} value={tFee} onChange={(e)=>setTFee(parseFloat(e.target.value)||0)} /></div></div>
+            <div className="grid grid-cols-3 gap-4">
+              <div><Label className="text-xs uppercase">Cupo Límite</Label><Input type="number" min={2} value={tMax} onChange={(e)=>setTMax(parseInt(e.target.value)||16)} /></div>
+              <div><Label className="text-xs uppercase">Inscripción ($)</Label><Input type="number" min={0} value={tFee} onChange={(e)=>setTFee(parseFloat(e.target.value)||0)} /></div>
+              {/* 👈 NUEVO CAMPO DE PORCENTAJE AL CREAR */}
+              <div><Label className="text-xs uppercase text-purple-400">% Para el Pozo</Label><div className="relative mt-1"><Percent className="absolute left-2 top-2 h-4 w-4 text-muted-foreground" /><Input type="number" min={1} max={100} value={tPrizePct} onChange={(e)=>setTPrizePct(parseInt(e.target.value)||70)} className="pl-8" /></div></div>
+            </div>
             <Button className="w-full bg-gradient-to-r from-primary to-accent" disabled={!tName || !tGame || !tDates} onClick={handleCreate}>Abrir Taquilla de Inscripciones</Button>
           </div>
         </Card>
@@ -120,10 +113,15 @@ export function TournamentTab() {
         const tParts = participants.filter(p => p.tournamentId === t.id);
         const fillPercent = Math.min(100, (tParts.length / t.maxPlayers) * 100);
         const isFull = tParts.length >= t.maxPlayers;
-        const prizePool = tParts.filter(p => p.paymentStatus === 'paid').length * t.entryFee;
+        
+        // 👈 CÁLCULOS MATEMÁTICOS DEL POZO (PRIZE POOL VS CASA)
+        const totalCollected = tParts.filter(p => p.paymentStatus === 'paid').length * t.entryFee;
+        const currentPct = t.prizePercentage || 100; // Por si hay torneos viejos sin el %
+        const prizePool = totalCollected * (currentPct / 100);
+        const houseCut = totalCollected - prizePool;
+
         const tMatches = matches.filter(m => m.tournamentId === t.id);
         const isRegistering = t.status === "registering";
-        
         const rounds = Array.from(new Set(tMatches.map(m => m.round))).sort((a, b) => a - b);
 
         return (
@@ -147,10 +145,14 @@ export function TournamentTab() {
                   </p>
                 </div>
                 
-                <div className="text-right">
-                  <p className="text-[10px] text-[#00E5FF] uppercase font-bold tracking-widest">Prize Pool Acumulado</p>
-                  <p className="font-display text-4xl text-white drop-shadow-[0_0_10px_rgba(0,229,255,0.5)]">{fmtUsd(prizePool)}</p>
-                  <p className="text-xs text-muted-foreground">Inscripción: {fmtUsd(t.entryFee)}</p>
+                {/* 👈 TABLERO FINANCIERO DESGLOSADO */}
+                <div className="text-right flex flex-col items-end">
+                  <p className="text-[10px] text-[#00E5FF] uppercase font-bold tracking-widest bg-[#00E5FF]/10 px-2 py-1 rounded">💰 Pozo de Premio ({currentPct}%)</p>
+                  <p className="font-display text-4xl text-white drop-shadow-[0_0_10px_rgba(0,229,255,0.5)] mt-1">{fmtUsd(prizePool)}</p>
+                  <div className="flex items-center gap-3 mt-1 text-xs font-semibold">
+                    <span className="text-muted-foreground">Local ({(100 - currentPct).toFixed(0)}%): {fmtUsd(houseCut)}</span>
+                    <span className="text-muted-foreground">| Total: {fmtUsd(totalCollected)}</span>
+                  </div>
                 </div>
               </div>
 
@@ -161,7 +163,7 @@ export function TournamentTab() {
                 </div>
               )}
 
-              <div className="mt-6 flex flex-wrap gap-3 relative z-10">
+              <div className="mt-6 flex flex-wrap items-center gap-3 relative z-10 border-t border-white/10 pt-4">
                 {isRegistering ? (
                   <>
                     <Button className="bg-white text-black hover:bg-zinc-200 font-display" disabled={isFull} onClick={() => { setPlayerName(""); setPaymentType("pending"); setEnrollModal({ open: true, tId: t.id }); }}><Plus className="h-4 w-4 mr-2" /> Inscribir Jugador</Button>
@@ -174,11 +176,19 @@ export function TournamentTab() {
                   <Button variant="outline" className="border-yellow-500/30 text-yellow-500 hover:bg-yellow-500/10" onClick={() => { if(confirm("⚠️ ¿Destruir todo el torneo y devolverlo a fase de inscripción? (Se borrarán los avances de las llaves)")) revertTournamentToRegistering(t.id); }}><RotateCcw className="h-4 w-4 mr-2" /> Reversar a Inscripciones</Button>
                 )}
                 
-                <Button variant="outline" className="border-red-500/30 text-red-400 hover:bg-red-500/10" onClick={() => { if(confirm(`¿Seguro que deseas eliminar el torneo ${t.name}?`)) deleteTournament(t.id); }}><Trash2 className="h-4 w-4 mr-2" /> Eliminar Torneo</Button>
+                {/* 👈 BOTÓN RÁPIDO PARA CAMBIAR EL % DEL PREMIO */}
+                <Button variant="outline" className="border-white/20 text-white hover:bg-white/10 ml-auto" onClick={() => {
+                  const newPctStr = prompt("¿Qué porcentaje de lo recaudado irá al premio? (Ej: 70)", currentPct.toString());
+                  const newPct = parseInt(newPctStr || "");
+                  if (!isNaN(newPct) && newPct >= 1 && newPct <= 100) { updateTournamentPrize(t.id, newPct); toast.success("Porcentaje actualizado"); } else { toast.error("Número inválido."); }
+                }}>
+                  Editar % Premio
+                </Button>
+                <Button variant="outline" className="border-red-500/30 text-red-400 hover:bg-red-500/10" onClick={() => { if(confirm(`¿Seguro que deseas eliminar el torneo ${t.name}?`)) deleteTournament(t.id); }}><Trash2 className="h-4 w-4" /></Button>
               </div>
             </Card>
 
-            {/* TABLA DE INSCRITOS (Solo se ve si estamos registrando) */}
+            {/* TABLA DE INSCRITOS */}
             {isRegistering && (
               <div className="rounded-md border border-border bg-card overflow-hidden">
                 <table className="w-full text-sm text-left"><thead className="bg-muted/50 text-muted-foreground uppercase text-xs font-display tracking-wider border-b border-border"><tr><th className="p-3 w-12 text-center">#</th><th className="p-3">Gamer (Participante)</th><th className="p-3 text-center">Estado del Pago</th><th className="p-3 text-right">Acciones</th></tr></thead><tbody className="divide-y divide-border/60">
@@ -231,7 +241,6 @@ export function TournamentTab() {
                 </div>
               </div>
             )}
-            
           </div>
         );
       })}

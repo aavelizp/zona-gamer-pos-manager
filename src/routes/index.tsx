@@ -23,8 +23,8 @@ import { DirectSaleDialog } from "@/components/DirectSaleDialog";
 import { SalesTab } from "@/components/SalesTab"; 
 import { MultiCheckoutDialog } from "@/components/MultiCheckoutDialog"; 
 import { ReconciliationTab } from "@/components/ReconciliationTab"; 
-import { TournamentTab } from "@/components/TournamentTab"; // 👈 IMPORTAMOS LA PESTAÑA DE TORNEOS
-import { Volume2, VolumeX, FileSpreadsheet, Receipt, Wallet, LogOut, ShoppingCart, Layers, ShieldCheck, Trophy } from "lucide-react";
+import { TournamentTab } from "@/components/TournamentTab";
+import { Volume2, VolumeX, FileSpreadsheet, Receipt, Wallet, LogOut, ShoppingCart, Layers } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -135,18 +135,19 @@ function Index() {
 
         <main className="flex-1 max-w-[1600px] w-full mx-auto px-4 py-6">
           <Tabs defaultValue="dashboard" className="space-y-4">
-            <TabsList className="bg-card border border-border flex-wrap h-auto shadow-sm">
-              <TabsTrigger value="dashboard">Consolas</TabsTrigger>
-              <TabsTrigger value="tournaments" className="text-purple-400 hover:text-purple-300">🏆 Torneos</TabsTrigger> {/* 👈 NUEVA PESTAÑA */}
-              <TabsTrigger value="sales" className="text-blue-400 hover:text-blue-300">📊 Ventas Hoy</TabsTrigger>
-              <TabsTrigger value="reconciliation" className="text-teal-400 hover:text-teal-300">🏦 Conciliación</TabsTrigger> 
-              <TabsTrigger value="inventory">Inventario</TabsTrigger>
-              <TabsTrigger value="combos">Combos</TabsTrigger>
-              <TabsTrigger value="credits">Fiados {credits.length > 0 && <span className="ml-1 text-accent font-bold">({credits.length})</span>}</TabsTrigger>
-              <TabsTrigger value="club" className="text-amber-500 hover:text-amber-400">🏆 Club</TabsTrigger> 
+            
+            <TabsList className="bg-card border border-border flex-wrap h-auto shadow-sm justify-start p-1 gap-1">
+              <TabsTrigger value="dashboard">🎮 Consolas</TabsTrigger>
+              <TabsTrigger value="club" className="text-amber-500 hover:text-amber-400">🏆 Club Gamer</TabsTrigger> 
+              <TabsTrigger value="combos">🍔 Combos</TabsTrigger>
+              <TabsTrigger value="tournaments" className="text-purple-400 hover:text-purple-300">🏆 Torneos</TabsTrigger> 
               <TabsTrigger value="clients">👥 Clientes</TabsTrigger>
-              <TabsTrigger value="maintenance">🔧 Mant.</TabsTrigger>
+              <TabsTrigger value="credits">📝 Fiados {credits.length > 0 && <span className="ml-1 text-accent font-bold">({credits.length})</span>}</TabsTrigger>
               <TabsTrigger value="expenses">💸 Gastos</TabsTrigger>
+              <TabsTrigger value="inventory">📦 Inventario</TabsTrigger>
+              <TabsTrigger value="maintenance">🔧 Mantenimiento</TabsTrigger>
+              <TabsTrigger value="reconciliation" className="text-teal-400 hover:text-teal-300">🏦 Conciliación</TabsTrigger> 
+              <TabsTrigger value="sales" className="text-blue-400 hover:text-blue-300">📊 Ventas Hoy</TabsTrigger>
             </TabsList>
 
             <TabsContent value="dashboard">
@@ -164,16 +165,17 @@ function Index() {
               </div>
             </TabsContent>
 
-            <TabsContent value="tournaments"><TournamentTab /></TabsContent> {/* 👈 CONTENIDO DE TORNEOS */}
+            <TabsContent value="club"><MembersTab /></TabsContent>
+            <TabsContent value="combos"><CombosTab /></TabsContent>
+            <TabsContent value="tournaments"><TournamentTab /></TabsContent>
+            <TabsContent value="clients"><ClientsTab /></TabsContent> 
+            <TabsContent value="credits"><CreditsTab /></TabsContent>
+            <TabsContent value="expenses"><ExpensesTab /></TabsContent>
+            <TabsContent value="inventory"><InventoryTab /></TabsContent>
+            <TabsContent value="maintenance"><MaintenanceTab /></TabsContent>
             <TabsContent value="reconciliation"><ReconciliationTab /></TabsContent> 
             <TabsContent value="sales"><SalesTab /></TabsContent>
-            <TabsContent value="inventory"><InventoryTab /></TabsContent>
-            <TabsContent value="combos"><CombosTab /></TabsContent>
-            <TabsContent value="credits"><CreditsTab /></TabsContent>
-            <TabsContent value="club"><MembersTab /></TabsContent>
-            <TabsContent value="clients"><ClientsTab /></TabsContent> 
-            <TabsContent value="maintenance"><MaintenanceTab /></TabsContent>
-            <TabsContent value="expenses"><ExpensesTab /></TabsContent>
+
             <TabsContent value="config"><BusinessConfigTab /></TabsContent>
           </Tabs>
         </main>
