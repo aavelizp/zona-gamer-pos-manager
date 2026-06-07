@@ -25,8 +25,16 @@ export type ExpenseCategory = "Servicios" | "Compras" | "Mantenimiento" | "Sueld
 export const EXPENSE_CATEGORIES: ExpenseCategory[] = ["Servicios", "Compras", "Mantenimiento", "Sueldos", "Limpieza", "Impuestos", "Otros"];
 export interface Expense { id: string; ts: number; createdAt?: number; description: string; amount: number; method: "cash" | "mobile"; amountBs?: number; rate: number; category?: ExpenseCategory; }
 
+// 👈 NUEVAS TABLAS PARA TORNEOS
+export interface Tournament { id: string; name: string; game: string; maxPlayers: number; entryFee: number; status: "registering" | "active" | "completed"; createdAt: number; }
+export interface TournamentParticipant { id: string; tournamentId: string; memberId?: string; memberName: string; paymentStatus: "paid" | "pending"; enrolledAt: number; }
+
 interface State {
   rate: number; soundOn: boolean; products: Product[]; combos: Combo[]; consoles: ConsoleState[]; sales: SaleRecord[]; credits: Credit[]; queue: QueueEntry[]; members: Member[]; maintenanceLogs: MaintenanceLog[]; sessionHistory: SessionHistoryEntry[]; expenses: Expense[];
+  
+  tournaments: Tournament[]; // 👈 ESTADO DE TORNEOS
+  participants: TournamentParticipant[]; // 👈 ESTADO DE PARTICIPANTES
+
   setRate: (n: number) => void; toggleSound: () => void;
   addProduct: (p: Omit<Product, "id">) => void; updateProduct: (id: string, p: Partial<Product>) => void; removeProduct: (id: string) => void;
   addCombo: (c: Omit<Combo, "id">) => void; removeCombo: (id: string) => void;
@@ -40,6 +48,13 @@ interface State {
   closeDay: () => void; registerMaintenance: (consoleId: string, description: string, date: number) => void; deleteMaintenanceLog: (logId: string) => void;
   prepaySession: (consoleId: string, minutes: number, payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; cashBs?: number; total: number; customerInfo?: CustomerInfo; comboId?: string }) => void; releaseConsole: (consoleId: string) => boolean; payExtras: (consoleId: string, payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; total: number; customer?: string }) => void; extendPaidSession: (consoleId: string, addMinutes: number, payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; total: number; customer?: string }) => void;
   addExpense: (e: { description: string; amount: number; method: "cash" | "mobile"; amountBs?: number; category?: ExpenseCategory; ts?: number }) => void; setConsoleRate: (type: ConsoleType, ratePerHour: number) => void; deleteSale: (saleId: string) => void; resetConsoleStats: (consoleId: string) => void;
+
+  // 👈 NUEVAS ACCIONES DEL TORNEO
+  createTournament: (t: Omit<Tournament, "id" | "createdAt" | "status">) => void;
+  deleteTournament: (id: string) => void;
+  enrollParticipant: (tournamentId: string, memberName: string, isPaid: boolean, payload?: any) => void;
+  removeParticipant: (participantId: string) => void;
+  payEnrollment: (participantId: string, payload: any) => void;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -60,6 +75,8 @@ export const useStore = create<State>()(
   persist(
     (set, get) => ({
       rate: 40, soundOn: true, products: [{ id: uid(), name: "Pepsi 355ml", price: 1, stock: 24 }, { id: uid(), name: "Doritos", price: 1.5, stock: 12 }, { id: uid(), name: "Agua 500ml", price: 0.75, stock: 30 }], combos: [], consoles: defaultConsoles, sales: [], credits: [], queue: [], members: [], maintenanceLogs: [], sessionHistory: [], expenses: [],
+      tournaments: [], participants: [], // Inicializamos torneos
+
       setRate: (n) => set({ rate: Math.max(0, n) }), toggleSound: () => set((s) => ({ soundOn: !s.soundOn })),
       addProduct: (p) => set((s) => ({ products: [...s.products, { ...p, id: uid() }] })), updateProduct: (id, p) => set((s) => ({ products: s.products.map((x) => (x.id === id ? { ...x, ...p } : x)) })), removeProduct: (id) => set((s) => ({ products: s.products.filter((p) => p.id !== id) })),
       addCombo: (c) => set((s) => ({ combos: [...s.combos, { ...c, id: uid() }] })), removeCombo: (id) => set((s) => ({ combos: s.combos.filter((c) => c.id !== id) })),
@@ -87,6 +104,34 @@ export const useStore = create<State>()(
       setConsoleRate: (type, ratePerHour) => set((s) => ({ consoles: s.consoles.map((c) => c.type === type ? { ...c, ratePerHour: Math.max(0, ratePerHour) } : c ) })),
       deleteSale: (id) => set((s) => ({ sales: s.sales.filter((x) => x.id !== id) })),
       resetConsoleStats: (consoleId) => set((s) => ({ consoles: s.consoles.map((c) => c.id === consoleId ? { ...c, totalMinutes: 0, maintenanceMinutes: 0 } : c), sessionHistory: s.sessionHistory.filter((h) => h.consoleId !== consoleId) })),
+
+      // 👈 LÓGICA DE TORNEOS (FASE 1: CREAR, INSCRIBIR, PAGAR)
+      createTournament: (t) => set((s) => ({ tournaments: [...s.tournaments, { ...t, id: uid(), createdAt: Date.now(), status: "registering" }] })),
+      deleteTournament: (id) => set((s) => ({ tournaments: s.tournaments.filter(t => t.id !== id), participants: s.participants.filter(p => p.tournamentId !== id) })),
+      
+      enrollParticipant: (tournamentId, memberName, isPaid, payload) => set((s) => {
+        const t = s.tournaments.find(x => x.id === tournamentId);
+        if (!t) return s;
+        const participantId = uid();
+        const p: TournamentParticipant = { id: participantId, tournamentId, memberName, paymentStatus: isPaid ? "paid" : "pending", enrolledAt: Date.now() };
+        
+        let newSales = s.sales;
+        if (isPaid && payload) {
+            const sale: SaleRecord = { id: uid(), ts: Date.now(), timeAmount: 0, extrasAmount: payload.total, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, cashBs: payload.cashBs || 0, rate: s.rate, method: payload.method, customer: memberName, concept: `Inscripción Torneo: ${t.name}`, items: [{ name: `Inscripción: ${t.name}`, qty: 1, price: payload.total }] };
+            newSales = [...s.sales, sale];
+        }
+        return { participants: [...s.participants, p], sales: newSales };
+      }),
+
+      removeParticipant: (participantId) => set((s) => ({ participants: s.participants.filter(p => p.id !== participantId) })),
+
+      payEnrollment: (participantId, payload) => set((s) => {
+        const p = s.participants.find(x => x.id === participantId);
+        if (!p) return s;
+        const t = s.tournaments.find(x => x.id === p.tournamentId);
+        const sale: SaleRecord = { id: uid(), ts: Date.now(), timeAmount: 0, extrasAmount: payload.total, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, cashBs: payload.cashBs || 0, rate: s.rate, method: payload.method, customer: p.memberName, concept: `Pago de Inscripción: ${t?.name || 'Torneo'}`, items: [{ name: `Pago Inscripción: ${p.memberName}`, qty: 1, price: payload.total }] };
+        return { participants: s.participants.map(x => x.id === participantId ? { ...x, paymentStatus: "paid" } : x), sales: [...s.sales, sale] };
+      })
     }),
     {
       name: "gamerzone-store-v1",

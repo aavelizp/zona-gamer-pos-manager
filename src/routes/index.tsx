@@ -22,8 +22,9 @@ import { BusinessConfigTab } from "@/components/BusinessConfigTab";
 import { DirectSaleDialog } from "@/components/DirectSaleDialog";
 import { SalesTab } from "@/components/SalesTab"; 
 import { MultiCheckoutDialog } from "@/components/MultiCheckoutDialog"; 
-import { ReconciliationTab } from "@/components/ReconciliationTab"; // 👈 IMPORTAMOS LA AUDITORÍA
-import { Volume2, VolumeX, FileSpreadsheet, Receipt, Wallet, LogOut, ShoppingCart, Layers, ShieldCheck } from "lucide-react";
+import { ReconciliationTab } from "@/components/ReconciliationTab"; 
+import { TournamentTab } from "@/components/TournamentTab"; // 👈 IMPORTAMOS LA PESTAÑA DE TORNEOS
+import { Volume2, VolumeX, FileSpreadsheet, Receipt, Wallet, LogOut, ShoppingCart, Layers, ShieldCheck, Trophy } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -66,11 +67,7 @@ function Index() {
     };
 
     supabase.auth.getSession().then(({ data }) => checkUser(data.session));
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      checkUser(session);
-    });
-
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => { checkUser(session); });
     return () => subscription.unsubscribe();
   }, []);
 
@@ -88,9 +85,7 @@ function Index() {
   const [saleOpen, setSaleOpen] = useState(false);
   const [multiCheckoutOpen, setMultiCheckoutOpen] = useState(false);
 
-  const today = useMemo(() => {
-    return sales.reduce((total, s) => total + s.total, 0);
-  }, [sales]);
+  const today = useMemo(() => { return sales.reduce((total, s) => total + s.total, 0); }, [sales]);
 
   const suggested = useMemo(() => {
     const free = consoles.filter((c) => !c.session);
@@ -109,9 +104,7 @@ function Index() {
     );
   }
 
-  if (!session) {
-    return <Login />;
-  }
+  if (!session) return <Login />;
 
   return (
     <div className="min-h-screen bg-background bg-grid relative">
@@ -122,46 +115,20 @@ function Index() {
       <div className="relative z-10 flex flex-col min-h-screen">
         <header className="border-b border-border/60 bg-card/40 backdrop-blur sticky top-0 z-30">
           <div className="max-w-[1600px] mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
-            
             <div className="flex items-center gap-2">
-              <div className="h-10 w-10 p-1 rounded-lg bg-primary/20 grid place-items-center glow-primary">
-                <img src="/logo.png" alt="Logo Header" className="w-full h-full object-contain" />
-              </div>
-              <div>
-                <h1 className="font-display text-xl leading-none">TWINS GAMER</h1>
-                <p className="text-[10px] uppercase tracking-widest text-accent">POS · Venezuela</p>
-              </div>
+              <div className="h-10 w-10 p-1 rounded-lg bg-primary/20 grid place-items-center glow-primary"><img src="/logo.png" alt="Logo Header" className="w-full h-full object-contain" /></div>
+              <div><h1 className="font-display text-xl leading-none">TWINS GAMER</h1><p className="text-[10px] uppercase tracking-widest text-accent">POS · Venezuela</p></div>
             </div>
 
             <div className="flex items-center gap-2 ml-auto flex-wrap">
-              <div className="flex items-center gap-2 bg-secondary/40 rounded-md px-3 py-1.5 border border-border/40">
-                <span className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Tasa Bs/$</span>
-                <Input type="number" step="0.01" value={rate} onChange={(e) => setRate(parseFloat(e.target.value) || 0)} className="h-7 w-20 bg-transparent border-0 font-display text-base focus-visible:ring-1 text-accent px-1" />
-              </div>
-              <div className="hidden md:flex flex-col text-right text-xs mr-2">
-                <span className="text-muted-foreground">Caja Hoy</span>
-                <span className="font-display text-base">{fmtUsd(today)} <span className="text-accent">· {fmtBs(today, rate)}</span></span>
-              </div>
-              
-              <Button variant="outline" size="sm" onClick={() => setSaleOpen(true)} className="border-green-500/30 text-green-400 hover:bg-green-500/10 hover:text-green-300">
-                <ShoppingCart className="h-4 w-4 mr-1" />Venta Rápida
-              </Button>
-
-              <Button variant="outline" size="sm" onClick={() => exportData({ sales, products, credits, rate })}>
-                <FileSpreadsheet className="h-4 w-4 mr-1" />Excel
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setExpenseOpen(true)}>
-                <Wallet className="h-4 w-4 mr-1" />Gasto
-              </Button>
-              <Button size="sm" onClick={() => setCloseOpen(true)} className="bg-gradient-to-r from-primary to-accent text-primary-foreground font-display tracking-wider">
-                <Receipt className="h-4 w-4 mr-1" />Cerrar Caja
-              </Button>
-              <Button variant={soundOn ? "default" : "outline"} size="icon" onClick={toggleSound}>
-                {soundOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
-              </Button>
-              <Button variant="ghost" size="icon" onClick={() => supabase.auth.signOut()} className="text-muted-foreground hover:text-red-500 hover:bg-red-500/10 ml-2" title="Cerrar Sesión">
-                <LogOut className="h-4 w-4" />
-              </Button>
+              <div className="flex items-center gap-2 bg-secondary/40 rounded-md px-3 py-1.5 border border-border/40"><span className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Tasa Bs/$</span><Input type="number" step="0.01" value={rate} onChange={(e) => setRate(parseFloat(e.target.value) || 0)} className="h-7 w-20 bg-transparent border-0 font-display text-base focus-visible:ring-1 text-accent px-1" /></div>
+              <div className="hidden md:flex flex-col text-right text-xs mr-2"><span className="text-muted-foreground">Caja Hoy</span><span className="font-display text-base">{fmtUsd(today)} <span className="text-accent">· {fmtBs(today, rate)}</span></span></div>
+              <Button variant="outline" size="sm" onClick={() => setSaleOpen(true)} className="border-green-500/30 text-green-400 hover:bg-green-500/10 hover:text-green-300"><ShoppingCart className="h-4 w-4 mr-1" />Venta Rápida</Button>
+              <Button variant="outline" size="sm" onClick={() => exportData({ sales, products, credits, rate })}><FileSpreadsheet className="h-4 w-4 mr-1" />Excel</Button>
+              <Button variant="outline" size="sm" onClick={() => setExpenseOpen(true)}><Wallet className="h-4 w-4 mr-1" />Gasto</Button>
+              <Button size="sm" onClick={() => setCloseOpen(true)} className="bg-gradient-to-r from-primary to-accent text-primary-foreground font-display tracking-wider"><Receipt className="h-4 w-4 mr-1" />Cerrar Caja</Button>
+              <Button variant={soundOn ? "default" : "outline"} size="icon" onClick={toggleSound}>{soundOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}</Button>
+              <Button variant="ghost" size="icon" onClick={() => supabase.auth.signOut()} className="text-muted-foreground hover:text-red-500 hover:bg-red-500/10 ml-2" title="Cerrar Sesión"><LogOut className="h-4 w-4" /></Button>
             </div>
           </div>
         </header>
@@ -170,16 +137,16 @@ function Index() {
           <Tabs defaultValue="dashboard" className="space-y-4">
             <TabsList className="bg-card border border-border flex-wrap h-auto shadow-sm">
               <TabsTrigger value="dashboard">Consolas</TabsTrigger>
+              <TabsTrigger value="tournaments" className="text-purple-400 hover:text-purple-300">🏆 Torneos</TabsTrigger> {/* 👈 NUEVA PESTAÑA */}
               <TabsTrigger value="sales" className="text-blue-400 hover:text-blue-300">📊 Ventas Hoy</TabsTrigger>
-              <TabsTrigger value="reconciliation" className="text-teal-400 hover:text-teal-300">🏦 Conciliación</TabsTrigger> {/* 👈 NUEVA PESTAÑA */}
+              <TabsTrigger value="reconciliation" className="text-teal-400 hover:text-teal-300">🏦 Conciliación</TabsTrigger> 
               <TabsTrigger value="inventory">Inventario</TabsTrigger>
               <TabsTrigger value="combos">Combos</TabsTrigger>
               <TabsTrigger value="credits">Fiados {credits.length > 0 && <span className="ml-1 text-accent font-bold">({credits.length})</span>}</TabsTrigger>
-              <TabsTrigger value="club" className="text-amber-500 hover:text-amber-400">🏆 Club Gamer</TabsTrigger> 
+              <TabsTrigger value="club" className="text-amber-500 hover:text-amber-400">🏆 Club</TabsTrigger> 
               <TabsTrigger value="clients">👥 Clientes</TabsTrigger>
               <TabsTrigger value="maintenance">🔧 Mant.</TabsTrigger>
               <TabsTrigger value="expenses">💸 Gastos</TabsTrigger>
-              <TabsTrigger value="config">⚙️ Config.</TabsTrigger>
             </TabsList>
 
             <TabsContent value="dashboard">
@@ -197,7 +164,8 @@ function Index() {
               </div>
             </TabsContent>
 
-            <TabsContent value="reconciliation"><ReconciliationTab /></TabsContent> {/* 👈 CONTENIDO DE CONCILIACIÓN */}
+            <TabsContent value="tournaments"><TournamentTab /></TabsContent> {/* 👈 CONTENIDO DE TORNEOS */}
+            <TabsContent value="reconciliation"><ReconciliationTab /></TabsContent> 
             <TabsContent value="sales"><SalesTab /></TabsContent>
             <TabsContent value="inventory"><InventoryTab /></TabsContent>
             <TabsContent value="combos"><CombosTab /></TabsContent>
