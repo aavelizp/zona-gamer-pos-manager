@@ -17,12 +17,7 @@ import { MixedPaymentInputs } from "@/components/MixedPaymentInputs";
 function CustomerSearch({ name, idDoc, phone, setName, setIdDoc, setPhone }: any) {
   const members = useStore((s) => s.members || []); const [query, setQuery] = useState(""); const [open, setOpen] = useState(false); const [creating, setCreating] = useState(false); const [selected, setSelected] = useState<Member | null>(null); const wrapRef = useRef<HTMLDivElement>(null);
   useEffect(() => { const onClick = (e: MouseEvent) => { if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false); }; document.addEventListener("mousedown", onClick); return () => document.removeEventListener("mousedown", onClick); }, []);
-  const results = useMemo(() => { 
-    const q = (query || "").trim().toLowerCase(); 
-    const safeMembers = Array.isArray(members) ? members : [];
-    if (!q) return safeMembers.slice(0, 8); 
-    return safeMembers.filter((m) => (m?.name || "").toLowerCase().includes(q) || (m?.phone || "").includes(q) || (m?.idDoc || "").toLowerCase().includes(q)).slice(0, 8); 
-  }, [members, query]);
+  const results = useMemo(() => { const q = (query || "").trim().toLowerCase(); const safeMembers = Array.isArray(members) ? members : []; if (!q) return safeMembers.slice(0, 8); return safeMembers.filter((m) => (m?.name || "").toLowerCase().includes(q) || (m?.phone || "").includes(q) || (m?.idDoc || "").toLowerCase().includes(q)).slice(0, 8); }, [members, query]);
   const pick = (m: Member) => { setSelected(m); setName(m.name || ""); setIdDoc(m.idDoc || ""); setPhone(m.phone || ""); setQuery(m.name || ""); setOpen(false); setCreating(false); }; const clear = () => { setSelected(null); setName(""); setIdDoc(""); setPhone(""); setQuery(""); setCreating(false); };
   return (
     <div className="space-y-2 border border-border rounded-md p-3 bg-background/40">
@@ -42,9 +37,12 @@ function ComboPicker({ consoleId, open, onClose }: any) { const combos = useStor
 
 function TransferDialog({ consoleId, open, onClose }: any) { const consoles = useStore((s) => s.consoles || []); const transferSession = useStore((s) => s.transferSession); const available = consoles.filter((c) => c && !c.session && c.id !== consoleId); return ( <Dialog open={open} onOpenChange={onClose}> <DialogContent className="max-w-xs"><DialogHeader><DialogTitle className="font-display">Mover a otra consola</DialogTitle></DialogHeader><div className="space-y-3"><p className="text-sm text-muted-foreground">El tiempo jugado y los snacks se sumarán automáticamente a la nueva consola.</p><div className="grid grid-cols-2 gap-2">{available.map((c) => (<Button key={c.id} variant="outline" className={c.type === "PS5" ? "border-gold/50 text-gold hover:bg-gold/10" : "border-primary/50 text-primary hover:bg-primary/10"} onClick={() => { if (confirm(`¿Estás seguro de mover la sesión a la ${c.name}?`)) { transferSession(consoleId, c.id); toast.success(`Sesión movida exitosamente a ${c.name}`); onClose(); } }}>{c.name}</Button>))}{available.length === 0 && <p className="col-span-2 text-sm text-center text-muted-foreground mt-4">Todas las demás consolas están ocupadas.</p>}</div></div></DialogContent> </Dialog> ); }
 
-function Checkout({ open, onClose, consoleObj, now }: any) {
+// 👇 AQUÍ ESTABA EL ERROR FATAL. Removí el choque de variables del reloj.
+function Checkout({ open, onClose, consoleObj }: any) {
   const rate = useStore((s) => s.rate); const finalize = useStore((s) => s.finalizeConsole); 
+  const now = useNow(); // Reloj único y seguro para la ventana
   const { minutes, amount: timeAmount } = useMemo(() => computeTimeAmount(consoleObj, now), [consoleObj, now]);
+  
   const extrasAmount = (consoleObj?.charges || []).reduce((a: number, c: any) => a + (c?.amount||0), 0); const total = timeAmount + extrasAmount;
   const [method, setMethod] = useState<"full" | "mixed" | "credit">("full"); const [fullPayMode, setFullPayMode] = useState<"cash" | "mobile" | "cash_bs">("cash"); const [cashUsd, setCashUsd] = useState(""); const [mobileBs, setMobileBs] = useState(""); const [cashBs, setCashBs] = useState(""); const [mobileBank, setMobileBank] = useState(""); const [mobileRef, setMobileRef] = useState(""); const [billReceived, setBillReceived] = useState(""); const [name, setName] = useState(""); const [idDoc, setIdDoc] = useState(""); const [phone, setPhone] = useState(""); const [receipt, setReceipt] = useState<ReceiptData | null>(null); const [pendingFinalize, setPendingFinalize] = useState(false);
   useEffect(() => { if (open) { setMethod("full"); setFullPayMode("cash"); setCashUsd(""); setMobileBs(""); setCashBs(""); setMobileBank(""); setMobileRef(""); setBillReceived(""); setName(""); setIdDoc(""); setPhone(""); setReceipt(null); setPendingFinalize(false); } }, [open]);
@@ -169,14 +167,13 @@ export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleStat
   const markPreAlerted = useStore((s) => s.markPreAlerted); 
   const pauseSession = useStore((s) => s.pauseSession); 
   const resumeSession = useStore((s) => s.resumeSession); 
-  const cancelSession = useStore((s) => s.cancelSession); 
-  const addExtraController = useStore((s) => s.addExtraController); 
+  const cancelSession = useStore((s) => (s as any).cancelSession); 
+  const addExtraController = useStore((s) => (s as any).addExtraController); 
   const now = useNow();
 
   const [snackOpen, setSnackOpen] = useState(false); const [comboOpen, setComboOpen] = useState(false); const [checkoutOpen, setCheckoutOpen] = useState(false); const [prepayOpen, setPrepayOpen] = useState(false); const [extendOpen, setExtendOpen] = useState<null | number>(null); const [transferOpen, setTransferOpen] = useState(false); 
   const releaseConsole = useStore((s) => s.releaseConsole);
 
-  // 👈 PARACAÍDAS PARA EL RENDERIZADO
   if (!consoleObj) return null;
 
   const isPS5 = consoleObj.type === "PS5"; const session = consoleObj.session; const occupied = !!session; const paused = !!session?.pausedAt; const isFixed = session?.mode === "fixed"; const refNow = paused ? session!.pausedAt! : now; const remainingMs = session?.endsAt ? session.endsAt - refNow : 0; const expired = isFixed && remainingMs <= 0 && !paused; const elapsedMs = session ? refNow - (session.startedAt || refNow) : 0; const { amount: timeAmount, minutes } = computeTimeAmount(consoleObj, now); const extras = (consoleObj.charges || []).reduce((a, c) => a + (c?.amount||0), 0); const total = timeAmount + extras;
@@ -264,7 +261,10 @@ export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleStat
 
       <SnackPicker consoleId={consoleObj.id} open={snackOpen} onClose={() => setSnackOpen(false)} />
       <ComboPicker consoleId={consoleObj.id} open={comboOpen} onClose={() => setComboOpen(false)} />
-      <Checkout open={checkoutOpen} onClose={() => setCheckoutOpen(false)} consoleObj={consoleObj} now={now} />
+      
+      {/* 👇 SOLUCIÓN: Pasamos el reloj 'now' solo si checkoutOpen es true, evitando cruces */}
+      {checkoutOpen && <Checkout open={checkoutOpen} onClose={() => setCheckoutOpen(false)} consoleObj={consoleObj} now={now} />}
+      
       <PrepayCheckout open={prepayOpen} onClose={() => setPrepayOpen(false)} consoleObj={consoleObj} />
       <PayExtrasDialog open={payExtrasOpen} onClose={() => setPayExtrasOpen(false)} consoleObj={consoleObj} />
       <TransferDialog consoleId={consoleObj.id} open={transferOpen} onClose={() => setTransferOpen(false)} />
