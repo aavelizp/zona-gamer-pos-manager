@@ -84,16 +84,15 @@ function Index() {
   const [saleOpen, setSaleOpen] = useState(false);
   const [multiCheckoutOpen, setMultiCheckoutOpen] = useState(false);
 
-  // 👈 FIX: Filtro de turno inteligente para que la caja no muestre datos falsos
   const today = useMemo(() => { 
     const shiftStart = new Date();
     if (shiftStart.getHours() < 6) shiftStart.setDate(shiftStart.getDate() - 1);
     shiftStart.setHours(6, 0, 0, 0);
-    return sales.filter(s => s.ts >= shiftStart.getTime()).reduce((total, s) => total + (s.total || 0), 0); 
+    return sales.filter(s => s && s.ts && s.ts >= shiftStart.getTime()).reduce((total, s) => total + (s?.total || 0), 0); 
   }, [sales]);
 
   const suggested = useMemo(() => {
-    const free = consoles.filter((c) => !c.session);
+    const free = consoles.filter((c) => c && !c.session);
     const ps4 = free.filter((c) => c.type === "PS4").sort((a, b) => (a.totalMinutes || 0) - (b.totalMinutes || 0))[0]?.id;
     const ps5 = free.filter((c) => c.type === "PS5").sort((a, b) => (a.totalMinutes || 0) - (b.totalMinutes || 0))[0]?.id;
     return new Set([ps4, ps5].filter(Boolean) as string[]);
