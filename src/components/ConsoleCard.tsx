@@ -156,10 +156,9 @@ function PayExtrasDialog({ open, onClose, consoleObj }: any) {
   );
 }
 
+// 👈 LA SOLUCIÓN DEL FATAL ERROR: Cumplir estrictamente la regla de Hooks
 export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleState; suggested: boolean; }) {
-  // 👈 CORRECCIÓN CRÍTICA: Se movieron TODOS los Hooks al principio del componente para cumplir la regla estricta de React
-  const rate = useStore((s) => s.rate); 
-  const soundOn = useStore((s) => s.soundOn); 
+  const rate = useStore((s) => s.rate); const soundOn = useStore((s) => s.soundOn); 
   const startSession = useStore((s) => s.startSession); 
   const extendSession = useStore((s) => s.extendSession); 
   const markAlerted = useStore((s) => s.markAlerted); 
@@ -179,6 +178,8 @@ export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleStat
   const [transferOpen, setTransferOpen] = useState(false); 
   const [payExtrasOpen, setPayExtrasOpen] = useState(false);
 
+  // 👈 CALCULAR MATEMÁTICAS USANDO CONSOLEOBJ SEGURO
+  const isPS5 = consoleObj?.type === "PS5"; 
   const session = consoleObj?.session; 
   const occupied = !!session; 
   const paused = !!session?.pausedAt; 
@@ -187,26 +188,34 @@ export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleStat
   const remainingMs = session?.endsAt ? session.endsAt - refNow : 0; 
   const expired = isFixed && remainingMs <= 0 && !paused; 
   const elapsedMs = session ? refNow - (session.startedAt || refNow) : 0; 
+  
+  const { amount: timeAmount, minutes } = computeTimeAmount(consoleObj, now); 
+  const extras = (consoleObj?.charges || []).reduce((a, c) => a + (c?.amount||0), 0); 
+  const total = timeAmount + extras;
   const preAlertActive = isFixed && !paused && !expired && remainingMs > 0 && remainingMs <= 5 * 60_000;
 
-  useEffect(() => { if (expired && session && !session.alerted && consoleObj) { if (soundOn) playAlert(); markAlerted(consoleObj.id); } }, [expired, session, soundOn, markAlerted, consoleObj?.id]);
-  useEffect(() => { if (preAlertActive && session && !session.preAlerted && consoleObj) { if (soundOn) playPreAlert(); markPreAlerted(consoleObj.id); } }, [preAlertActive, session, soundOn, markPreAlerted, consoleObj?.id]);
+  // 👈 LOS USEFFECT ESTÁN AHORA ARRIBA (Legal en React)
+  useEffect(() => { 
+     if (expired && session && !session.alerted && consoleObj?.id) { 
+        if (soundOn) playAlert(); 
+        markAlerted(consoleObj.id); 
+     } 
+  }, [expired, session, soundOn, markAlerted, consoleObj?.id]);
 
-  // 👈 SEGURO: El return rápido ocurre DESPUÉS de que todos los hooks han sido declarados
+  useEffect(() => { 
+     if (preAlertActive && session && !session.preAlerted && consoleObj?.id) { 
+        if (soundOn) playPreAlert(); 
+        markPreAlerted(consoleObj.id); 
+     } 
+  }, [preAlertActive, session, soundOn, markPreAlerted, consoleObj?.id]);
+
+  // 👈 RETORNO CONDICIONAL VA DESPUÉS DE LOS HOOKS SIEMPRE
   if (!consoleObj) return null;
-
-  const isPS5 = consoleObj.type === "PS5"; 
-  const { amount: timeAmount, minutes } = computeTimeAmount(consoleObj, now); 
-  const extras = (consoleObj.charges || []).reduce((a, c) => a + (c?.amount||0), 0); 
-  const total = timeAmount + extras;
 
   const statusBg = !occupied ? "border-success/50" : paused ? "border-warning animate-pulse" : expired ? "border-destructive animate-blink" : preAlertActive ? "border-warning animate-blink" : "border-primary/60";
   const statusDot = !occupied ? "bg-success" : paused ? "bg-warning" : expired ? "bg-destructive" : preAlertActive ? "bg-warning" : "bg-primary";
   const statusText = !occupied ? "LIBRE" : paused ? "EN PAUSA" : expired ? "TIEMPO AGOTADO" : preAlertActive ? "ÚLTIMOS 5 MIN" : "OCUPADO";
-  const customerName = session?.customerName?.trim(); 
-  const pendingExtras = (consoleObj.charges || []).reduce((a, c) => a + (c?.amount||0), 0); 
-  const isPrepaid = !!session?.prepaid; 
-  const blockedRelease = isPrepaid && expired && pendingExtras > 0.001; 
+  const customerName = session?.customerName?.trim(); const pendingExtras = (consoleObj.charges || []).reduce((a, c) => a + (c?.amount||0), 0); const isPrepaid = !!session?.prepaid; const blockedRelease = isPrepaid && expired && pendingExtras > 0.001; 
   const isTournament = !!session?.isTournament;
 
   const tryRelease = () => { const ok = releaseConsole(consoleObj.id); if (!ok) toast.error("Hay saldo adicional pendiente. Cóbralo antes de liberar."); };
