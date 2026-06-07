@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConsoleCard } from "@/components/ConsoleCard";
-import { InventoryTab, CombosTab } from "@/components/InventoryCombos";
+import { InventoryTab } from "@/components/InventoryCombos";
+import { CombosTab } from "@/components/InventoryCombos";
 import { CreditsTab } from "@/components/CreditsTab";
 import { WaitQueue } from "@/components/WaitQueue";
 import { CloseDayDialog } from "@/components/CloseDayDialog";
@@ -21,7 +22,8 @@ import { BusinessConfigTab } from "@/components/BusinessConfigTab";
 import { DirectSaleDialog } from "@/components/DirectSaleDialog";
 import { SalesTab } from "@/components/SalesTab"; 
 import { MultiCheckoutDialog } from "@/components/MultiCheckoutDialog"; 
-import { Volume2, VolumeX, FileSpreadsheet, Receipt, Wallet, LogOut, ShoppingCart, Layers } from "lucide-react";
+import { ReconciliationTab } from "@/components/ReconciliationTab"; // 👈 IMPORTAMOS LA AUDITORÍA
+import { Volume2, VolumeX, FileSpreadsheet, Receipt, Wallet, LogOut, ShoppingCart, Layers, ShieldCheck } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -86,7 +88,6 @@ function Index() {
   const [saleOpen, setSaleOpen] = useState(false);
   const [multiCheckoutOpen, setMultiCheckoutOpen] = useState(false);
 
-  // 👈 AQUÍ ELIMINAMOS EL FILTRO POR FECHA Y LO DEJAMOS COMO EL LOTE COMPLETO
   const today = useMemo(() => {
     return sales.reduce((total, s) => total + s.total, 0);
   }, [sales]);
@@ -114,13 +115,8 @@ function Index() {
 
   return (
     <div className="min-h-screen bg-background bg-grid relative">
-      
       <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden">
-        <img 
-          src="/logo.png" 
-          alt="Marca de agua Twins Gamer" 
-          className="w-[800px] h-[800px] object-contain opacity-[0.30] drop-shadow-[0_0_50px_rgba(158,84,255,0.4)]" 
-        />
+        <img src="/logo.png" alt="Marca de agua" className="w-[800px] h-[800px] object-contain opacity-[0.30] drop-shadow-[0_0_50px_rgba(158,84,255,0.4)]" />
       </div>
 
       <div className="relative z-10 flex flex-col min-h-screen">
@@ -175,37 +171,33 @@ function Index() {
             <TabsList className="bg-card border border-border flex-wrap h-auto shadow-sm">
               <TabsTrigger value="dashboard">Consolas</TabsTrigger>
               <TabsTrigger value="sales" className="text-blue-400 hover:text-blue-300">📊 Ventas Hoy</TabsTrigger>
+              <TabsTrigger value="reconciliation" className="text-teal-400 hover:text-teal-300">🏦 Conciliación</TabsTrigger> {/* 👈 NUEVA PESTAÑA */}
               <TabsTrigger value="inventory">Inventario</TabsTrigger>
               <TabsTrigger value="combos">Combos</TabsTrigger>
               <TabsTrigger value="credits">Fiados {credits.length > 0 && <span className="ml-1 text-accent font-bold">({credits.length})</span>}</TabsTrigger>
               <TabsTrigger value="club" className="text-amber-500 hover:text-amber-400">🏆 Club Gamer</TabsTrigger> 
               <TabsTrigger value="clients">👥 Clientes</TabsTrigger>
-              <TabsTrigger value="maintenance">🔧 Mantenimiento</TabsTrigger>
+              <TabsTrigger value="maintenance">🔧 Mant.</TabsTrigger>
               <TabsTrigger value="expenses">💸 Gastos</TabsTrigger>
-              <TabsTrigger value="config">⚙️ Configuración</TabsTrigger>
+              <TabsTrigger value="config">⚙️ Config.</TabsTrigger>
             </TabsList>
 
             <TabsContent value="dashboard">
               <div className="flex justify-between items-center mb-4 mt-2">
                 <h2 className="font-display text-lg text-primary/80 uppercase tracking-widest hidden md:block">Estado en Vivo</h2>
-                <Button 
-                  onClick={() => setMultiCheckoutOpen(true)} 
-                  className="bg-gradient-to-r from-purple-600 to-primary text-white shadow-lg shadow-purple-500/20 hover:scale-[1.02] transition-transform ml-auto"
-                >
+                <Button onClick={() => setMultiCheckoutOpen(true)} className="bg-gradient-to-r from-purple-600 to-primary text-white shadow-lg shadow-purple-500/20 hover:scale-[1.02] transition-transform ml-auto">
                   <Layers className="h-4 w-4 mr-2" /> Cobro Múltiple (Unir Cuentas)
                 </Button>
               </div>
-
               <div className="grid xl:grid-cols-[1fr_320px] gap-4">
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                  {consoles.map((c) => (
-                    <ConsoleCard key={c.id} consoleObj={c} suggested={suggested.has(c.id)} />
-                  ))}
+                  {consoles.map((c) => ( <ConsoleCard key={c.id} consoleObj={c} suggested={suggested.has(c.id)} /> ))}
                 </div>
                 <WaitQueue />
               </div>
             </TabsContent>
 
+            <TabsContent value="reconciliation"><ReconciliationTab /></TabsContent> {/* 👈 CONTENIDO DE CONCILIACIÓN */}
             <TabsContent value="sales"><SalesTab /></TabsContent>
             <TabsContent value="inventory"><InventoryTab /></TabsContent>
             <TabsContent value="combos"><CombosTab /></TabsContent>
