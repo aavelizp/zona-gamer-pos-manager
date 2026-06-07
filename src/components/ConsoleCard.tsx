@@ -37,12 +37,9 @@ function ComboPicker({ consoleId, open, onClose }: any) { const combos = useStor
 
 function TransferDialog({ consoleId, open, onClose }: any) { const consoles = useStore((s) => s.consoles || []); const transferSession = useStore((s) => s.transferSession); const available = consoles.filter((c) => c && !c.session && c.id !== consoleId); return ( <Dialog open={open} onOpenChange={onClose}> <DialogContent className="max-w-xs"><DialogHeader><DialogTitle className="font-display">Mover a otra consola</DialogTitle></DialogHeader><div className="space-y-3"><p className="text-sm text-muted-foreground">El tiempo jugado y los snacks se sumarán automáticamente a la nueva consola.</p><div className="grid grid-cols-2 gap-2">{available.map((c) => (<Button key={c.id} variant="outline" className={c.type === "PS5" ? "border-gold/50 text-gold hover:bg-gold/10" : "border-primary/50 text-primary hover:bg-primary/10"} onClick={() => { if (confirm(`¿Estás seguro de mover la sesión a la ${c.name}?`)) { transferSession(consoleId, c.id); toast.success(`Sesión movida exitosamente a ${c.name}`); onClose(); } }}>{c.name}</Button>))}{available.length === 0 && <p className="col-span-2 text-sm text-center text-muted-foreground mt-4">Todas las demás consolas están ocupadas.</p>}</div></div></DialogContent> </Dialog> ); }
 
-// 👇 AQUÍ ESTABA EL ERROR FATAL. Removí el choque de variables del reloj.
-function Checkout({ open, onClose, consoleObj }: any) {
+function Checkout({ open, onClose, consoleObj, now }: any) {
   const rate = useStore((s) => s.rate); const finalize = useStore((s) => s.finalizeConsole); 
-  const now = useNow(); // Reloj único y seguro para la ventana
   const { minutes, amount: timeAmount } = useMemo(() => computeTimeAmount(consoleObj, now), [consoleObj, now]);
-  
   const extrasAmount = (consoleObj?.charges || []).reduce((a: number, c: any) => a + (c?.amount||0), 0); const total = timeAmount + extrasAmount;
   const [method, setMethod] = useState<"full" | "mixed" | "credit">("full"); const [fullPayMode, setFullPayMode] = useState<"cash" | "mobile" | "cash_bs">("cash"); const [cashUsd, setCashUsd] = useState(""); const [mobileBs, setMobileBs] = useState(""); const [cashBs, setCashBs] = useState(""); const [mobileBank, setMobileBank] = useState(""); const [mobileRef, setMobileRef] = useState(""); const [billReceived, setBillReceived] = useState(""); const [name, setName] = useState(""); const [idDoc, setIdDoc] = useState(""); const [phone, setPhone] = useState(""); const [receipt, setReceipt] = useState<ReceiptData | null>(null); const [pendingFinalize, setPendingFinalize] = useState(false);
   useEffect(() => { if (open) { setMethod("full"); setFullPayMode("cash"); setCashUsd(""); setMobileBs(""); setCashBs(""); setMobileBank(""); setMobileRef(""); setBillReceived(""); setName(""); setIdDoc(""); setPhone(""); setReceipt(null); setPendingFinalize(false); } }, [open]);
@@ -160,7 +157,9 @@ function PayExtrasDialog({ open, onClose, consoleObj }: any) {
 }
 
 export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleState; suggested: boolean; }) {
-  const rate = useStore((s) => s.rate); const soundOn = useStore((s) => s.soundOn); 
+  // 👈 CORRECCIÓN CRÍTICA: Se movieron TODOS los Hooks al principio del componente para cumplir la regla estricta de React
+  const rate = useStore((s) => s.rate); 
+  const soundOn = useStore((s) => s.soundOn); 
   const startSession = useStore((s) => s.startSession); 
   const extendSession = useStore((s) => s.extendSession); 
   const markAlerted = useStore((s) => s.markAlerted); 
@@ -169,25 +168,46 @@ export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleStat
   const resumeSession = useStore((s) => s.resumeSession); 
   const cancelSession = useStore((s) => (s as any).cancelSession); 
   const addExtraController = useStore((s) => (s as any).addExtraController); 
+  const releaseConsole = useStore((s) => s.releaseConsole);
   const now = useNow();
 
-  const [snackOpen, setSnackOpen] = useState(false); const [comboOpen, setComboOpen] = useState(false); const [checkoutOpen, setCheckoutOpen] = useState(false); const [prepayOpen, setPrepayOpen] = useState(false); const [extendOpen, setExtendOpen] = useState<null | number>(null); const [transferOpen, setTransferOpen] = useState(false); 
-  const releaseConsole = useStore((s) => s.releaseConsole);
+  const [snackOpen, setSnackOpen] = useState(false); 
+  const [comboOpen, setComboOpen] = useState(false); 
+  const [checkoutOpen, setCheckoutOpen] = useState(false); 
+  const [prepayOpen, setPrepayOpen] = useState(false); 
+  const [extendOpen, setExtendOpen] = useState<null | number>(null); 
+  const [transferOpen, setTransferOpen] = useState(false); 
+  const [payExtrasOpen, setPayExtrasOpen] = useState(false);
 
+  const session = consoleObj?.session; 
+  const occupied = !!session; 
+  const paused = !!session?.pausedAt; 
+  const isFixed = session?.mode === "fixed"; 
+  const refNow = paused ? session!.pausedAt! : now; 
+  const remainingMs = session?.endsAt ? session.endsAt - refNow : 0; 
+  const expired = isFixed && remainingMs <= 0 && !paused; 
+  const elapsedMs = session ? refNow - (session.startedAt || refNow) : 0; 
+  const preAlertActive = isFixed && !paused && !expired && remainingMs > 0 && remainingMs <= 5 * 60_000;
+
+  useEffect(() => { if (expired && session && !session.alerted && consoleObj) { if (soundOn) playAlert(); markAlerted(consoleObj.id); } }, [expired, session, soundOn, markAlerted, consoleObj?.id]);
+  useEffect(() => { if (preAlertActive && session && !session.preAlerted && consoleObj) { if (soundOn) playPreAlert(); markPreAlerted(consoleObj.id); } }, [preAlertActive, session, soundOn, markPreAlerted, consoleObj?.id]);
+
+  // 👈 SEGURO: El return rápido ocurre DESPUÉS de que todos los hooks han sido declarados
   if (!consoleObj) return null;
 
-  const isPS5 = consoleObj.type === "PS5"; const session = consoleObj.session; const occupied = !!session; const paused = !!session?.pausedAt; const isFixed = session?.mode === "fixed"; const refNow = paused ? session!.pausedAt! : now; const remainingMs = session?.endsAt ? session.endsAt - refNow : 0; const expired = isFixed && remainingMs <= 0 && !paused; const elapsedMs = session ? refNow - (session.startedAt || refNow) : 0; const { amount: timeAmount, minutes } = computeTimeAmount(consoleObj, now); const extras = (consoleObj.charges || []).reduce((a, c) => a + (c?.amount||0), 0); const total = timeAmount + extras;
-
-  useEffect(() => { if (expired && session && !session.alerted) { if (soundOn) playAlert(); markAlerted(consoleObj.id); } }, [expired, session, soundOn, markAlerted, consoleObj.id]);
-  const preAlertActive = isFixed && !paused && !expired && remainingMs > 0 && remainingMs <= 5 * 60_000;
-  useEffect(() => { if (preAlertActive && session && !session.preAlerted) { if (soundOn) playPreAlert(); markPreAlerted(consoleObj.id); } }, [preAlertActive, session, soundOn, markPreAlerted, consoleObj.id]);
+  const isPS5 = consoleObj.type === "PS5"; 
+  const { amount: timeAmount, minutes } = computeTimeAmount(consoleObj, now); 
+  const extras = (consoleObj.charges || []).reduce((a, c) => a + (c?.amount||0), 0); 
+  const total = timeAmount + extras;
 
   const statusBg = !occupied ? "border-success/50" : paused ? "border-warning animate-pulse" : expired ? "border-destructive animate-blink" : preAlertActive ? "border-warning animate-blink" : "border-primary/60";
   const statusDot = !occupied ? "bg-success" : paused ? "bg-warning" : expired ? "bg-destructive" : preAlertActive ? "bg-warning" : "bg-primary";
   const statusText = !occupied ? "LIBRE" : paused ? "EN PAUSA" : expired ? "TIEMPO AGOTADO" : preAlertActive ? "ÚLTIMOS 5 MIN" : "OCUPADO";
-  const customerName = session?.customerName?.trim(); const pendingExtras = (consoleObj.charges || []).reduce((a, c) => a + (c?.amount||0), 0); const isPrepaid = !!session?.prepaid; const blockedRelease = isPrepaid && expired && pendingExtras > 0.001; 
+  const customerName = session?.customerName?.trim(); 
+  const pendingExtras = (consoleObj.charges || []).reduce((a, c) => a + (c?.amount||0), 0); 
+  const isPrepaid = !!session?.prepaid; 
+  const blockedRelease = isPrepaid && expired && pendingExtras > 0.001; 
   const isTournament = !!session?.isTournament;
-  const [payExtrasOpen, setPayExtrasOpen] = useState(false);
 
   const tryRelease = () => { const ok = releaseConsole(consoleObj.id); if (!ok) toast.error("Hay saldo adicional pendiente. Cóbralo antes de liberar."); };
 
@@ -261,10 +281,7 @@ export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleStat
 
       <SnackPicker consoleId={consoleObj.id} open={snackOpen} onClose={() => setSnackOpen(false)} />
       <ComboPicker consoleId={consoleObj.id} open={comboOpen} onClose={() => setComboOpen(false)} />
-      
-      {/* 👇 SOLUCIÓN: Pasamos el reloj 'now' solo si checkoutOpen es true, evitando cruces */}
       {checkoutOpen && <Checkout open={checkoutOpen} onClose={() => setCheckoutOpen(false)} consoleObj={consoleObj} now={now} />}
-      
       <PrepayCheckout open={prepayOpen} onClose={() => setPrepayOpen(false)} consoleObj={consoleObj} />
       <PayExtrasDialog open={payExtrasOpen} onClose={() => setPayExtrasOpen(false)} consoleObj={consoleObj} />
       <TransferDialog consoleId={consoleObj.id} open={transferOpen} onClose={() => setTransferOpen(false)} />
