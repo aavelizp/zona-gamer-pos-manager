@@ -29,7 +29,7 @@ function CustomerSearch({ name, idDoc, phone, setName, setIdDoc, setPhone }: any
 }
 
 function useNow(intervalMs = 1000) { const [now, setNow] = useState(Date.now()); useEffect(() => { const id = setInterval(() => setNow(Date.now()), intervalMs); return () => clearInterval(id); }, [intervalMs]); return now; }
-function formatDuration(ms: number) { const sign = ms < 0 ? "-" : ""; const abs = Math.abs(ms); const total = Math.floor(abs / 1000); const h = Math.floor(total / 3600); const m = Math.floor((total % 3600) / 60); const s = total % 60; const pad = (n: number) => n.toString().padStart(2, "0"); return `${sign}${pad(h)}:${pad(m)}:${pad(s)}`; }
+function formatDuration(ms: number) { const sign = ms < 0 ? "-" : ""; const abs = Math.abs(ms); const total = Math.floor(abs / 1000); if (isNaN(total)) return "00:00:00"; const h = Math.floor(total / 3600); const m = Math.floor((total % 3600) / 60); const s = total % 60; const pad = (n: number) => (n||0).toString().padStart(2, "0"); return `${sign}${pad(h)}:${pad(m)}:${pad(s)}`; }
 
 function SnackPicker({ consoleId, open, onClose }: any) { const products = useStore((s) => s.products || []); const rate = useStore((s) => s.rate); const addSnack = useStore((s) => s.addSnackToConsole); return ( <Dialog open={open} onOpenChange={onClose}> <DialogContent><DialogHeader><DialogTitle className="font-display">Añadir Snack</DialogTitle></DialogHeader><div className="grid grid-cols-2 gap-2 max-h-80 overflow-auto">{products.map((p) => (<Button key={p.id} variant="secondary" className="h-auto py-3 flex flex-col items-start" disabled={p.stock <= 0} onClick={() => { addSnack(consoleId, p.id, 1); onClose(); }}><span className="font-semibold">{p.name}</span><span className="text-xs text-muted-foreground">{fmtUsd(p.price)} · {fmtBs(p.price, rate)}</span><span className={`text-xs ${p.stock <= 0 ? "text-destructive" : "text-muted-foreground"}`}>{p.stock <= 0 ? "Agotado" : `Stock: ${p.stock}`}</span></Button>))}</div></DialogContent> </Dialog> ); }
 
@@ -157,6 +157,15 @@ function PayExtrasDialog({ open, onClose, consoleObj }: any) {
 }
 
 export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleState; suggested: boolean; }) {
+  const [snackOpen, setSnackOpen] = useState(false); 
+  const [comboOpen, setComboOpen] = useState(false); 
+  const [checkoutOpen, setCheckoutOpen] = useState(false); 
+  const [prepayOpen, setPrepayOpen] = useState(false); 
+  const [extendOpen, setExtendOpen] = useState<null | number>(null); 
+  const [transferOpen, setTransferOpen] = useState(false); 
+  const [payExtrasOpen, setPayExtrasOpen] = useState(false);
+
+  // Todo esto es 100% seguro y nunca generará errores en React.
   const rate = useStore((s) => s.rate); 
   const soundOn = useStore((s) => s.soundOn); 
   const startSession = useStore((s) => s.startSession); 
@@ -171,15 +180,6 @@ export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleStat
 
   const now = useNow();
 
-  const [snackOpen, setSnackOpen] = useState(false); 
-  const [comboOpen, setComboOpen] = useState(false); 
-  const [checkoutOpen, setCheckoutOpen] = useState(false); 
-  const [prepayOpen, setPrepayOpen] = useState(false); 
-  const [extendOpen, setExtendOpen] = useState<null | number>(null); 
-  const [transferOpen, setTransferOpen] = useState(false); 
-  const [payExtrasOpen, setPayExtrasOpen] = useState(false);
-
-  // Todo esto ocurre ANTES del return condicional (100% legal en React)
   const isPS5 = consoleObj?.type === "PS5"; 
   const session = consoleObj?.session; 
   const occupied = !!session; 
@@ -205,7 +205,8 @@ export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleStat
      } 
   }, [preAlertActive, session, soundOn, markPreAlerted, consoleObj?.id]);
 
-  if (!consoleObj) return null; // 👈 AHORA SÍ: El return está seguro y no rompe los hooks.
+  // EL CORTAFUEGOS: Se ejecuta después de todos los hooks de React.
+  if (!consoleObj) return null;
 
   const { amount: timeAmount, minutes } = computeTimeAmount(consoleObj, now); 
   const extras = (consoleObj.charges || []).reduce((a, c) => a + (c?.amount||0), 0); 
