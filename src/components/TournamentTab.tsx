@@ -11,14 +11,19 @@ import { Trophy, Users, Plus, Trash2, CheckCircle2, AlertTriangle, Receipt, Swor
 import { toast } from "sonner";
 
 function CustomerSearch({ name, idDoc, phone, setName, setIdDoc, setPhone }: any) {
-  const members = useStore((s) => s.members); const [query, setQuery] = useState(""); const [open, setOpen] = useState(false); const [creating, setCreating] = useState(false); const [selected, setSelected] = useState<Member | null>(null); const wrapRef = useRef<HTMLDivElement>(null);
+  const members = useStore((s) => s.members || []); const [query, setQuery] = useState(""); const [open, setOpen] = useState(false); const [creating, setCreating] = useState(false); const [selected, setSelected] = useState<Member | null>(null); const wrapRef = useRef<HTMLDivElement>(null);
   useEffect(() => { const onClick = (e: MouseEvent) => { if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false); }; document.addEventListener("mousedown", onClick); return () => document.removeEventListener("mousedown", onClick); }, []);
-  const results = useMemo(() => { const q = query.trim().toLowerCase(); if (!q) return members.slice(0, 8); return members.filter((m) => m.name.toLowerCase().includes(q) || (m.phone || "").includes(q) || (m.idDoc || "").toLowerCase().includes(q)).slice(0, 8); }, [members, query]);
-  const pick = (m: Member) => { setSelected(m); setName(m.name); setIdDoc(m.idDoc || ""); setPhone(m.phone || ""); setQuery(m.name); setOpen(false); setCreating(false); }; const clear = () => { setSelected(null); setName(""); setIdDoc(""); setPhone(""); setQuery(""); setCreating(false); };
+  const results = useMemo(() => { 
+    const q = (query || "").trim().toLowerCase(); 
+    const safeMembers = Array.isArray(members) ? members : [];
+    if (!q) return safeMembers.slice(0, 8); 
+    return safeMembers.filter((m) => (m?.name || "").toLowerCase().includes(q) || (m?.phone || "").includes(q) || (m?.idDoc || "").toLowerCase().includes(q)).slice(0, 8); 
+  }, [members, query]);
+  const pick = (m: Member) => { setSelected(m); setName(m.name || ""); setIdDoc(m.idDoc || ""); setPhone(m.phone || ""); setQuery(m.name || ""); setOpen(false); setCreating(false); }; const clear = () => { setSelected(null); setName(""); setIdDoc(""); setPhone(""); setQuery(""); setCreating(false); };
   return (
     <div className="space-y-2 border border-border rounded-md p-3 bg-background/40">
       <div className="flex items-center justify-between"><p className="text-xs uppercase tracking-wider text-accent font-semibold">Jugador a Inscribir</p>{(selected || creating || name) && (<Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={clear}><X className="h-3 w-3 mr-1" />Limpiar</Button>)}</div>
-      {!creating && ( <div ref={wrapRef} className="relative"> <div className="flex gap-1"><div className="relative flex-1"><Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" /><Input value={query} onChange={(e) => { setQuery(e.target.value); setOpen(true); if (selected) setSelected(null); }} onFocus={() => setOpen(true)} placeholder="Buscar en Club Gamer..." className="pl-7" /></div><Button type="button" size="icon" variant="outline" onClick={() => { setCreating(true); setOpen(false); setSelected(null); setName(query); setIdDoc(""); setPhone(""); }}><Plus className="h-4 w-4" /></Button></div> {open && (<div className="absolute z-50 mt-1 w-full bg-popover border border-border rounded-md shadow-lg max-h-56 overflow-auto">{results.length === 0 ? (<div className="p-2 text-xs text-muted-foreground">Sin coincidencias. <button type="button" className="text-primary underline" onClick={() => { setCreating(true); setOpen(false); setName(query); }}>Inscribir nuevo jugador "{query}"</button></div>) : results.map((m) => (<button key={m.id} type="button" onClick={() => pick(m)} className="w-full text-left px-3 py-2 hover:bg-accent/30 border-b border-border/40 last:border-0"><p className="text-sm font-semibold">{m.name}</p><p className="text-[11px] text-muted-foreground">{m.phone || "sin tel"} · {Math.round(m.totalMinutes / 60)}h</p></button>))}</div>)} {selected && (<p className="text-[10px] text-success mt-1">✓ {selected.name} es miembro del Club Gamer.</p>)} </div> )}
+      {!creating && ( <div ref={wrapRef} className="relative"> <div className="flex gap-1"><div className="relative flex-1"><Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" /><Input value={query} onChange={(e) => { setQuery(e.target.value); setOpen(true); if (selected) setSelected(null); }} onFocus={() => setOpen(true)} placeholder="Buscar en Club Gamer..." className="pl-7" /></div><Button type="button" size="icon" variant="outline" onClick={() => { setCreating(true); setOpen(false); setSelected(null); setName(query); setIdDoc(""); setPhone(""); }}><Plus className="h-4 w-4" /></Button></div> {open && (<div className="absolute z-50 mt-1 w-full bg-popover border border-border rounded-md shadow-lg max-h-56 overflow-auto">{results.length === 0 ? (<div className="p-2 text-xs text-muted-foreground">Sin coincidencias. <button type="button" className="text-primary underline" onClick={() => { setCreating(true); setOpen(false); setName(query); }}>Inscribir nuevo jugador "{query}"</button></div>) : results.map((m) => (<button key={m.id} type="button" onClick={() => pick(m)} className="w-full text-left px-3 py-2 hover:bg-accent/30 border-b border-border/40 last:border-0"><p className="text-sm font-semibold">{m.name}</p><p className="text-[11px] text-muted-foreground">{m.phone || "sin tel"} · {Math.round((m.totalMinutes||0) / 60)}h</p></button>))}</div>)} {selected && (<p className="text-[10px] text-success mt-1">✓ {selected.name} es miembro del Club Gamer.</p>)} </div> )}
       {(creating || selected) && ( <div className="space-y-2"> {creating && (<div><Label className="text-xs">Nombre y Apellido / Nickname *</Label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej: ShadowNinja99" autoFocus /></div>)} <div className="grid grid-cols-2 gap-2"><div><Label className="text-xs">Cédula/RIF (Opcional)</Label><Input value={idDoc} onChange={(e) => setIdDoc(e.target.value)} placeholder="V-12345678" /></div><div><Label className="text-xs">Teléfono (Opcional)</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="04141234567" /></div></div> </div> )}
     </div>
   );
@@ -56,10 +61,7 @@ export function TournamentTab() {
 
   const handleCreate = () => { 
     if (!tName || !tGame || tMax < 2 || !startDate || !endDate || tPrizePct < 1 || tPrizePct > 100) { toast.error("Revisa todos los campos de creación."); return; }
-    const formatD = (ds: string) => {
-      const [y, m, d] = ds.split("-");
-      return new Date(parseInt(y), parseInt(m)-1, parseInt(d)).toLocaleDateString("es-VE", { day: 'numeric', month: 'short' });
-    };
+    const formatD = (ds: string) => { const [y, m, d] = ds.split("-"); return new Date(parseInt(y), parseInt(m)-1, parseInt(d)).toLocaleDateString("es-VE", { day: 'numeric', month: 'short' }); };
     const tDates = startDate === endDate ? formatD(startDate) : `Del ${formatD(startDate)} al ${formatD(endDate)}`;
     createTournament({ name: tName, game: tGame, maxPlayers: tMax, entryFee: tFee, prizePercentage: tPrizePct, format: tFormat, dateRange: tDates }); 
     setTName(""); setTGame(""); setTMax(16); setTFee(5); setStartDate(""); setEndDate(""); setTPrizePct(70);
@@ -95,6 +97,9 @@ export function TournamentTab() {
     setName(""); setIdDoc(""); setPhone(""); setPaymentType("pending"); setCashUsd(""); setMobileBs(""); setCashBs(""); setMobileBank(""); setMobileRef("");
   };
 
+  // 👈 PARACAÍDAS PARA EL CALENDARIO
+  const tryShowPicker = (e: any) => { try { if ('showPicker' in e.currentTarget) e.currentTarget.showPicker(); } catch(err) {} };
+
   if (tournaments.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-10 text-center space-y-6">
@@ -110,32 +115,8 @@ export function TournamentTab() {
 
             <div className="grid grid-cols-2 gap-4 border-y border-border py-4">
               <div className="grid grid-cols-2 gap-2">
-                {/* 👈 MAGIA AQUÍ: onClick={...showPicker()} para abrir el calendario donde sea que toques */}
-                <div>
-                  <Label className="text-[10px] uppercase flex items-center gap-1 text-accent"><Calendar className="h-3 w-3"/> Inicio</Label>
-                  <Input 
-                    type="date" 
-                    value={startDate} 
-                    onClick={(e) => 'showPicker' in HTMLInputElement.prototype && e.currentTarget.showPicker()}
-                    onChange={(e) => { 
-                      setStartDate(e.target.value); 
-                      if (endDate && e.target.value > endDate) setEndDate(e.target.value); 
-                    }} 
-                    className="mt-1 text-xs cursor-pointer" 
-                  />
-                </div>
-                <div>
-                  <Label className="text-[10px] uppercase flex items-center gap-1 text-accent"><Calendar className="h-3 w-3"/> Fin</Label>
-                  <Input 
-                    type="date" 
-                    min={startDate} 
-                    value={endDate} 
-                    onClick={(e) => 'showPicker' in HTMLInputElement.prototype && e.currentTarget.showPicker()}
-                    onChange={(e)=>setEndDate(e.target.value)} 
-                    disabled={!startDate} 
-                    className="mt-1 text-xs cursor-pointer" 
-                  />
-                </div>
+                <div><Label className="text-[10px] uppercase flex items-center gap-1 text-accent"><Calendar className="h-3 w-3"/> Inicio</Label><Input type="date" value={startDate} onClick={tryShowPicker} onChange={(e) => { setStartDate(e.target.value); if (endDate && e.target.value > endDate) setEndDate(e.target.value); }} className="mt-1 text-xs cursor-pointer" /></div>
+                <div><Label className="text-[10px] uppercase flex items-center gap-1 text-accent"><Calendar className="h-3 w-3"/> Fin</Label><Input type="date" min={startDate} value={endDate} onClick={tryShowPicker} onChange={(e)=>setEndDate(e.target.value)} disabled={!startDate} className="mt-1 text-xs cursor-pointer" /></div>
               </div>
               <div><Label className="text-xs uppercase flex items-center gap-1 text-accent"><ListOrdered className="h-3 w-3"/> Formato</Label><select className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm mt-1 focus:ring-1 focus:ring-primary cursor-pointer" value={tFormat} onChange={(e) => setTFormat(e.target.value as any)}><option value="single_elimination">Eliminación Directa</option><option value="league">Liga / Puntos</option></select></div>
             </div>
@@ -156,7 +137,7 @@ export function TournamentTab() {
     <div className="space-y-12">
       {tournaments.map(t => {
         const tParts = participants.filter(p => p.tournamentId === t.id);
-        const fillPercent = Math.min(100, (tParts.length / t.maxPlayers) * 100);
+        const fillPercent = Math.min(100, (tParts.length / (t.maxPlayers || 1)) * 100);
         const isFull = tParts.length >= t.maxPlayers;
         
         const totalCollected = tParts.filter(p => p.paymentStatus === 'paid').length * t.entryFee;
