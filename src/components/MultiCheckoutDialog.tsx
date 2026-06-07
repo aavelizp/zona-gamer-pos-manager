@@ -68,6 +68,8 @@ export function MultiCheckoutDialog({ open, onClose }: { open: boolean; onClose:
   const [cashUsd, setCashUsd] = useState("");
   const [mobileBs, setMobileBs] = useState("");
   const [cashBs, setCashBs] = useState("");
+  const [mobileBank, setMobileBank] = useState(""); // 👈 AUDITORÍA
+  const [mobileRef, setMobileRef] = useState("");   // 👈 AUDITORÍA
   const [billReceived, setBillReceived] = useState("");
   const [name, setName] = useState("");
   const [idDoc, setIdDoc] = useState("");
@@ -78,27 +80,19 @@ export function MultiCheckoutDialog({ open, onClose }: { open: boolean; onClose:
   useEffect(() => {
     if (open) {
       setSelectedIds([]);
-      setMethod("full"); setFullPayMode("cash"); setCashUsd(""); setMobileBs(""); setCashBs(""); setBillReceived("");
+      setMethod("full"); setFullPayMode("cash"); setCashUsd(""); setMobileBs(""); setCashBs(""); setMobileBank(""); setMobileRef(""); setBillReceived("");
       setName(""); setIdDoc(""); setPhone(""); setReceipt(null); setPendingFinalize(false);
     }
   }, [open]);
 
   const toggle = (id: string) => setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
-  // Cálculos agrupados
-  let timeAmount = 0;
-  let extrasAmount = 0;
-  let totalMinutes = 0;
-  let items: any[] = [];
-
+  let timeAmount = 0; let extrasAmount = 0; let totalMinutes = 0; let items: any[] = [];
   consoles.filter(c => selectedIds.includes(c.id)).forEach(c => {
      const { minutes, amount } = computeTimeAmount(c, now);
      const cTimeAmt = c.session?.prepaid ? 0 : amount;
-     timeAmount += cTimeAmt;
-     totalMinutes += minutes;
-
+     timeAmount += cTimeAmt; totalMinutes += minutes;
      if (cTimeAmt > 0) items.push({ name: `Tiempo ${c.name} (${minutes} min)`, qty: 1, price: cTimeAmt });
-     
      const cExtras = c.charges.reduce((acc, ch) => acc + ch.amount, 0);
      extrasAmount += cExtras;
      c.charges.forEach(ch => items.push({ name: `${c.name}: ${ch.label}`, qty: 1, price: ch.amount }));
@@ -106,24 +100,21 @@ export function MultiCheckoutDialog({ open, onClose }: { open: boolean; onClose:
 
   const total = timeAmount + extrasAmount;
 
-  const cashUsdN = parseFloat(cashUsd) || 0;
-  const mobileBsN = parseFloat(mobileBs) || 0;
-  const cashBsN = parseFloat(cashBs) || 0;
-  const mobileUsd = rate > 0 ? mobileBsN / rate : 0;
-  const cashBsUsd = rate > 0 ? cashBsN / rate : 0;
-  
-  const paid = method === "full" ? total : method === "mixed" ? (cashUsdN + mobileUsd + cashBsUsd) : 0;
-  const remaining = total - paid;
+  const cashUsdN = parseFloat(cashUsd) || 0; const mobileBsN = parseFloat(mobileBs) || 0; const cashBsN = parseFloat(cashBs) || 0;
+  const mobileUsd = rate > 0 ? mobileBsN / rate : 0; const cashBsUsd = rate > 0 ? cashBsN / rate : 0;
+  const paid = method === "full" ? total : method === "mixed" ? (cashUsdN + mobileUsd + cashBsUsd) : 0; const remaining = total - paid;
 
   const resolvedCashUsd = method === "full" ? (fullPayMode === "cash" ? total : 0) : method === "mixed" ? cashUsdN : 0;
   const resolvedMobileBs = method === "full" ? (fullPayMode === "mobile" ? total * rate : 0) : method === "mixed" ? mobileBsN : 0;
   const resolvedCashBs = method === "full" ? (fullPayMode === "cash_bs" ? total * rate : 0) : method === "mixed" ? cashBsN : 0;
   const finalMethod = method === "full" && fullPayMode === "cash_bs" ? "cash_bs" : method;
 
-  const billN = parseFloat(billReceived) || 0;
-  const cashTarget = method === "full" && fullPayMode === "cash" ? total : method === "mixed" ? cashUsdN : 0;
-  const rawChange = billN - cashTarget;
-  const showBill = (method === "full" && fullPayMode === "cash") || (method === "mixed" && cashTarget > 0);
+  const billN = parseFloat(billReceived) || 0; const cashTarget = method === "full" && fullPayMode === "cash" ? total : method === "mixed" ? cashUsdN : 0;
+  const rawChange = billN - cashTarget; const showBill = (method === "full" && fullPayMode === "cash") || (method === "mixed" && cashTarget > 0);
+
+  // 👈 REGLA DE AUDITORÍA
+  const needsRef = (method === "full" && fullPayMode === "mobile") || (method === "mixed" && mobileBsN > 0);
+  const isValidRef = !needsRef || (mobileBank !== "" && mobileRef.length >= 4);
 
   const buildReceipt = (): ReceiptData => ({
     ts: Date.now(), rate, consoleName: consoles.filter(c => selectedIds.includes(c.id)).map(c => c.name).join(" + "), minutes: totalMinutes,
@@ -134,23 +125,17 @@ export function MultiCheckoutDialog({ open, onClose }: { open: boolean; onClose:
   const doFinalize = () => {
     finalizeMulti(selectedIds, {
       method: finalMethod, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, cashBs: resolvedCashBs,
-      customer: method === "credit" ? name.trim() : undefined,
-      customerInfo: name.trim() ? { name: name.trim(), idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined } : undefined,
-      total, timeAmount, extrasAmount, totalMinutes, items
+      mobileBank: needsRef ? mobileBank : undefined, mobileRef: needsRef ? mobileRef : undefined,
+      customer: method === "credit" ? name.trim() : undefined, customerInfo: name.trim() ? { name: name.trim(), idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined } : undefined, total, timeAmount, extrasAmount, totalMinutes, items
     });
   };
 
   const submit = () => {
-    if (method === "credit" && !name.trim()) return;
-    if (method === "mixed" && remaining > 0.01) return;
-    setReceipt(buildReceipt());
-    setPendingFinalize(true);
+    if (method === "credit" && !name.trim()) return; if (method === "mixed" && remaining > 0.01) return; if (!isValidRef) return;
+    setReceipt(buildReceipt()); setPendingFinalize(true);
   };
 
-  const handleReceiptClose = () => {
-    setReceipt(null);
-    if (pendingFinalize) { doFinalize(); setPendingFinalize(false); onClose(); }
-  };
+  const handleReceiptClose = () => { setReceipt(null); if (pendingFinalize) { doFinalize(); setPendingFinalize(false); onClose(); } };
 
   return (
     <>
@@ -198,22 +183,29 @@ export function MultiCheckoutDialog({ open, onClose }: { open: boolean; onClose:
                     <label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "mobile" ? "border-primary bg-primary/10" : "border-border"}`}><RadioGroupItem value="mobile" /><div><p className="text-sm font-semibold">Pago Móvil Bs</p></div></label>
                     <label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "cash_bs" ? "border-primary bg-primary/10" : "border-border"}`}><RadioGroupItem value="cash_bs" /><div><p className="text-sm font-semibold">Efectivo Bs 💵</p></div></label>
                   </RadioGroup>
+                  
+                  {/* 👈 CELDAS DE AUDITORÍA */}
+                  {fullPayMode === "mobile" && (
+                    <div className="grid grid-cols-2 gap-2 mt-3 p-3 bg-primary/10 rounded-md border border-primary/20">
+                      <div><Label className="text-[10px] uppercase font-bold text-primary tracking-wider">Banco *</Label><select className="w-full h-9 rounded-md border border-input bg-background px-2 text-xs focus:ring-1 focus:ring-primary" value={mobileBank} onChange={(e) => setMobileBank(e.target.value)}><option value="">Seleccione...</option><option value="Banesco">Banesco</option><option value="Mercantil">Mercantil</option><option value="Venezuela">Venezuela</option><option value="Provincial">Provincial</option><option value="BNC">BNC</option><option value="Bancamiga">Bancamiga</option><option value="Tesoro">Tesoro</option><option value="Otro">Otro</option></select></div>
+                      <div><Label className="text-[10px] uppercase font-bold text-primary tracking-wider">Referencia *</Label><Input type="text" maxLength={8} value={mobileRef} onChange={(e) => setMobileRef(e.target.value.replace(/\D/g, ''))} className="h-9 text-xs font-display tracking-widest bg-background" placeholder="Ej: 1234" /></div>
+                    </div>
+                  )}
                 </div>
               )}
 
               {method === "mixed" && (
-                <MixedPaymentInputs total={total} cashUsd={cashUsd} mobileBs={mobileBs} cashBs={cashBs} setCashUsd={setCashUsd} setMobileBs={setMobileBs} setCashBs={setCashBs} />
+                <MixedPaymentInputs total={total} cashUsd={cashUsd} mobileBs={mobileBs} cashBs={cashBs} mobileBank={mobileBank} mobileRef={mobileRef} setCashUsd={setCashUsd} setMobileBs={setMobileBs} setCashBs={setCashBs} setMobileBank={setMobileBank} setMobileRef={setMobileRef} />
               )}
-              {showBill && cashTarget > 0 && (
-                <div className="space-y-1 border border-border rounded-md p-3 bg-background/40"><Label className="text-xs">Billete recibido ($)</Label><Input type="number" step="0.01" value={billReceived} onChange={(e) => setBillReceived(e.target.value)} placeholder={cashTarget.toFixed(2)} />{billN > 0 && ( <p className={`text-sm ${rawChange < 1 ? "text-muted-foreground" : "text-accent"}`}> Vuelto: <span className="font-display">{rawChange < 1 ? "$0" : fmtUsd(rawChange)}</span> </p> )}</div>
-              )}
+              
+              {!isValidRef && <p className="text-xs text-destructive animate-pulse text-center font-bold mt-2">⚠️ REQUERIDO: Selecciona el Banco y escribe la Referencia</p>}
             </>
           )}
         </div>
         <DialogFooter className="flex-wrap gap-2">
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={submit} disabled={selectedIds.length === 0 || (method === "mixed" && remaining > 0.01) || (method === "credit" && !name.trim())} className="bg-gradient-to-r from-purple-600 to-primary text-white">
-            <Receipt className="h-4 w-4 mr-1" />Confirmar Cobro Global
+          <Button onClick={submit} disabled={selectedIds.length === 0 || (method === "mixed" && remaining > 0.01) || (method === "credit" && !name.trim()) || !isValidRef} className="bg-gradient-to-r from-purple-600 to-primary text-white">
+            <Receipt className="h-4 w-4 mr-1" />Confirmar Cobro
           </Button>
         </DialogFooter>
       </DialogContent>

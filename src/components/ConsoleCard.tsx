@@ -27,9 +27,7 @@ function CustomerSearch({ name, idDoc, phone, setName, setIdDoc, setPhone }: Cus
   const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const onClick = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
-    };
+    const onClick = (e: MouseEvent) => { if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false); };
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
@@ -37,102 +35,27 @@ function CustomerSearch({ name, idDoc, phone, setName, setIdDoc, setPhone }: Cus
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return members.slice(0, 8);
-    return members.filter((m) =>
-      m.name.toLowerCase().includes(q) ||
-      (m.phone || "").includes(q) ||
-      (m.idDoc || "").toLowerCase().includes(q)
-    ).slice(0, 8);
+    return members.filter((m) => m.name.toLowerCase().includes(q) || (m.phone || "").includes(q) || (m.idDoc || "").toLowerCase().includes(q)).slice(0, 8);
   }, [members, query]);
 
-  const pick = (m: Member) => {
-    setSelected(m); setName(m.name); setIdDoc(m.idDoc || ""); setPhone(m.phone || "");
-    setQuery(m.name); setOpen(false); setCreating(false);
-  };
-
-  const clear = () => {
-    setSelected(null); setName(""); setIdDoc(""); setPhone(""); setQuery(""); setCreating(false);
-  };
+  const pick = (m: Member) => { setSelected(m); setName(m.name); setIdDoc(m.idDoc || ""); setPhone(m.phone || ""); setQuery(m.name); setOpen(false); setCreating(false); };
+  const clear = () => { setSelected(null); setName(""); setIdDoc(""); setPhone(""); setQuery(""); setCreating(false); };
 
   return (
     <div className="space-y-2 border border-border rounded-md p-3 bg-background/40">
-      <div className="flex items-center justify-between">
-        <p className="text-xs uppercase tracking-wider text-accent font-semibold">Cliente</p>
-        {(selected || creating || name) && (
-          <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={clear}>
-            <X className="h-3 w-3 mr-1" />Limpiar
-          </Button>
-        )}
-      </div>
-
+      <div className="flex items-center justify-between"><p className="text-xs uppercase tracking-wider text-accent font-semibold">Cliente</p>{(selected || creating || name) && (<Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={clear}><X className="h-3 w-3 mr-1" />Limpiar</Button>)}</div>
       {!creating && (
         <div ref={wrapRef} className="relative">
-          <div className="flex gap-1">
-            <div className="relative flex-1">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(e) => { setQuery(e.target.value); setOpen(true); if (selected) setSelected(null); }}
-                onFocus={() => setOpen(true)}
-                placeholder="Buscar cliente por nombre, teléfono o cédula..."
-                className="pl-7"
-              />
-            </div>
-            <Button type="button" size="icon" variant="outline" title="Cliente nuevo"
-              onClick={() => { setCreating(true); setOpen(false); setSelected(null); setName(query); setIdDoc(""); setPhone(""); }}>
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
-          {open && (
-            <div className="absolute z-50 mt-1 w-full bg-popover border border-border rounded-md shadow-lg max-h-56 overflow-auto">
-              {results.length === 0 ? (
-                <div className="p-2 text-xs text-muted-foreground">
-                  Sin coincidencias.{" "}
-                  <button type="button" className="text-primary underline"
-                    onClick={() => { setCreating(true); setOpen(false); setName(query); }}>
-                    Crear "{query}"
-                  </button>
-                </div>
-              ) : results.map((m) => (
-                <button key={m.id} type="button" onClick={() => pick(m)}
-                  className="w-full text-left px-3 py-2 hover:bg-accent/30 border-b border-border/40 last:border-0">
-                  <p className="text-sm font-semibold">{m.name}</p>
-                  <p className="text-[11px] text-muted-foreground">
-                    {m.phone || "sin tel"} · {Math.round(m.totalMinutes / 60)}h
-                    {m.pendingRewards > 0 && <span className="text-gold"> · 🎁 {m.pendingRewards}</span>}
-                  </p>
-                </button>
-              ))}
-            </div>
-          )}
-          {selected && (
-            <p className="text-[10px] text-success mt-1">
-              ✓ {selected.name} · {Math.round(selected.totalMinutes / 60)}h en Club Gamer
-            </p>
-          )}
+          <div className="flex gap-1"><div className="relative flex-1"><Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" /><Input value={query} onChange={(e) => { setQuery(e.target.value); setOpen(true); if (selected) setSelected(null); }} onFocus={() => setOpen(true)} placeholder="Buscar cliente..." className="pl-7" /></div><Button type="button" size="icon" variant="outline" onClick={() => { setCreating(true); setOpen(false); setSelected(null); setName(query); setIdDoc(""); setPhone(""); }}><Plus className="h-4 w-4" /></Button></div>
+          {open && (<div className="absolute z-50 mt-1 w-full bg-popover border border-border rounded-md shadow-lg max-h-56 overflow-auto">{results.length === 0 ? (<div className="p-2 text-xs text-muted-foreground">Sin coincidencias. <button type="button" className="text-primary underline" onClick={() => { setCreating(true); setOpen(false); setName(query); }}>Crear "{query}"</button></div>) : results.map((m) => (<button key={m.id} type="button" onClick={() => pick(m)} className="w-full text-left px-3 py-2 hover:bg-accent/30 border-b border-border/40 last:border-0"><p className="text-sm font-semibold">{m.name}</p><p className="text-[11px] text-muted-foreground">{m.phone || "sin tel"} · {Math.round(m.totalMinutes / 60)}h</p></button>))}</div>)}
+          {selected && (<p className="text-[10px] text-success mt-1">✓ {selected.name} · {Math.round(selected.totalMinutes / 60)}h en Club Gamer</p>)}
         </div>
       )}
-
       {(creating || selected) && (
         <div className="space-y-2">
-          {creating && (
-            <div>
-              <Label className="text-xs">Nombre y Apellido *</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Juan Pérez" autoFocus />
-            </div>
-          )}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <Label className="text-xs">Cédula/RIF</Label>
-              <Input value={idDoc} onChange={(e) => setIdDoc(e.target.value)} placeholder="V-12345678" />
-            </div>
-            <div>
-              <Label className="text-xs">Teléfono</Label>
-              <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="04141234567" />
-            </div>
-          </div>
-          {creating && name.trim() && phone.trim() && (
-            <p className="text-[10px] text-success">✓ Se creará en el Club Gamer al cobrar</p>
-          )}
+          {creating && (<div><Label className="text-xs">Nombre y Apellido *</Label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Juan Pérez" autoFocus /></div>)}
+          <div className="grid grid-cols-2 gap-2"><div><Label className="text-xs">Cédula/RIF</Label><Input value={idDoc} onChange={(e) => setIdDoc(e.target.value)} placeholder="V-12345678" /></div><div><Label className="text-xs">Teléfono</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="04141234567" /></div></div>
+          {creating && name.trim() && phone.trim() && (<p className="text-[10px] text-success">✓ Se creará en el Club Gamer al cobrar</p>)}
         </div>
       )}
     </div>
@@ -141,10 +64,7 @@ function CustomerSearch({ name, idDoc, phone, setName, setIdDoc, setPhone }: Cus
 
 function useNow(intervalMs = 1000) {
   const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), intervalMs);
-    return () => clearInterval(id);
-  }, [intervalMs]);
+  useEffect(() => { const id = setInterval(() => setNow(Date.now()), intervalMs); return () => clearInterval(id); }, [intervalMs]);
   return now;
 }
 
@@ -166,19 +86,7 @@ function SnackPicker({ consoleId, open, onClose }: SnackPickerProps) {
   const addSnack = useStore((s) => s.addSnackToConsole);
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent>
-        <DialogHeader><DialogTitle className="font-display">Añadir Snack</DialogTitle></DialogHeader>
-        <div className="grid grid-cols-2 gap-2 max-h-80 overflow-auto">
-          {products.map((p) => (
-            <Button key={p.id} variant="secondary" className="h-auto py-3 flex flex-col items-start"
-              disabled={p.stock <= 0} onClick={() => { addSnack(consoleId, p.id, 1); onClose(); }}>
-              <span className="font-semibold">{p.name}</span>
-              <span className="text-xs text-muted-foreground">{fmtUsd(p.price)} · {fmtBs(p.price, rate)}</span>
-              <span className={`text-xs ${p.stock <= 0 ? "text-destructive" : "text-muted-foreground"}`}>{p.stock <= 0 ? "Agotado" : `Stock: ${p.stock}`}</span>
-            </Button>
-          ))}
-        </div>
-      </DialogContent>
+      <DialogContent><DialogHeader><DialogTitle className="font-display">Añadir Snack</DialogTitle></DialogHeader><div className="grid grid-cols-2 gap-2 max-h-80 overflow-auto">{products.map((p) => (<Button key={p.id} variant="secondary" className="h-auto py-3 flex flex-col items-start" disabled={p.stock <= 0} onClick={() => { addSnack(consoleId, p.id, 1); onClose(); }}><span className="font-semibold">{p.name}</span><span className="text-xs text-muted-foreground">{fmtUsd(p.price)} · {fmtBs(p.price, rate)}</span><span className={`text-xs ${p.stock <= 0 ? "text-destructive" : "text-muted-foreground"}`}>{p.stock <= 0 ? "Agotado" : `Stock: ${p.stock}`}</span></Button>))}</div></DialogContent>
     </Dialog>
   );
 }
@@ -188,62 +96,21 @@ function ComboPicker({ consoleId, open, onClose }: SnackPickerProps) {
   const products = useStore((s) => s.products);
   const rate = useStore((s) => s.rate);
   const apply = useStore((s) => s.applyComboToConsole);
-  const canApply = (cId: string) => {
-    const c = combos.find((x) => x.id === cId)!;
-    return c.items.every((it) => (products.find((p) => p.id === it.productId)?.stock ?? 0) >= it.qty);
-  };
+  const canApply = (cId: string) => { const c = combos.find((x) => x.id === cId)!; return c.items.every((it) => (products.find((p) => p.id === it.productId)?.stock ?? 0) >= it.qty); };
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent>
-        <DialogHeader><DialogTitle className="font-display">Aplicar Combo</DialogTitle></DialogHeader>
-        <div className="space-y-2 max-h-96 overflow-auto">
-          {combos.map((c) => (
-            <Card key={c.id} className="p-3 flex items-center justify-between">
-              <div>
-                <p className="font-semibold">{c.name}</p>
-                <p className="text-xs text-muted-foreground">{c.hours}h · {c.items.length} producto(s)</p>
-                <p className="text-sm">{fmtUsd(c.price)} <span className="text-muted-foreground">· {fmtBs(c.price, rate)}</span></p>
-              </div>
-              <Button size="sm" disabled={!canApply(c.id)} onClick={() => { apply(consoleId, c.id); onClose(); }}>{canApply(c.id) ? "Aplicar" : "Sin stock"}</Button>
-            </Card>
-          ))}
-        </div>
-      </DialogContent>
+      <DialogContent><DialogHeader><DialogTitle className="font-display">Aplicar Combo</DialogTitle></DialogHeader><div className="space-y-2 max-h-96 overflow-auto">{combos.map((c) => (<Card key={c.id} className="p-3 flex items-center justify-between"><div><p className="font-semibold">{c.name}</p><p className="text-xs text-muted-foreground">{c.hours}h · {c.items.length} producto(s)</p><p className="text-sm">{fmtUsd(c.price)} <span className="text-muted-foreground">· {fmtBs(c.price, rate)}</span></p></div><Button size="sm" disabled={!canApply(c.id)} onClick={() => { apply(consoleId, c.id); onClose(); }}>{canApply(c.id) ? "Aplicar" : "Sin stock"}</Button></Card>))}</div></DialogContent>
     </Dialog>
   );
 }
 
-// 👈 NUEVA PANTALLA DE TRANSFERENCIA
 function TransferDialog({ consoleId, open, onClose }: { consoleId: string; open: boolean; onClose: () => void }) {
   const consoles = useStore((s) => s.consoles);
   const transferSession = useStore((s) => (s as any).transferSession);
-  
-  // Mostrar solo consolas desocupadas que no sean la misma
   const available = consoles.filter((c) => !c.session && c.id !== consoleId);
-
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-xs">
-        <DialogHeader><DialogTitle className="font-display">Mover a otra consola</DialogTitle></DialogHeader>
-        <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">El tiempo jugado y los snacks se sumarán automáticamente a la nueva consola.</p>
-          <div className="grid grid-cols-2 gap-2">
-            {available.map((c) => (
-              <Button key={c.id} variant="outline" className={c.type === "PS5" ? "border-gold/50 text-gold hover:bg-gold/10" : "border-primary/50 text-primary hover:bg-primary/10"} 
-                onClick={() => {
-                  if (confirm(`¿Estás seguro de mover la sesión a la ${c.name}?`)) {
-                    transferSession(consoleId, c.id);
-                    toast.success(`Sesión movida exitosamente a ${c.name}`);
-                    onClose();
-                  }
-              }}>
-                {c.name}
-              </Button>
-            ))}
-            {available.length === 0 && <p className="col-span-2 text-sm text-center text-muted-foreground mt-4">Todas las demás consolas están ocupadas.</p>}
-          </div>
-        </div>
-      </DialogContent>
+      <DialogContent className="max-w-xs"><DialogHeader><DialogTitle className="font-display">Mover a otra consola</DialogTitle></DialogHeader><div className="space-y-3"><p className="text-sm text-muted-foreground">El tiempo jugado y los snacks se sumarán automáticamente a la nueva consola.</p><div className="grid grid-cols-2 gap-2">{available.map((c) => (<Button key={c.id} variant="outline" className={c.type === "PS5" ? "border-gold/50 text-gold hover:bg-gold/10" : "border-primary/50 text-primary hover:bg-primary/10"} onClick={() => { if (confirm(`¿Estás seguro de mover la sesión a la ${c.name}?`)) { transferSession(consoleId, c.id); toast.success(`Sesión movida exitosamente a ${c.name}`); onClose(); } }}>{c.name}</Button>))}{available.length === 0 && <p className="col-span-2 text-sm text-center text-muted-foreground mt-4">Todas las demás consolas están ocupadas.</p>}</div></div></DialogContent>
     </Dialog>
   );
 }
@@ -262,6 +129,8 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
   const [cashUsd, setCashUsd] = useState("");
   const [mobileBs, setMobileBs] = useState("");
   const [cashBs, setCashBs] = useState("");
+  const [mobileBank, setMobileBank] = useState(""); // 👈 AUDITORÍA
+  const [mobileRef, setMobileRef] = useState("");   // 👈 AUDITORÍA
   const [billReceived, setBillReceived] = useState("");
   const [name, setName] = useState("");
   const [idDoc, setIdDoc] = useState("");
@@ -271,73 +140,49 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
 
   useEffect(() => {
     if (open) {
-      setMethod("full"); setFullPayMode("cash"); setCashUsd(""); setMobileBs(""); setCashBs(""); setBillReceived("");
+      setMethod("full"); setFullPayMode("cash"); setCashUsd(""); setMobileBs(""); setCashBs(""); setMobileBank(""); setMobileRef(""); setBillReceived("");
       setName(""); setIdDoc(""); setPhone(""); setReceipt(null); setPendingFinalize(false);
     }
   }, [open]);
 
-  const cashUsdN = parseFloat(cashUsd) || 0;
-  const mobileBsN = parseFloat(mobileBs) || 0;
-  const cashBsN = parseFloat(cashBs) || 0;
-  const mobileUsd = rate > 0 ? mobileBsN / rate : 0;
-  const cashBsUsd = rate > 0 ? cashBsN / rate : 0;
-  
+  const cashUsdN = parseFloat(cashUsd) || 0; const mobileBsN = parseFloat(mobileBs) || 0; const cashBsN = parseFloat(cashBs) || 0;
+  const mobileUsd = rate > 0 ? mobileBsN / rate : 0; const cashBsUsd = rate > 0 ? cashBsN / rate : 0;
   const paid = method === "full" ? total : method === "mixed" ? (cashUsdN + mobileUsd + cashBsUsd) : 0;
   const remaining = total - paid;
-
+  
   const resolvedCashUsd = method === "full" ? (fullPayMode === "cash" ? total : 0) : method === "mixed" ? cashUsdN : 0;
   const resolvedMobileBs = method === "full" ? (fullPayMode === "mobile" ? total * rate : 0) : method === "mixed" ? mobileBsN : 0;
   const resolvedCashBs = method === "full" ? (fullPayMode === "cash_bs" ? total * rate : 0) : method === "mixed" ? cashBsN : 0;
-
-  const billN = parseFloat(billReceived) || 0;
-  const cashTarget = method === "full" && fullPayMode === "cash" ? total : method === "mixed" ? cashUsdN : 0;
-  const rawChange = billN - cashTarget;
-  const showBill = (method === "full" && fullPayMode === "cash") || (method === "mixed" && cashTarget > 0);
-  const changeDisplay = rawChange < 1 ? "$0" : fmtUsd(rawChange);
-
   const finalMethod = method === "full" && fullPayMode === "cash_bs" ? "cash_bs" : method;
 
+  const billN = parseFloat(billReceived) || 0; const cashTarget = method === "full" && fullPayMode === "cash" ? total : method === "mixed" ? cashUsdN : 0;
+  const rawChange = billN - cashTarget; const showBill = (method === "full" && fullPayMode === "cash") || (method === "mixed" && cashTarget > 0);
+  const changeDisplay = rawChange < 1 ? "$0" : fmtUsd(rawChange);
+
+  // 👈 REGLA DE AUDITORÍA BANCARIA
+  const needsRef = (method === "full" && fullPayMode === "mobile") || (method === "mixed" && mobileBsN > 0);
+  const isValidRef = !needsRef || (mobileBank !== "" && mobileRef.length >= 4);
+
   const buildReceipt = (): ReceiptData => ({
-    ts: Date.now(), rate, consoleName: consoleObj.name, minutes,
-    timeAmount,
-    items: [
-      ...(timeAmount > 0 ? [{ name: `Tiempo ${consoleObj.name} (${minutes} min)`, qty: 1, price: timeAmount }] : []),
-      ...consoleObj.charges.map((ch) => ({ name: ch.label, qty: 1, price: ch.amount })),
-    ],
-    total, method: finalMethod,
-    cashUsd: resolvedCashUsd,
-    mobileBs: resolvedMobileBs,
-    cashBs: resolvedCashBs,
-    customer: { name: name.trim() || "Consumidor Final", idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined },
+    ts: Date.now(), rate, consoleName: consoleObj.name, minutes, timeAmount, items: [ ...(timeAmount > 0 ? [{ name: `Tiempo ${consoleObj.name} (${minutes} min)`, qty: 1, price: timeAmount }] : []), ...consoleObj.charges.map((ch) => ({ name: ch.label, qty: 1, price: ch.amount })) ], total, method: finalMethod, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, cashBs: resolvedCashBs, customer: { name: name.trim() || "Consumidor Final", idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined }
   });
 
   const doFinalize = () => {
     finalize(consoleObj.id, {
-      method: finalMethod,
-      cashUsd: resolvedCashUsd,
-      mobileBs: resolvedMobileBs,
-      cashBs: resolvedCashBs,
-      customer: method === "credit" ? name.trim() : undefined,
-      customerInfo: name.trim() ? { name: name.trim(), idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined } : undefined,
-      total, timeAmount, extrasAmount, minutes,
+      method: finalMethod, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, cashBs: resolvedCashBs,
+      mobileBank: needsRef ? mobileBank : undefined, mobileRef: needsRef ? mobileRef : undefined,
+      customer: method === "credit" ? name.trim() : undefined, customerInfo: name.trim() ? { name: name.trim(), idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined } : undefined, total, timeAmount, extrasAmount, minutes
     });
   };
 
   const submit = () => {
     if (method === "credit" && !name.trim()) return;
     if (method === "mixed" && remaining > 0.01) return;
-    setReceipt(buildReceipt());
-    setPendingFinalize(true);
+    if (!isValidRef) return;
+    setReceipt(buildReceipt()); setPendingFinalize(true);
   };
 
-  const handleReceiptClose = () => {
-    setReceipt(null);
-    if (pendingFinalize) {
-      doFinalize();
-      setPendingFinalize(false);
-      onClose();
-    }
-  };
+  const handleReceiptClose = () => { setReceipt(null); if (pendingFinalize) { doFinalize(); setPendingFinalize(false); onClose(); } };
 
   return (
     <>
@@ -345,64 +190,51 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle className="font-display">Cobrar · {consoleObj.name}</DialogTitle></DialogHeader>
         <div className="space-y-3">
-          <Card className="p-3 bg-secondary/40">
-            <div className="flex justify-between text-sm"><span>Tiempo ({minutes} min)</span><span>{fmtUsd(timeAmount)}</span></div>
-            <div className="flex justify-between text-sm"><span>Extras</span><span>{fmtUsd(extrasAmount)}</span></div>
-            <div className="border-t border-border my-2" />
-            <div className="flex justify-between font-display text-lg"><span>TOTAL</span><span>{fmtUsd(total)}</span></div>
-            <div className="flex justify-between text-sm text-accent"><span>En Bs</span><span>{fmtBs(total, rate)}</span></div>
-          </Card>
-
+          <Card className="p-3 bg-secondary/40"><div className="flex justify-between text-sm"><span>Tiempo ({minutes} min)</span><span>{fmtUsd(timeAmount)}</span></div><div className="flex justify-between text-sm"><span>Extras</span><span>{fmtUsd(extrasAmount)}</span></div><div className="border-t border-border my-2" /><div className="flex justify-between font-display text-lg"><span>TOTAL</span><span>{fmtUsd(total)}</span></div><div className="flex justify-between text-sm text-accent"><span>En Bs</span><span>{fmtBs(total, rate)}</span></div></Card>
           <CustomerSearch name={name} idDoc={idDoc} phone={phone} setName={setName} setIdDoc={setIdDoc} setPhone={setPhone} />
-
-          <div className="grid grid-cols-3 gap-2">
-            <Button variant={method === "full" ? "default" : "outline"} onClick={() => setMethod("full")}>Completo</Button>
-            <Button variant={method === "mixed" ? "default" : "outline"} onClick={() => setMethod("mixed")}>Mixto</Button>
-            <Button variant={method === "credit" ? "default" : "outline"} onClick={() => setMethod("credit")}>Fiado</Button>
-          </div>
-
+          <div className="grid grid-cols-3 gap-2"><Button variant={method === "full" ? "default" : "outline"} onClick={() => setMethod("full")}>Completo</Button><Button variant={method === "mixed" ? "default" : "outline"} onClick={() => setMethod("mixed")}>Mixto</Button><Button variant={method === "credit" ? "default" : "outline"} onClick={() => setMethod("credit")}>Fiado</Button></div>
+          
           {method === "full" && (
             <div className="space-y-2 border border-border rounded-md p-3 bg-background/40">
               <Label className="text-xs uppercase tracking-wider text-accent font-semibold">¿Cómo pagó?</Label>
               <RadioGroup value={fullPayMode} onValueChange={(v) => setFullPayMode(v as any)} className="grid grid-cols-1 gap-2">
-                <label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "cash" ? "border-primary bg-primary/10" : "border-border"}`}>
-                  <RadioGroupItem value="cash" />
-                  <div><p className="text-sm font-semibold">Efectivo $</p></div>
-                </label>
-                <label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "mobile" ? "border-primary bg-primary/10" : "border-border"}`}>
-                  <RadioGroupItem value="mobile" />
-                  <div><p className="text-sm font-semibold">Pago Móvil Bs</p></div>
-                </label>
-                <label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "cash_bs" ? "border-primary bg-primary/10" : "border-border"}`}>
-                  <RadioGroupItem value="cash_bs" />
-                  <div><p className="text-sm font-semibold">Efectivo Bs 💵</p></div>
-                </label>
+                <label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "cash" ? "border-primary bg-primary/10" : "border-border"}`}><RadioGroupItem value="cash" /><div><p className="text-sm font-semibold">Efectivo $</p></div></label>
+                <label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "mobile" ? "border-primary bg-primary/10" : "border-border"}`}><RadioGroupItem value="mobile" /><div><p className="text-sm font-semibold">Pago Móvil Bs</p></div></label>
+                <label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "cash_bs" ? "border-primary bg-primary/10" : "border-border"}`}><RadioGroupItem value="cash_bs" /><div><p className="text-sm font-semibold">Efectivo Bs 💵</p></div></label>
               </RadioGroup>
+              
+              {/* 👈 CELDAS DE AUDITORÍA SI ES PAGO MÓVIL COMPLETO */}
+              {fullPayMode === "mobile" && (
+                <div className="grid grid-cols-2 gap-2 mt-3 p-3 bg-primary/10 rounded-md border border-primary/20">
+                  <div>
+                    <Label className="text-[10px] uppercase font-bold text-primary tracking-wider">Banco Emisor *</Label>
+                    <select className="w-full h-9 rounded-md border border-input bg-background px-2 text-xs focus:ring-1 focus:ring-primary" value={mobileBank} onChange={(e) => setMobileBank(e.target.value)}>
+                      <option value="">Seleccione...</option><option value="Banesco">Banesco</option><option value="Mercantil">Mercantil</option><option value="Venezuela">Venezuela</option><option value="Provincial">Provincial</option><option value="BNC">BNC</option><option value="Bancamiga">Bancamiga</option><option value="Tesoro">Tesoro</option><option value="Otro">Otro</option>
+                    </select>
+                  </div>
+                  <div>
+                    <Label className="text-[10px] uppercase font-bold text-primary tracking-wider">Referencia *</Label>
+                    <Input type="text" maxLength={8} value={mobileRef} onChange={(e) => setMobileRef(e.target.value.replace(/\D/g, ''))} className="h-9 text-xs font-display tracking-widest bg-background" placeholder="Ej: 1234" />
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
           {method === "mixed" && (
-            <div className="space-y-2">
-              <MixedPaymentInputs total={total} cashUsd={cashUsd} mobileBs={mobileBs} cashBs={cashBs} setCashUsd={setCashUsd} setMobileBs={setMobileBs} setCashBs={setCashBs} />
-            </div>
+            <MixedPaymentInputs total={total} cashUsd={cashUsd} mobileBs={mobileBs} cashBs={cashBs} mobileBank={mobileBank} mobileRef={mobileRef} setCashUsd={setCashUsd} setMobileBs={setMobileBs} setCashBs={setCashBs} setMobileBank={setMobileBank} setMobileRef={setMobileRef} />
           )}
-          {showBill && cashTarget > 0 && (
-            <div className="space-y-1 border border-border rounded-md p-3 bg-background/40">
-              <Label className="text-xs">Billete recibido ($)</Label>
-              <Input type="number" step="0.01" value={billReceived} onChange={(e) => setBillReceived(e.target.value)} placeholder={cashTarget.toFixed(2)} />
-              {billN > 0 && ( <p className={`text-sm ${rawChange < 1 ? "text-muted-foreground" : "text-accent"}`}> Vuelto a entregar: <span className="font-display">{changeDisplay}</span> </p> )}
-            </div>
-          )}
-          {method === "credit" && total > 10 && <p className="text-xs text-warning">⚠ Supera el límite sugerido de $10</p>}
+
+          {showBill && cashTarget > 0 && (<div className="space-y-1 border border-border rounded-md p-3 bg-background/40"><Label className="text-xs">Billete recibido ($)</Label><Input type="number" step="0.01" value={billReceived} onChange={(e) => setBillReceived(e.target.value)} placeholder={cashTarget.toFixed(2)} />{billN > 0 && ( <p className={`text-sm ${rawChange < 1 ? "text-muted-foreground" : "text-accent"}`}> Vuelto a entregar: <span className="font-display">{changeDisplay}</span> </p> )}</div>)}
           {method === "credit" && !name.trim() && <p className="text-xs text-destructive">Debes seleccionar o crear un cliente para fiar.</p>}
+          {!isValidRef && <p className="text-xs text-destructive animate-pulse text-center font-bold mt-2">⚠️ REQUERIDO: Selecciona el Banco y escribe la Referencia (Mín. 4 números)</p>}
         </div>
         <DialogFooter className="flex-wrap gap-2">
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={submit} disabled={(method === "mixed" && remaining > 0.01) || (method === "credit" && !name.trim())} className="bg-gradient-to-r from-primary to-accent">
+          <Button onClick={submit} disabled={(method === "mixed" && remaining > 0.01) || (method === "credit" && !name.trim()) || !isValidRef} className="bg-gradient-to-r from-primary to-accent">
             <Receipt className="h-4 w-4 mr-1" />Confirmar Pago
           </Button>
         </DialogFooter>
-        <p className="text-[10px] text-muted-foreground text-center">La consola se liberará al cerrar el recibo digital.</p>
       </DialogContent>
     </Dialog>
     <ReceiptDialog open={!!receipt} onClose={handleReceiptClose} data={receipt} />
@@ -417,112 +249,59 @@ function PrepayCheckout({ open, onClose, consoleObj }: PrepayProps) {
   const [chosenMinutes, setChosenMinutes] = useState<number>(60); const [chosenCombo, setChosenCombo] = useState<Combo | null>(null);
   const [method, setMethod] = useState<"full" | "mixed">("full"); const [fullPayMode, setFullPayMode] = useState<"cash" | "mobile" | "cash_bs">("cash");
   const [cashUsd, setCashUsd] = useState(""); const [mobileBs, setMobileBs] = useState(""); const [cashBs, setCashBs] = useState("");
+  const [mobileBank, setMobileBank] = useState(""); const [mobileRef, setMobileRef] = useState("");
   const [billReceived, setBillReceived] = useState(""); const [name, setName] = useState(""); const [idDoc, setIdDoc] = useState(""); const [phone, setPhone] = useState("");
   const [receipt, setReceipt] = useState<ReceiptData | null>(null); const [pending, setPending] = useState(false);
 
   useEffect(() => {
-    if (open) { setStep("type"); setChosenMinutes(60); setChosenCombo(null); setMethod("full"); setFullPayMode("cash"); setCashUsd(""); setMobileBs(""); setCashBs(""); setBillReceived(""); setName(""); setIdDoc(""); setPhone(""); setReceipt(null); setPending(false); }
+    if (open) { setStep("type"); setChosenMinutes(60); setChosenCombo(null); setMethod("full"); setFullPayMode("cash"); setCashUsd(""); setMobileBs(""); setCashBs(""); setMobileBank(""); setMobileRef(""); setBillReceived(""); setName(""); setIdDoc(""); setPhone(""); setReceipt(null); setPending(false); }
   }, [open]);
 
   const isCombo = !!chosenCombo; const minutes = isCombo ? Math.round(chosenCombo!.hours * 60) : chosenMinutes; const total = isCombo ? chosenCombo!.price : +(consoleObj.ratePerHour * (chosenMinutes / 60)).toFixed(2);
   const cashUsdN = parseFloat(cashUsd) || 0; const mobileBsN = parseFloat(mobileBs) || 0; const cashBsN = parseFloat(cashBs) || 0;
   const mobileUsd = rate > 0 ? mobileBsN / rate : 0; const cashBsUsd = rate > 0 ? cashBsN / rate : 0;
-  
   const paid = method === "full" ? total : cashUsdN + mobileUsd + cashBsUsd; const remaining = total - paid;
+  
   const resolvedCashUsd = method === "full" ? (fullPayMode === "cash" ? total : 0) : cashUsdN;
   const resolvedMobileBs = method === "full" ? (fullPayMode === "mobile" ? total * rate : 0) : mobileBsN;
   const resolvedCashBs = method === "full" ? (fullPayMode === "cash_bs" ? total * rate : 0) : cashBsN;
-
-  const billN = parseFloat(billReceived) || 0; const cashTarget = method === "full" && fullPayMode === "cash" ? total : method === "mixed" ? cashUsdN : 0;
-  const rawChange = billN - cashTarget; const showBill = (method === "full" && fullPayMode === "cash") || (method === "mixed" && cashTarget > 0);
-  const changeDisplay = rawChange < 1 ? "$0" : fmtUsd(rawChange);
-
   const finalMethod = method === "full" && fullPayMode === "cash_bs" ? "cash_bs" : method;
-  const canApplyCombo = (c: Combo) => c.items.every((it) => (products.find((p) => p.id === it.productId)?.stock ?? 0) >= it.qty);
+  
+  const needsRef = (method === "full" && fullPayMode === "mobile") || (method === "mixed" && mobileBsN > 0);
+  const isValidRef = !needsRef || (mobileBank !== "" && mobileRef.length >= 4);
 
-  const submit = () => {
-    if (method === "mixed" && remaining > 0.01) return;
-    const items: ReceiptData["items"] = isCombo ? [ { name: `Combo: ${chosenCombo!.name} - ${consoleObj.name} (${minutes} min)`, qty: 1, price: total }, ...chosenCombo!.items.map((it) => { const p = products.find((pp) => pp.id === it.productId); return { name: `  · ${p?.name || "Item"}`, qty: it.qty, price: 0 }; }), ] : [{ name: `Prepago ${consoleObj.name} (${minutes} min)`, qty: 1, price: total }];
-    setReceipt({ ts: Date.now(), rate, consoleName: consoleObj.name, minutes, timeAmount: total, items, total, method: finalMethod, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, cashBs: resolvedCashBs, customer: { name: name.trim() || "Consumidor Final", idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined } }); setPending(true);
+  const buildReceipt = () => {
+    const items = isCombo ? [ { name: `Combo: ${chosenCombo!.name}`, qty: 1, price: total }, ...chosenCombo!.items.map((it) => { const p = products.find((pp) => pp.id === it.productId); return { name: `  · ${p?.name || "Item"}`, qty: it.qty, price: 0 }; }) ] : [{ name: `Prepago ${consoleObj.name} (${minutes} min)`, qty: 1, price: total }];
+    return { ts: Date.now(), rate, consoleName: consoleObj.name, minutes, timeAmount: total, items, total, method: finalMethod, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, cashBs: resolvedCashBs, customer: { name: name.trim() || "Consumidor Final", idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined } };
   };
 
-  const handleReceiptClose = () => {
-    setReceipt(null);
-    if (pending) { prepay(consoleObj.id, minutes, { method: finalMethod, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, cashBs: resolvedCashBs, total, customerInfo: name.trim() ? { name: name.trim(), idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined } : undefined, comboId: chosenCombo?.id, }); setPending(false); onClose(); }
-  };
+  const doPrepay = () => { prepay(consoleObj.id, minutes, { method: finalMethod, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, cashBs: resolvedCashBs, mobileBank: needsRef ? mobileBank : undefined, mobileRef: needsRef ? mobileRef : undefined, total, customerInfo: name.trim() ? { name: name.trim(), idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined } : undefined, comboId: chosenCombo?.id }); };
+
+  const submit = () => { if (method === "mixed" && remaining > 0.01) return; if (!isValidRef) return; setReceipt(buildReceipt() as any); setPending(true); };
+  const handleReceiptClose = () => { setReceipt(null); if (pending) { doPrepay(); setPending(false); onClose(); } };
 
   return (
     <>
       <Dialog open={open && !receipt} onOpenChange={(o) => { if (!o) onClose(); }}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle className="font-display">Prepago · {consoleObj.name}</DialogTitle></DialogHeader>
-          {step === "type" && (
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">¿Qué quieres cobrar?</p>
-              <div className="grid grid-cols-1 gap-2">
-                <Button variant="outline" className="h-auto py-4 flex-col items-start" onClick={() => { setChosenCombo(null); setStep("time"); }}><span className="font-semibold">Tiempo Libre / Manual</span><span className="text-xs text-muted-foreground">Define minutos y precio por hora</span></Button>
-                <Button variant="outline" className="h-auto py-4 flex-col items-start" onClick={() => setStep("combo")} disabled={combos.length === 0}><span className="font-semibold">Seleccionar un Combo</span><span className="text-xs text-muted-foreground">{combos.length === 0 ? "No hay combos creados" : `${combos.length} combo(s) disponibles`}</span></Button>
-              </div>
-              <DialogFooter><Button variant="ghost" onClick={onClose}>Cancelar</Button></DialogFooter>
-            </div>
-          )}
-          {step === "combo" && (
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">Elige un combo:</p>
-              <div className="space-y-2 max-h-96 overflow-auto">
-                {combos.map((c) => {
-                  const ok = canApplyCombo(c);
-                  return (
-                    <Card key={c.id} className={`p-3 flex items-center justify-between ${chosenCombo?.id === c.id ? "border-primary" : ""}`}>
-                      <div><p className="font-semibold">{c.name}</p><p className="text-xs text-muted-foreground">{c.hours}h · {c.items.length} producto(s)</p><p className="text-sm">{fmtUsd(c.price)} · {fmtBs(c.price, rate)}</p></div>
-                      <Button size="sm" disabled={!ok} onClick={() => { setChosenCombo(c); setStep("pay"); }}>{ok ? "Elegir" : "Sin stock"}</Button>
-                    </Card>
-                  );
-                })}
-              </div>
-              <DialogFooter><Button variant="ghost" onClick={() => setStep("type")}>← Atrás</Button></DialogFooter>
-            </div>
-          )}
-          {step === "time" && (
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">¿Cuánto tiempo va a jugar?</p>
-              <div className="grid grid-cols-2 gap-2">
-                {[30, 60, 90, 120].map((m) => ( <Button key={m} variant={chosenMinutes === m ? "default" : "outline"} onClick={() => setChosenMinutes(m)}>{m >= 60 ? `${m / 60}h` : `${m} min`} · {fmtUsd(+(consoleObj.ratePerHour * (m / 60)).toFixed(2))}</Button> ))}
-              </div>
-              <div><Label className="text-xs">Otro (minutos)</Label><Input type="number" min={5} step={5} value={chosenMinutes} onChange={(e) => setChosenMinutes(Math.max(5, parseInt(e.target.value) || 0))} /></div>
-              <Card className="p-3 bg-secondary/40"><div className="flex justify-between font-display text-lg"><span>TOTAL</span><span>{fmtUsd(total)}</span></div><div className="flex justify-between text-sm text-accent"><span>En Bs</span><span>{fmtBs(total, rate)}</span></div></Card>
-              <DialogFooter><Button variant="ghost" onClick={() => setStep("type")}>← Atrás</Button><Button onClick={() => setStep("pay")} disabled={chosenMinutes < 5 || total <= 0}>Continuar al pago</Button></DialogFooter>
-            </div>
-          )}
+          {step === "type" && (<div className="space-y-3"><div className="grid grid-cols-1 gap-2"><Button variant="outline" className="h-auto py-4 flex-col items-start" onClick={() => { setChosenCombo(null); setStep("time"); }}><span className="font-semibold">Tiempo Libre / Manual</span></Button><Button variant="outline" className="h-auto py-4 flex-col items-start" onClick={() => setStep("combo")} disabled={combos.length === 0}><span className="font-semibold">Seleccionar un Combo</span></Button></div></div>)}
+          {step === "combo" && (<div className="space-y-2"><div className="space-y-2 max-h-96 overflow-auto">{combos.map((c) => { const ok = c.items.every((it) => (products.find((p) => p.id === it.productId)?.stock ?? 0) >= it.qty); return (<Card key={c.id} className="p-3 flex justify-between"><div><p className="font-semibold">{c.name}</p><p className="text-sm">{fmtUsd(c.price)}</p></div><Button size="sm" disabled={!ok} onClick={() => { setChosenCombo(c); setStep("pay"); }}>{ok ? "Elegir" : "Sin stock"}</Button></Card>); })}</div></div>)}
+          {step === "time" && (<div className="space-y-3"><div className="grid grid-cols-2 gap-2">{[30, 60, 90, 120].map((m) => ( <Button key={m} variant={chosenMinutes === m ? "default" : "outline"} onClick={() => setChosenMinutes(m)}>{m >= 60 ? `${m / 60}h` : `${m} min`} · {fmtUsd(+(consoleObj.ratePerHour * (m / 60)).toFixed(2))}</Button> ))}</div><div><Label>Otro (minutos)</Label><Input type="number" min={5} step={5} value={chosenMinutes} onChange={(e) => setChosenMinutes(Math.max(5, parseInt(e.target.value) || 0))} /></div><Button className="w-full" onClick={() => setStep("pay")} disabled={chosenMinutes < 5}>Continuar al pago</Button></div>)}
           {step === "pay" && (
             <div className="space-y-3">
-              <Card className="p-3 bg-secondary/40">
-                {isCombo && <div className="text-xs text-accent font-semibold mb-1">🎁 Combo: {chosenCombo!.name}</div>}
-                <div className="flex justify-between text-sm"><span>Tiempo prepago</span><span>{minutes} min</span></div>
-                <div className="flex justify-between font-display text-lg"><span>TOTAL</span><span>{fmtUsd(total)}</span></div>
-                <div className="flex justify-between text-sm text-accent"><span>En Bs</span><span>{fmtBs(total, rate)}</span></div>
-              </Card>
+              <Card className="p-3 bg-secondary/40"><div className="flex justify-between font-display text-lg"><span>TOTAL</span><span>{fmtUsd(total)}</span></div></Card>
               <CustomerSearch name={name} idDoc={idDoc} phone={phone} setName={setName} setIdDoc={setIdDoc} setPhone={setPhone} />
-              <div className="grid grid-cols-2 gap-2">
-                <Button variant={method === "full" ? "default" : "outline"} onClick={() => setMethod("full")}>Completo</Button>
-                <Button variant={method === "mixed" ? "default" : "outline"} onClick={() => setMethod("mixed")}>Mixto</Button>
-              </div>
+              <div className="grid grid-cols-2 gap-2"><Button variant={method === "full" ? "default" : "outline"} onClick={() => setMethod("full")}>Completo</Button><Button variant={method === "mixed" ? "default" : "outline"} onClick={() => setMethod("mixed")}>Mixto</Button></div>
               {method === "full" && (
-                <div className="grid grid-cols-3 gap-2">
-                  <Button size="sm" variant={fullPayMode === "cash" ? "default" : "outline"} onClick={() => setFullPayMode("cash")}>Efectivo $</Button>
-                  <Button size="sm" variant={fullPayMode === "mobile" ? "default" : "outline"} onClick={() => setFullPayMode("mobile")}>Pago Móvil</Button>
-                  <Button size="sm" variant={fullPayMode === "cash_bs" ? "default" : "outline"} onClick={() => setFullPayMode("cash_bs")}>Efectivo Bs</Button>
-                </div>
+                <>
+                  <div className="grid grid-cols-3 gap-2"><Button size="sm" variant={fullPayMode === "cash" ? "default" : "outline"} onClick={() => setFullPayMode("cash")}>Efectivo $</Button><Button size="sm" variant={fullPayMode === "mobile" ? "default" : "outline"} onClick={() => setFullPayMode("mobile")}>Pago Móvil</Button><Button size="sm" variant={fullPayMode === "cash_bs" ? "default" : "outline"} onClick={() => setFullPayMode("cash_bs")}>Efectivo Bs</Button></div>
+                  {fullPayMode === "mobile" && (<div className="grid grid-cols-2 gap-2 mt-2 p-3 bg-primary/10 rounded-md border border-primary/20"><div><Label className="text-[10px] uppercase font-bold text-primary tracking-wider">Banco *</Label><select className="w-full h-9 rounded-md border border-input bg-background px-2 text-xs focus:ring-1 focus:ring-primary" value={mobileBank} onChange={(e) => setMobileBank(e.target.value)}><option value="">Seleccione...</option><option value="Banesco">Banesco</option><option value="Mercantil">Mercantil</option><option value="Venezuela">Venezuela</option><option value="Provincial">Provincial</option><option value="BNC">BNC</option><option value="Bancamiga">Bancamiga</option><option value="Tesoro">Tesoro</option><option value="Otro">Otro</option></select></div><div><Label className="text-[10px] uppercase font-bold text-primary tracking-wider">Referencia *</Label><Input type="text" maxLength={8} value={mobileRef} onChange={(e) => setMobileRef(e.target.value.replace(/\D/g, ''))} className="h-9 text-xs font-display tracking-widest bg-background" placeholder="Ej: 1234" /></div></div>)}
+                </>
               )}
-              {method === "mixed" && (
-                <div className="space-y-2">
-                  <MixedPaymentInputs total={total} cashUsd={cashUsd} mobileBs={mobileBs} cashBs={cashBs} setCashUsd={setCashUsd} setMobileBs={setMobileBs} setCashBs={setCashBs} />
-                </div>
-              )}
-              {showBill && cashTarget > 0 && (
-                <div className="space-y-1 border border-border rounded-md p-3 bg-background/40"><Label className="text-xs">Billete recibido ($)</Label><Input type="number" step="0.01" value={billReceived} onChange={(e) => setBillReceived(e.target.value)} placeholder={cashTarget.toFixed(2)} />{billN > 0 && ( <p className={`text-sm ${rawChange < 1 ? "text-muted-foreground" : "text-accent"}`}> Vuelto a entregar: <span className="font-display">{changeDisplay}</span> </p> )}</div>
-              )}
-              <DialogFooter><Button variant="ghost" onClick={() => setStep(isCombo ? "combo" : "time")}>← Atrás</Button><Button onClick={submit} disabled={method === "mixed" && remaining > 0.01} className="bg-gradient-to-r from-primary to-accent"><Receipt className="h-4 w-4 mr-1" /> Cobrar y arrancar</Button></DialogFooter>
+              {method === "mixed" && (<MixedPaymentInputs total={total} cashUsd={cashUsd} mobileBs={mobileBs} cashBs={cashBs} mobileBank={mobileBank} mobileRef={mobileRef} setCashUsd={setCashUsd} setMobileBs={setMobileBs} setCashBs={setCashBs} setMobileBank={setMobileBank} setMobileRef={setMobileRef} />)}
+              {!isValidRef && <p className="text-xs text-destructive animate-pulse text-center font-bold mt-2">⚠️ REQUERIDO: Selecciona el Banco y escribe la Referencia</p>}
+              <DialogFooter><Button onClick={submit} disabled={method === "mixed" && remaining > 0.01 || !isValidRef} className="bg-gradient-to-r from-primary to-accent"><Receipt className="h-4 w-4 mr-1" /> Cobrar y arrancar</Button></DialogFooter>
             </div>
           )}
         </DialogContent>
@@ -537,10 +316,11 @@ function PayExtrasDialog({ open, onClose, consoleObj }: PayExtrasProps) {
   const rate = useStore((s) => s.rate); const payExtras = useStore((s) => s.payExtras); const total = consoleObj.charges.reduce((a, c) => a + c.amount, 0);
   const [method, setMethod] = useState<"full" | "mixed" | "credit">("full"); const [fullPayMode, setFullPayMode] = useState<"cash" | "mobile" | "cash_bs">("cash");
   const [cashUsd, setCashUsd] = useState(""); const [mobileBs, setMobileBs] = useState(""); const [cashBs, setCashBs] = useState("");
+  const [mobileBank, setMobileBank] = useState(""); const [mobileRef, setMobileRef] = useState("");
   const [name, setName] = useState(""); const [receipt, setReceipt] = useState<ReceiptData | null>(null); const [pending, setPending] = useState(false);
 
   useEffect(() => {
-    if (open) { setMethod("full"); setFullPayMode("cash"); setCashUsd(""); setMobileBs(""); setCashBs(""); setName(consoleObj.session?.customerName || ""); setReceipt(null); setPending(false); }
+    if (open) { setMethod("full"); setFullPayMode("cash"); setCashUsd(""); setMobileBs(""); setCashBs(""); setMobileBank(""); setMobileRef(""); setName(consoleObj.session?.customerName || ""); setReceipt(null); setPending(false); }
   }, [open, consoleObj.session?.customerName]);
 
   const cashUsdN = parseFloat(cashUsd) || 0; const mobileBsN = parseFloat(mobileBs) || 0; const cashBsN = parseFloat(cashBs) || 0;
@@ -549,18 +329,17 @@ function PayExtrasDialog({ open, onClose, consoleObj }: PayExtrasProps) {
   
   const resolvedCashUsd = method === "full" ? (fullPayMode === "cash" ? total : 0) : method === "mixed" ? cashUsdN : 0;
   const resolvedMobileBs = method === "full" ? (fullPayMode === "mobile" ? total * rate : 0) : method === "mixed" ? mobileBsN : 0;
-  const resolvedCashBs = method === "full" ? (fullPayMode === "cash_bs" ? total * rate : 0) : method === "mixed" ? cashBsN : 0;
   const finalMethod = method === "full" && fullPayMode === "cash_bs" ? "cash_bs" : method;
 
+  const needsRef = (method === "full" && fullPayMode === "mobile") || (method === "mixed" && mobileBsN > 0);
+  const isValidRef = !needsRef || (mobileBank !== "" && mobileRef.length >= 4);
+
   const submit = () => {
-    if (method === "mixed" && remaining > 0.01) return; if (method === "credit" && !name.trim()) return;
-    setReceipt({ ts: Date.now(), rate, consoleName: consoleObj.name, minutes: 0, timeAmount: 0, items: consoleObj.charges.map((ch) => ({ name: ch.label, qty: 1, price: ch.amount })), total, method: finalMethod, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, cashBs: resolvedCashBs, customer: { name: name.trim() || "Consumidor Final" } }); setPending(true);
+    if (method === "mixed" && remaining > 0.01) return; if (method === "credit" && !name.trim()) return; if (!isValidRef) return;
+    setReceipt({ ts: Date.now(), rate, consoleName: consoleObj.name, minutes: 0, timeAmount: 0, items: consoleObj.charges.map((ch) => ({ name: ch.label, qty: 1, price: ch.amount })), total, method: finalMethod, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, cashBs: 0, customer: { name: name.trim() || "Consumidor Final" } }); setPending(true);
   };
 
-  const handleReceiptClose = () => {
-    setReceipt(null);
-    if (pending) { payExtras(consoleObj.id, { method: finalMethod, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, cashBs: resolvedCashBs, total, customer: name.trim() || undefined }); setPending(false); onClose(); toast.success("Adicionales cobrados."); }
-  };
+  const handleReceiptClose = () => { setReceipt(null); if (pending) { payExtras(consoleObj.id, { method: finalMethod, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, mobileBank: needsRef ? mobileBank : undefined, mobileRef: needsRef ? mobileRef : undefined, total, customer: name.trim() || undefined }); setPending(false); onClose(); toast.success("Adicionales cobrados."); } };
 
   return (
     <>
@@ -568,21 +347,19 @@ function PayExtrasDialog({ open, onClose, consoleObj }: PayExtrasProps) {
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle className="font-display">Cobrar Adicional</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <Card className="p-3 bg-secondary/40">
-              <div className="flex justify-between font-display text-lg"><span>TOTAL</span><span>{fmtUsd(total)}</span></div>
-            </Card>
+            <Card className="p-3 bg-secondary/40"><div className="flex justify-between font-display text-lg"><span>TOTAL</span><span>{fmtUsd(total)}</span></div></Card>
             <div><Label className="text-xs">Cliente</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
             <div className="grid grid-cols-3 gap-2"> <Button variant={method === "full" ? "default" : "outline"} onClick={() => setMethod("full")}>Completo</Button> <Button variant={method === "mixed" ? "default" : "outline"} onClick={() => setMethod("mixed")}>Mixto</Button> <Button variant={method === "credit" ? "default" : "outline"} onClick={() => setMethod("credit")}>Fiado</Button> </div>
             {method === "full" && (
-              <div className="grid grid-cols-3 gap-2"><Button size="sm" variant={fullPayMode === "cash" ? "default" : "outline"} onClick={() => setFullPayMode("cash")}>Efectivo $</Button><Button size="sm" variant={fullPayMode === "mobile" ? "default" : "outline"} onClick={() => setFullPayMode("mobile")}>Pago Móvil</Button><Button size="sm" variant={fullPayMode === "cash_bs" ? "default" : "outline"} onClick={() => setFullPayMode("cash_bs")}>Efectivo Bs</Button></div>
+              <>
+                <div className="grid grid-cols-3 gap-2"><Button size="sm" variant={fullPayMode === "cash" ? "default" : "outline"} onClick={() => setFullPayMode("cash")}>Efectivo $</Button><Button size="sm" variant={fullPayMode === "mobile" ? "default" : "outline"} onClick={() => setFullPayMode("mobile")}>Pago Móvil</Button><Button size="sm" variant={fullPayMode === "cash_bs" ? "default" : "outline"} onClick={() => setFullPayMode("cash_bs")}>Efectivo Bs</Button></div>
+                {fullPayMode === "mobile" && (<div className="grid grid-cols-2 gap-2 mt-2 p-3 bg-primary/10 rounded-md border border-primary/20"><div><Label className="text-[10px] uppercase font-bold text-primary tracking-wider">Banco *</Label><select className="w-full h-9 rounded-md border border-input bg-background px-2 text-xs focus:ring-1 focus:ring-primary" value={mobileBank} onChange={(e) => setMobileBank(e.target.value)}><option value="">Seleccione...</option><option value="Banesco">Banesco</option><option value="Mercantil">Mercantil</option><option value="Venezuela">Venezuela</option><option value="Provincial">Provincial</option><option value="BNC">BNC</option><option value="Bancamiga">Bancamiga</option><option value="Tesoro">Tesoro</option><option value="Otro">Otro</option></select></div><div><Label className="text-[10px] uppercase font-bold text-primary tracking-wider">Referencia *</Label><Input type="text" maxLength={8} value={mobileRef} onChange={(e) => setMobileRef(e.target.value.replace(/\D/g, ''))} className="h-9 text-xs font-display tracking-widest bg-background" placeholder="Ej: 1234" /></div></div>)}
+              </>
             )}
-            {method === "mixed" && (
-              <div className="space-y-2">
-                <MixedPaymentInputs total={total} cashUsd={cashUsd} mobileBs={mobileBs} cashBs={cashBs} setCashUsd={setCashUsd} setMobileBs={setMobileBs} setCashBs={setCashBs} />
-              </div>
-            )}
+            {method === "mixed" && (<MixedPaymentInputs total={total} cashUsd={cashUsd} mobileBs={mobileBs} cashBs={cashBs} mobileBank={mobileBank} mobileRef={mobileRef} setCashUsd={setCashUsd} setMobileBs={setMobileBs} setCashBs={setCashBs} setMobileBank={setMobileBank} setMobileRef={setMobileRef} />)}
+            {!isValidRef && <p className="text-xs text-destructive animate-pulse text-center font-bold mt-2">⚠️ REQUERIDO: Selecciona el Banco y escribe la Referencia</p>}
           </div>
-          <DialogFooter> <Button variant="outline" onClick={onClose}>Cancelar</Button> <Button onClick={submit} disabled={(method === "mixed" && remaining > 0.01)} className="bg-gradient-to-r from-primary to-accent"><Receipt className="h-4 w-4 mr-1" />Confirmar</Button> </DialogFooter>
+          <DialogFooter><Button onClick={submit} disabled={(method === "mixed" && remaining > 0.01) || !isValidRef} className="bg-gradient-to-r from-primary to-accent"><Receipt className="h-4 w-4 mr-1" />Confirmar</Button></DialogFooter>
         </DialogContent>
       </Dialog>
       <ReceiptDialog open={!!receipt} onClose={handleReceiptClose} data={receipt} />
@@ -590,14 +367,13 @@ function PayExtrasDialog({ open, onClose, consoleObj }: PayExtrasProps) {
   );
 }
 
-interface ConsoleCardProps { consoleObj: ConsoleState; suggested: boolean; }
-export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
+export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleState; suggested: boolean; }) {
   const rate = useStore((s) => s.rate); const soundOn = useStore((s) => s.soundOn); const startSession = useStore((s) => s.startSession); const extendSession = useStore((s) => s.extendSession); const markAlerted = useStore((s) => s.markAlerted); const markPreAlerted = useStore((s) => s.markPreAlerted); const pauseSession = useStore((s) => s.pauseSession); const resumeSession = useStore((s) => s.resumeSession); const cancelSession = useStore((s) => (s as any).cancelSession); 
   const addExtraController = useStore((s) => (s as any).addExtraController); 
   const now = useNow();
 
   const [snackOpen, setSnackOpen] = useState(false); const [comboOpen, setComboOpen] = useState(false); const [checkoutOpen, setCheckoutOpen] = useState(false); const [prepayOpen, setPrepayOpen] = useState(false); const [extendOpen, setExtendOpen] = useState<null | number>(null); 
-  const [transferOpen, setTransferOpen] = useState(false); // 👈 ESTADO PARA ABRIR MENÚ DE TRANSFERENCIA
+  const [transferOpen, setTransferOpen] = useState(false); 
   
   const releaseConsole = useStore((s) => s.releaseConsole);
 
@@ -621,7 +397,7 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-2">
             {isPS5 ? <Sparkles className="h-5 w-5 text-gold" /> : <Gamepad2 className="h-5 w-5 text-primary" />}
-            <div><h3 className={`font-display text-lg leading-tight ${isPS5 ? "text-gold" : ""}`}>{consoleObj.name}</h3><p className="text-xs text-muted-foreground">{fmtUsd(consoleObj.ratePerHour)}/h · {Math.round(consoleObj.totalMinutes / 60)}h</p></div>
+            <div><h3 className={`font-display text-lg leading-tight ${isPS5 ? "text-gold" : ""}`}>{consoleObj.name}</h3><p className="text-xs text-muted-foreground">{fmtUsd(consoleObj.ratePerHour)}/h</p></div>
           </div>
           <div className="flex flex-col items-end gap-1"><Badge className={`${statusDot} text-foreground`}>{statusText}</Badge>{suggested && <Badge variant="outline" className="border-gold text-gold"><Star className="h-3 w-3 mr-1 fill-current" /> Sugerida</Badge>}</div>
         </div>
@@ -649,24 +425,19 @@ export function ConsoleCard({ consoleObj, suggested }: ConsoleCardProps) {
               {isPrepaid ? ( <><Button size="sm" variant="secondary" onClick={() => setExtendOpen(15)}>+15 min (cobrar)</Button><Button size="sm" variant="secondary" onClick={() => setExtendOpen(30)}>+30 min (cobrar)</Button></> ) : ( <><Button size="sm" variant="secondary" onClick={() => extendSession(consoleObj.id, 15)}>+15 min</Button><Button size="sm" variant="secondary" onClick={() => extendSession(consoleObj.id, 30)}>+30 min</Button></> )}
             </div>
             
-            {/* 👈 AQUÍ INCLUIMOS EL BOTÓN PARA "MOVER" */}
             <div className="grid grid-cols-3 gap-2">
               <Button size="sm" variant="outline" onClick={() => setSnackOpen(true)}><ShoppingBag className="h-4 w-4 mr-1" />Snack</Button>
               <Button size="sm" variant="outline" onClick={() => setComboOpen(true)}><Package className="h-4 w-4 mr-1" />Combo</Button>
-              <Button size="sm" variant="outline" className="border-primary/30 text-primary hover:bg-primary/10 px-1" onClick={() => {
-                if (confirm(`¿Añadir 1 Control Adicional por $1.00 a ${consoleObj.name}?`)) { addExtraController(consoleObj.id); toast.success("Control añadido al recibo"); }
-              }}><Gamepad2 className="h-4 w-4 mr-1" />Ctrl +$1</Button>
+              <Button size="sm" variant="outline" className="border-primary/30 text-primary hover:bg-primary/10 px-1" onClick={() => { if (confirm(`¿Añadir 1 Control Adicional por $1 a ${consoleObj.name}?`)) { addExtraController(consoleObj.id); toast.success("Control añadido"); } }}><Gamepad2 className="h-4 w-4 mr-1" />Ctrl +$1</Button>
               
               <Button size="sm" variant="outline" onClick={() => setTransferOpen(true)} className="border-white/20 hover:bg-white/10"><ArrowRightLeft className="h-4 w-4 mr-1" />Mover</Button>
-              
-              {paused ? ( <Button size="sm" variant="default" className="col-span-2 bg-warning text-foreground hover:bg-warning/90" onClick={() => resumeSession(consoleObj.id)}><Play className="h-4 w-4 mr-1" />Reanudar</Button> ) : ( <Button size="sm" variant="outline" className="col-span-2" onClick={() => pauseSession(consoleObj.id)}><Pause className="h-4 w-4 mr-1" />Pausar Tiempo</Button> )}
+              {paused ? ( <Button size="sm" variant="default" className="col-span-2 bg-warning text-foreground hover:bg-warning/90" onClick={() => resumeSession(consoleObj.id)}><Play className="h-4 w-4 mr-1" />Reanudar</Button> ) : ( <Button size="sm" variant="outline" className="col-span-2" onClick={() => pauseSession(consoleObj.id)}><Pause className="h-4 w-4 mr-1" />Pausar</Button> )}
             </div>
 
-            {consoleObj.charges.length > 0 && ( <div className="text-xs text-muted-foreground space-y-0.5 max-h-16 overflow-auto">{consoleObj.charges.map((c, i) => ( <div key={i} className="flex justify-between"><span>{c.label}</span><span>{fmtUsd(c.amount)}</span></div> ))}</div> )}
             {isPrepaid && pendingExtras > 0.001 && ( <Button className="w-full" variant="default" onClick={() => setPayExtrasOpen(true)}><Coins className="h-4 w-4 mr-2" /> Cobrar Adicional {fmtUsd(pendingExtras)}</Button> )}
             <div className="flex gap-2">
               {isPrepaid ? ( <Button className="flex-1" variant="secondary" onClick={tryRelease} disabled={pendingExtras > 0.001}><Coins className="h-4 w-4 mr-2" /> Liberar</Button> ) : ( <Button className="flex-1 glow-primary" onClick={() => setCheckoutOpen(true)}><Coins className="h-4 w-4 mr-2" /> Cobrar {fmtUsd(total)}</Button> )}
-              <Button variant="outline" className="px-3 border-red-500/40 text-red-400 hover:bg-red-500/15" onClick={() => { if (confirm(`⚠️ ¿CANCELAR sesión de ${consoleObj.name} sin cobrar?`)) cancelSession(consoleObj.id); }}><Trash2 className="h-4 w-4" /></Button>
+              <Button variant="outline" className="px-3 border-red-500/40 text-red-400 hover:bg-red-500/15" onClick={() => { if (confirm(`⚠️ ¿CANCELAR sesión sin cobrar?`)) cancelSession(consoleObj.id); }}><Trash2 className="h-4 w-4" /></Button>
             </div>
           </div>
         )}
