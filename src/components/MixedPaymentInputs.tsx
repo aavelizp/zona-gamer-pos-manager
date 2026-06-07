@@ -7,13 +7,27 @@ interface Props {
   total: number;
   cashUsd: string;
   mobileBs: string;
-  cashBs: string; // 👈 NUEVA VARIABLE
+  cashBs: string;
+  
+  // 👈 NUEVAS PROPIEDADES PARA AUDITORÍA
+  mobileBank: string;
+  mobileRef: string;
+  
   setCashUsd: (v: string) => void;
   setMobileBs: (v: string) => void;
-  setCashBs: (v: string) => void; // 👈 NUEVA FUNCIÓN
+  setCashBs: (v: string) => void;
+  
+  setMobileBank: (v: string) => void;
+  setMobileRef: (v: string) => void;
 }
 
-export function MixedPaymentInputs({ total, cashUsd, mobileBs, cashBs, setCashUsd, setMobileBs, setCashBs }: Props) {
+export function MixedPaymentInputs({ 
+  total, cashUsd, mobileBs, cashBs, 
+  mobileBank, mobileRef, 
+  setCashUsd, setMobileBs, setCashBs, 
+  setMobileBank, setMobileRef 
+}: Props) {
+  
   const rate = useStore((s) => s.rate);
   const cashUsdN = parseFloat(cashUsd) || 0;
   const mobileBsN = parseFloat(mobileBs) || 0;
@@ -22,7 +36,6 @@ export function MixedPaymentInputs({ total, cashUsd, mobileBs, cashBs, setCashUs
   const mobileUsd = rate > 0 ? mobileBsN / rate : 0;
   const cashBsUsd = rate > 0 ? cashBsN / rate : 0;
 
-  // Diferencia restante en USD luego de aplicar lo ingresado en $ y Efectivo Bs
   const totalPaid = cashUsdN + mobileUsd + cashBsUsd;
   const remainingAfterCash = Math.max(0, total - (cashUsdN + cashBsUsd));
   const remainingAfterCashBsFormatted = remainingAfterCash * rate;
@@ -41,7 +54,6 @@ export function MixedPaymentInputs({ total, cashUsd, mobileBs, cashBs, setCashUs
         </div>
       </Card>
 
-      {/* 👈 TRES COLUMNAS PARA LOS 3 MÉTODOS SIMULTÁNEOS */}
       <div className="grid grid-cols-3 gap-2">
         <div>
           <Label className="text-[10px] uppercase font-semibold text-muted-foreground">Efectivo $</Label>
@@ -56,6 +68,41 @@ export function MixedPaymentInputs({ total, cashUsd, mobileBs, cashBs, setCashUs
           <Input type="number" step="1" inputMode="decimal" value={mobileBs} onChange={(e) => setMobileBs(e.target.value)} placeholder={remainingAfterCashBsFormatted > 0 ? remainingAfterCashBsFormatted.toFixed(2) : "0.00"} />
         </div>
       </div>
+
+      {/* 👈 NUEVA CAJA DE AUDITORÍA (APARECE SOLO SI HAY PAGO MÓVIL) */}
+      {mobileBsN > 0 && (
+        <div className="grid grid-cols-2 gap-2 mt-2 p-3 bg-primary/10 rounded-md border border-primary/20">
+            <div>
+                <Label className="text-[10px] uppercase font-bold text-primary tracking-wider">Banco Emisor *</Label>
+                <select 
+                  className="w-full h-9 rounded-md border border-input bg-background px-2 text-xs focus:ring-1 focus:ring-primary" 
+                  value={mobileBank} 
+                  onChange={(e) => setMobileBank(e.target.value)}
+                >
+                    <option value="">Seleccione...</option>
+                    <option value="Banesco">Banesco</option>
+                    <option value="Mercantil">Mercantil</option>
+                    <option value="Venezuela">Venezuela</option>
+                    <option value="Provincial">Provincial</option>
+                    <option value="BNC">BNC</option>
+                    <option value="Bancamiga">Bancamiga</option>
+                    <option value="Tesoro">Tesoro</option>
+                    <option value="Otro">Otro</option>
+                </select>
+            </div>
+            <div>
+                <Label className="text-[10px] uppercase font-bold text-primary tracking-wider">Referencia (Últ. 4/6) *</Label>
+                <Input 
+                  type="text" 
+                  maxLength={8} 
+                  value={mobileRef} 
+                  onChange={(e) => setMobileRef(e.target.value.replace(/\D/g, ''))} // Bloquea letras, solo números
+                  className="h-9 text-xs font-display tracking-widest bg-background" 
+                  placeholder="Ej: 1234" 
+                />
+            </div>
+        </div>
+      )}
 
       <div className={`rounded-md p-3 border-2 ${remaining <= 0.01 ? "border-success bg-success/10" : "border-accent bg-accent/10"}`}>
         <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Diferencia Restante (a cobrar)</div>
@@ -78,11 +125,16 @@ export function MixedPaymentInputs({ total, cashUsd, mobileBs, cashBs, setCashUs
   );
 }
 
-export function isMixedCovered(total: number, cashUsd: string, mobileBs: string, cashBs: string, rate: number) {
+// 👈 ACTUALIZAMOS EL SUPERVISOR PARA QUE NO DEJE PASAR PAGOS SIN REFERENCIA
+export function isMixedCovered(total: number, cashUsd: string, mobileBs: string, cashBs: string, rate: number, mobileBank: string, mobileRef: string) {
   const cashUsdN = parseFloat(cashUsd) || 0;
   const mobileBsN = parseFloat(mobileBs) || 0;
   const cashBsN = parseFloat(cashBs) || 0;
   const mobileUsd = rate > 0 ? mobileBsN / rate : 0;
   const cashBsUsd = rate > 0 ? cashBsN / rate : 0;
+  
+  // Si introdujo Pago Móvil, pero no puso el banco o la referencia, bloquéalo (Retorna falso).
+  if (mobileBsN > 0 && (!mobileBank || mobileRef.length < 4)) return false;
+  
   return cashUsdN + mobileUsd + cashBsUsd + 0.01 >= total;
 }

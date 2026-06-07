@@ -76,6 +76,11 @@ export interface SaleRecord {
   cashUsd: number;
   mobileBs: number;
   cashBs?: number;
+  
+  // 👈 NUEVAS COLUMNAS DE AUDITORÍA BANCARIA
+  mobileBank?: string;
+  mobileRef?: string;
+
   rate: number;
   method: PaymentMethod;
   customer?: string;
@@ -186,24 +191,23 @@ interface State {
 
   addSnackToConsole: (consoleId: string, productId: string, qty: number) => void;
   applyComboToConsole: (consoleId: string, comboId: string) => void;
-  
   addExtraController: (consoleId: string) => void;
   transferSession: (originId: string, destId: string) => void;
 
+  // 👈 SE ACTUALIZAN TODOS LOS PAGOS PARA RECIBIR BANCO Y REF
   finalizeConsole: (
     consoleId: string,
-    payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; cashBs?: number; customer?: string; total: number; timeAmount: number; extrasAmount: number; minutes: number; customerInfo?: CustomerInfo }
+    payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; cashBs?: number; customer?: string; total: number; timeAmount: number; extrasAmount: number; minutes: number; customerInfo?: CustomerInfo }
   ) => void;
 
-  // 👈 NUEVA FUNCIÓN PARA COBRAR VARIAS CONSOLAS JUNTAS
   finalizeMultipleConsoles: (
     consoleIds: string[],
-    payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; cashBs?: number; customer?: string; total: number; timeAmount: number; extrasAmount: number; totalMinutes: number; customerInfo?: CustomerInfo; items: { name: string; qty: number; price: number }[] }
+    payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; cashBs?: number; customer?: string; total: number; timeAmount: number; extrasAmount: number; totalMinutes: number; customerInfo?: CustomerInfo; items: { name: string; qty: number; price: number }[] }
   ) => void;
 
-  directSale: (payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; cashBs?: number; total: number; customer?: string; items: { productId: string; qty: number; price: number; name: string }[] }) => void;
+  directSale: (payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; cashBs?: number; total: number; customer?: string; items: { productId: string; qty: number; price: number; name: string }[] }) => void;
 
-  payCredit: (creditId: string, payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; amount: number }) => void;
+  payCredit: (creditId: string, payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; amount: number }) => void;
 
   enqueue: (e: Omit<QueueEntry, "id" | "ts">) => void;
   dequeue: (id: string) => void;
@@ -218,10 +222,10 @@ interface State {
 
   registerMaintenance: (consoleId: string, description: string, date: number) => void;
 
-  prepaySession: (consoleId: string, minutes: number, payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; cashBs?: number; total: number; customerInfo?: CustomerInfo; comboId?: string }) => void;
+  prepaySession: (consoleId: string, minutes: number, payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; cashBs?: number; total: number; customerInfo?: CustomerInfo; comboId?: string }) => void;
   releaseConsole: (consoleId: string) => boolean;
-  payExtras: (consoleId: string, payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; total: number; customer?: string }) => void;
-  extendPaidSession: (consoleId: string, addMinutes: number, payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; total: number; customer?: string }) => void;
+  payExtras: (consoleId: string, payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; total: number; customer?: string }) => void;
+  extendPaidSession: (consoleId: string, addMinutes: number, payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; total: number; customer?: string }) => void;
 
   addExpense: (e: { description: string; amount: number; method: "cash" | "mobile"; amountBs?: number; category?: ExpenseCategory; ts?: number }) => void;
   setConsoleRate: (type: ConsoleType, ratePerHour: number) => void;
@@ -378,7 +382,7 @@ export const useStore = create<State>()(
         set((s) => {
           const c = s.consoles.find((x) => x.id === consoleId);
           if (!c) return s;
-          const sale: SaleRecord = { id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, minutes: payload.minutes, timeAmount: payload.timeAmount, extrasAmount: payload.extrasAmount, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, cashBs: payload.cashBs || 0, rate: s.rate, method: payload.method, customer: payload.customerInfo?.name || payload.customer, concept: "Consola", items: [ ...(payload.timeAmount > 0 ? [{ name: `Tiempo ${c.name} (${payload.minutes} min)`, qty: 1, price: payload.timeAmount }] : []), ...c.charges.map((ch) => ({ name: ch.label, qty: 1, price: ch.amount })) ] };
+          const sale: SaleRecord = { id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, minutes: payload.minutes, timeAmount: payload.timeAmount, extrasAmount: payload.extrasAmount, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, cashBs: payload.cashBs || 0, rate: s.rate, method: payload.method, customer: payload.customerInfo?.name || payload.customer, concept: "Consola", items: [ ...(payload.timeAmount > 0 ? [{ name: `Tiempo ${c.name} (${payload.minutes} min)`, qty: 1, price: payload.timeAmount }] : []), ...c.charges.map((ch) => ({ name: ch.label, qty: 1, price: ch.amount })) ] };
           const newCredits = payload.method === "credit" ? [ ...s.credits, { id: uid(), customer: payload.customerInfo?.name || payload.customer || "Sin nombre", amount: payload.total, createdAt: Date.now(), note: c.name } ] : s.credits;
 
           let newMembers = s.members;
@@ -400,7 +404,6 @@ export const useStore = create<State>()(
           return { consoles: s.consoles.map((x) => x.id === consoleId ? { ...x, session: undefined, charges: [], totalMinutes: x.totalMinutes + payload.minutes, maintenanceMinutes: (x.maintenanceMinutes || 0) + payload.minutes } : x ), sales: payload.method === "credit" ? s.sales : [...s.sales, sale], credits: newCredits, members: newMembers, sessionHistory: [histEntry, ...s.sessionHistory] };
         }),
 
-      // 👈 LA MAGIA DE UNIR CUENTAS (COBRO MÚLTIPLE)
       finalizeMultipleConsoles: (consoleIds, payload) =>
         set((s) => {
           const involved = s.consoles.filter((c) => consoleIds.includes(c.id));
@@ -416,6 +419,8 @@ export const useStore = create<State>()(
             total: payload.total,
             cashUsd: payload.cashUsd,
             mobileBs: payload.mobileBs,
+            mobileBank: payload.mobileBank,
+            mobileRef: payload.mobileRef,
             cashBs: payload.cashBs || 0,
             rate: s.rate,
             method: payload.method,
@@ -469,7 +474,7 @@ export const useStore = create<State>()(
         set((s) => {
           let newProducts = s.products;
           for (const it of payload.items) { newProducts = newProducts.map((p) => p.id === it.productId ? { ...p, stock: p.stock - it.qty } : p ); }
-          const sale: SaleRecord = { id: uid(), ts: Date.now(), timeAmount: 0, extrasAmount: payload.total, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, cashBs: payload.cashBs || 0, rate: s.rate, method: payload.method, customer: payload.customer, concept: "Venta Directa", items: payload.items.map((it) => ({ name: it.name, qty: it.qty, price: it.price })) };
+          const sale: SaleRecord = { id: uid(), ts: Date.now(), timeAmount: 0, extrasAmount: payload.total, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, cashBs: payload.cashBs || 0, rate: s.rate, method: payload.method, customer: payload.customer, concept: "Venta Directa", items: payload.items.map((it) => ({ name: it.name, qty: it.qty, price: it.price })) };
           const newCredits = payload.method === "credit" ? [ ...s.credits, { id: uid(), customer: payload.customer || "Sin nombre", amount: payload.total, createdAt: Date.now(), note: "Venta Directa" } ] : s.credits;
           return { products: newProducts, sales: [...s.sales, sale], credits: newCredits };
         }),
@@ -478,7 +483,7 @@ export const useStore = create<State>()(
         set((s) => {
           const credit = s.credits.find((c) => c.id === creditId);
           if (!credit) return s;
-          const sale: SaleRecord = { id: uid(), ts: Date.now(), timeAmount: 0, extrasAmount: payload.amount, total: payload.amount, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, rate: s.rate, method: payload.method, customer: credit.customer, concept: "Deuda Cobrada", items: [{ name: `Deuda de ${credit.customer}`, qty: 1, price: payload.amount }] };
+          const sale: SaleRecord = { id: uid(), ts: Date.now(), timeAmount: 0, extrasAmount: payload.amount, total: payload.amount, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, rate: s.rate, method: payload.method, customer: credit.customer, concept: "Deuda Cobrada", items: [{ name: `Deuda de ${credit.customer}`, qty: 1, price: payload.amount }] };
           const remaining = credit.amount - payload.amount;
           return { sales: [...s.sales, sale], credits: remaining > 0.001 ? s.credits.map((c) => (c.id === creditId ? { ...c, amount: remaining } : c)) : s.credits.filter((c) => c.id !== creditId) };
         }),
@@ -509,7 +514,7 @@ export const useStore = create<State>()(
           } else {
             items.push({ name: `Prepago ${c.name} (${minutes} min)`, qty: 1, price: payload.total });
           }
-          const sale: SaleRecord = { id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, minutes, timeAmount: payload.total, extrasAmount: 0, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, cashBs: payload.cashBs || 0, rate: s.rate, method: payload.method, customer: payload.customerInfo?.name, concept: "Consola", items };
+          const sale: SaleRecord = { id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, minutes, timeAmount: payload.total, extrasAmount: 0, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, cashBs: payload.cashBs || 0, rate: s.rate, method: payload.method, customer: payload.customerInfo?.name, concept: "Consola", items };
           let newMembers = s.members;
           const ci = payload.customerInfo;
           if (ci && ci.name?.trim() && ci.phone?.trim()) {
@@ -539,8 +544,8 @@ export const useStore = create<State>()(
         return true;
       },
 
-      payExtras: (consoleId, payload) => set((s) => { const c = s.consoles.find((x) => x.id === consoleId); if (!c || c.charges.length === 0) return s; const sale: SaleRecord = { id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, minutes: 0, timeAmount: 0, extrasAmount: payload.total, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, rate: s.rate, method: payload.method, customer: payload.customer, concept: "Adicionales", items: c.charges.map((ch) => ({ name: ch.label, qty: 1, price: ch.amount })) }; const newCredits = payload.method === "credit" ? [...s.credits, { id: uid(), customer: payload.customer || "Sin nombre", amount: payload.total, createdAt: Date.now(), note: `Adicionales ${c.name}` }] : s.credits; return { consoles: s.consoles.map((x) => x.id === consoleId ? { ...x, charges: [] } : x), sales: payload.method === "credit" ? s.sales : [...s.sales, sale], credits: newCredits }; }),
-      extendPaidSession: (consoleId, addMinutes, payload) => set((s) => { const c = s.consoles.find((x) => x.id === consoleId); if (!c || !c.session) return s; const base = c.session.endsAt && c.session.endsAt > Date.now() ? c.session.endsAt : Date.now(); const newEnds = base + addMinutes * 60_000; const sale: SaleRecord = { id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, minutes: addMinutes, timeAmount: payload.total, extrasAmount: 0, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, rate: s.rate, method: payload.method, customer: payload.customer || c.session.customerName, concept: "Consola", items: [{ name: `Extensión ${c.name} (+${addMinutes} min)`, qty: 1, price: payload.total }] }; const newCredits = payload.method === "credit" ? [...s.credits, { id: uid(), customer: payload.customer || c.session.customerName || "Sin nombre", amount: payload.total, createdAt: Date.now(), note: `Extensión ${c.name}` }] : s.credits; return { consoles: s.consoles.map((x) => x.id === consoleId ? { ...x, session: { ...x.session!, mode: "fixed", endsAt: newEnds, prepaidMinutes: (x.session!.prepaidMinutes ?? 0) + addMinutes, alerted: false, preAlerted: false } } : x ), sales: payload.method === "credit" ? s.sales : [...s.sales, sale], credits: newCredits }; }),
+      payExtras: (consoleId, payload) => set((s) => { const c = s.consoles.find((x) => x.id === consoleId); if (!c || c.charges.length === 0) return s; const sale: SaleRecord = { id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, minutes: 0, timeAmount: 0, extrasAmount: payload.total, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, rate: s.rate, method: payload.method, customer: payload.customer, concept: "Adicionales", items: c.charges.map((ch) => ({ name: ch.label, qty: 1, price: ch.amount })) }; const newCredits = payload.method === "credit" ? [...s.credits, { id: uid(), customer: payload.customer || "Sin nombre", amount: payload.total, createdAt: Date.now(), note: `Adicionales ${c.name}` }] : s.credits; return { consoles: s.consoles.map((x) => x.id === consoleId ? { ...x, charges: [] } : x), sales: payload.method === "credit" ? s.sales : [...s.sales, sale], credits: newCredits }; }),
+      extendPaidSession: (consoleId, addMinutes, payload) => set((s) => { const c = s.consoles.find((x) => x.id === consoleId); if (!c || !c.session) return s; const base = c.session.endsAt && c.session.endsAt > Date.now() ? c.session.endsAt : Date.now(); const newEnds = base + addMinutes * 60_000; const sale: SaleRecord = { id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, minutes: addMinutes, timeAmount: payload.total, extrasAmount: 0, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, rate: s.rate, method: payload.method, customer: payload.customer || c.session.customerName, concept: "Consola", items: [{ name: `Extensión ${c.name} (+${addMinutes} min)`, qty: 1, price: payload.total }] }; const newCredits = payload.method === "credit" ? [...s.credits, { id: uid(), customer: payload.customer || c.session.customerName || "Sin nombre", amount: payload.total, createdAt: Date.now(), note: `Extensión ${c.name}` }] : s.credits; return { consoles: s.consoles.map((x) => x.id === consoleId ? { ...x, session: { ...x.session!, mode: "fixed", endsAt: newEnds, prepaidMinutes: (x.session!.prepaidMinutes ?? 0) + addMinutes, alerted: false, preAlerted: false } } : x ), sales: payload.method === "credit" ? s.sales : [...s.sales, sale], credits: newCredits }; }),
       addExpense: ({ ts, ...rest }) => set((s) => ({ expenses: [ { id: uid(), ts: ts ?? Date.now(), createdAt: Date.now(), rate: s.rate, ...rest }, ...s.expenses ] })),
       setConsoleRate: (type, ratePerHour) => set((s) => ({ consoles: s.consoles.map((c) => c.type === type ? { ...c, ratePerHour: Math.max(0, ratePerHour) } : c ) })),
       
