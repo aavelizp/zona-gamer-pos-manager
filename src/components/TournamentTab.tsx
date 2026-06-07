@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { MixedPaymentInputs } from "@/components/MixedPaymentInputs";
-import { Trophy, Users, Plus, Trash2, CheckCircle2, AlertTriangle, Receipt, Swords, Undo2, RotateCcw } from "lucide-react";
+import { Trophy, Users, Plus, Trash2, CheckCircle2, AlertTriangle, Receipt, Swords, Undo2, RotateCcw, Calendar, ListOrdered } from "lucide-react";
 import { toast } from "sonner";
 
 export function TournamentTab() {
@@ -26,14 +26,26 @@ export function TournamentTab() {
   const revertTournamentToRegistering = useStore((s) => (s as any).revertTournamentToRegistering);
   const rate = useStore((s) => s.rate);
 
+  // 👈 NUEVOS ESTADOS DE CONFIGURACIÓN
   const [tName, setTName] = useState(""); const [tGame, setTGame] = useState(""); const [tMax, setTMax] = useState(16); const [tFee, setTFee] = useState(5);
+  const [tFormat, setTFormat] = useState<"single_elimination" | "league">("single_elimination");
+  const [tDates, setTDates] = useState("");
+
   const [enrollModal, setEnrollModal] = useState<{ open: boolean; tId: string | null; participantId?: string }>({ open: false, tId: null });
   const [playerName, setPlayerName] = useState(""); const [paymentType, setPaymentType] = useState<"pending" | "pay_now">("pending");
   const [method, setMethod] = useState<"full" | "mixed">("full"); const [fullPayMode, setFullPayMode] = useState<"cash" | "mobile" | "cash_bs">("cash");
   const [cashUsd, setCashUsd] = useState(""); const [mobileBs, setMobileBs] = useState(""); const [cashBs, setCashBs] = useState("");
   const [mobileBank, setMobileBank] = useState(""); const [mobileRef, setMobileRef] = useState("");
 
-  const handleCreate = () => { if (!tName || !tGame || tMax < 2) return; createTournament({ name: tName, game: tGame, maxPlayers: tMax, entryFee: tFee }); setTName(""); setTGame(""); setTMax(16); setTFee(5); toast.success("Torneo creado exitosamente"); };
+  const handleCreate = () => { 
+    if (!tName || !tGame || tMax < 2 || !tDates) {
+      toast.error("Por favor llena todos los campos, incluyendo los días del torneo.");
+      return;
+    }
+    createTournament({ name: tName, game: tGame, maxPlayers: tMax, entryFee: tFee, format: tFormat, dateRange: tDates }); 
+    setTName(""); setTGame(""); setTMax(16); setTFee(5); setTDates("");
+    toast.success("Torneo creado exitosamente"); 
+  };
 
   const activeT = enrollModal.tId ? tournaments.find(t => t.id === enrollModal.tId) : null;
   const total = activeT ? activeT.entryFee : 0;
@@ -68,16 +80,34 @@ export function TournamentTab() {
 
   if (tournaments.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-center space-y-6">
+      <div className="flex flex-col items-center justify-center py-10 text-center space-y-6">
         <Trophy className="h-24 w-24 text-muted-foreground/30" />
-        <div><h2 className="font-display text-2xl text-foreground">No hay torneos activos</h2><p className="text-muted-foreground mt-2 max-w-md mx-auto">Crea tu primer torneo para empezar a vender inscripciones y organizar los enfrentamientos de tu local.</p></div>
-        <Card className="p-6 bg-card border-primary/20 w-full max-w-md text-left shadow-[0_0_30px_rgba(158,84,255,0.1)]">
-          <h3 className="font-semibold text-lg text-primary mb-4 flex items-center gap-2"><Plus className="h-5 w-5" /> Crear Nuevo Torneo</h3>
+        <div><h2 className="font-display text-2xl text-foreground">No hay torneos activos</h2><p className="text-muted-foreground mt-2 max-w-md mx-auto">Configura tu próximo gran evento. Elige las fechas y el formato.</p></div>
+        <Card className="p-6 bg-card border-primary/20 w-full max-w-lg text-left shadow-[0_0_30px_rgba(158,84,255,0.1)]">
+          <h3 className="font-semibold text-lg text-primary mb-4 flex items-center gap-2"><Plus className="h-5 w-5" /> Configurar Nuevo Torneo</h3>
           <div className="space-y-4">
-            <div><Label className="text-xs uppercase">Nombre del Evento</Label><Input value={tName} onChange={(e)=>setTName(e.target.value)} placeholder="Ej: Torneo Relámpago FIFA 26" /></div>
-            <div><Label className="text-xs uppercase">Juego</Label><Input value={tGame} onChange={(e)=>setTGame(e.target.value)} placeholder="Ej: EA FC 26, Smash Bros..." /></div>
-            <div className="grid grid-cols-2 gap-4"><div><Label className="text-xs uppercase">Cupo (Jugadores)</Label><Input type="number" min={2} value={tMax} onChange={(e)=>setTMax(parseInt(e.target.value)||16)} /></div><div><Label className="text-xs uppercase">Inscripción ($)</Label><Input type="number" min={0} value={tFee} onChange={(e)=>setTFee(parseFloat(e.target.value)||0)} /></div></div>
-            <Button className="w-full bg-gradient-to-r from-primary to-accent" disabled={!tName || !tGame} onClick={handleCreate}>Iniciar Fase de Inscripción</Button>
+            <div className="grid grid-cols-2 gap-4">
+              <div><Label className="text-xs uppercase">Nombre del Evento</Label><Input value={tName} onChange={(e)=>setTName(e.target.value)} placeholder="Ej: Champions FIFA" /></div>
+              <div><Label className="text-xs uppercase">Juego</Label><Input value={tGame} onChange={(e)=>setTGame(e.target.value)} placeholder="Ej: EA FC 26" /></div>
+            </div>
+
+            {/* 👈 NUEVOS CONTROLES DE FECHA Y FORMATO */}
+            <div className="grid grid-cols-2 gap-4 border-y border-border py-4">
+              <div>
+                <Label className="text-xs uppercase flex items-center gap-1 text-accent"><Calendar className="h-3 w-3"/> Días del Torneo</Label>
+                <Input value={tDates} onChange={(e)=>setTDates(e.target.value)} placeholder="Ej: Viernes 10 al Domingo 12" className="mt-1" />
+              </div>
+              <div>
+                <Label className="text-xs uppercase flex items-center gap-1 text-accent"><ListOrdered className="h-3 w-3"/> Formato</Label>
+                <select className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm mt-1 focus:ring-1 focus:ring-primary" value={tFormat} onChange={(e) => setTFormat(e.target.value as any)}>
+                  <option value="single_elimination">Árbol (Eliminación Directa)</option>
+                  <option value="league">Liga / Puntos (Próximamente)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4"><div><Label className="text-xs uppercase">Cupo Límite</Label><Input type="number" min={2} value={tMax} onChange={(e)=>setTMax(parseInt(e.target.value)||16)} /></div><div><Label className="text-xs uppercase">Inscripción ($)</Label><Input type="number" min={0} value={tFee} onChange={(e)=>setTFee(parseFloat(e.target.value)||0)} /></div></div>
+            <Button className="w-full bg-gradient-to-r from-primary to-accent" disabled={!tName || !tGame || !tDates} onClick={handleCreate}>Abrir Taquilla de Inscripciones</Button>
           </div>
         </Card>
       </div>
@@ -94,7 +124,6 @@ export function TournamentTab() {
         const tMatches = matches.filter(m => m.tournamentId === t.id);
         const isRegistering = t.status === "registering";
         
-        // Agrupamos las llaves por Rondas para dibujarlas
         const rounds = Array.from(new Set(tMatches.map(m => m.round))).sort((a, b) => a - b);
 
         return (
@@ -108,11 +137,14 @@ export function TournamentTab() {
                   <div className="flex items-center gap-2 mb-1">
                     <span className="bg-primary/20 text-primary text-[10px] uppercase font-bold px-2 py-0.5 rounded tracking-widest">{t.game}</span>
                     <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded tracking-widest ${isRegistering ? 'bg-green-500/20 text-green-400' : t.status === 'completed' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-blue-500/20 text-blue-400'}`}>
-                      {isRegistering ? 'Inscripciones Abiertas' : t.status === 'active' ? 'Torneo en Curso (Llaves)' : 'Torneo Finalizado 🏆'}
+                      {isRegistering ? 'Inscripciones Abiertas' : t.status === 'active' ? 'Torneo en Curso' : 'Torneo Finalizado 🏆'}
                     </span>
                   </div>
                   <h2 className="font-display text-3xl text-white tracking-wide uppercase">{t.name}</h2>
-                  <p className="text-muted-foreground text-sm flex items-center gap-2 mt-1"><Users className="h-4 w-4" /> Modalidad: 1 vs 1 (Eliminación Directa)</p>
+                  <p className="text-muted-foreground text-sm flex items-center gap-4 mt-1">
+                    <span className="flex items-center gap-1"><Calendar className="h-4 w-4" /> {t.dateRange}</span>
+                    <span className="flex items-center gap-1"><Swords className="h-4 w-4" /> {t.format === 'league' ? "Formato Liga" : "Eliminación Directa"}</span>
+                  </p>
                 </div>
                 
                 <div className="text-right">
@@ -133,7 +165,10 @@ export function TournamentTab() {
                 {isRegistering ? (
                   <>
                     <Button className="bg-white text-black hover:bg-zinc-200 font-display" disabled={isFull} onClick={() => { setPlayerName(""); setPaymentType("pending"); setEnrollModal({ open: true, tId: t.id }); }}><Plus className="h-4 w-4 mr-2" /> Inscribir Jugador</Button>
-                    <Button variant="default" className="bg-blue-600 hover:bg-blue-700 text-white font-display" disabled={tParts.length < 2} onClick={() => { if(confirm("¿Cerrar inscripciones y generar las llaves de enfrentamiento?")) generateBracket(t.id); }}><Swords className="h-4 w-4 mr-2" /> ¡GENERAR LLAVES (BRACKET)!</Button>
+                    <Button variant="default" className="bg-blue-600 hover:bg-blue-700 text-white font-display" disabled={tParts.length < 2} onClick={() => { 
+                      if(t.format === 'league') { toast.info("El formato de Liga está en desarrollo. Configura uno de Eliminación Directa."); return; }
+                      if(confirm("¿Cerrar inscripciones y generar las llaves de enfrentamiento?")) generateBracket(t.id); 
+                    }}><Swords className="h-4 w-4 mr-2" /> ¡GENERAR LLAVES (BRACKET)!</Button>
                   </>
                 ) : (
                   <Button variant="outline" className="border-yellow-500/30 text-yellow-500 hover:bg-yellow-500/10" onClick={() => { if(confirm("⚠️ ¿Destruir todo el torneo y devolverlo a fase de inscripción? (Se borrarán los avances de las llaves)")) revertTournamentToRegistering(t.id); }}><RotateCcw className="h-4 w-4 mr-2" /> Reversar a Inscripciones</Button>
@@ -156,8 +191,8 @@ export function TournamentTab() {
               </div>
             )}
 
-            {/* 👈 FASE 2: MOTOR DE LLAVES (BRACKETS) VISUAL */}
-            {!isRegistering && (
+            {/* FASE 2: MOTOR DE LLAVES (BRACKETS) VISUAL */}
+            {!isRegistering && t.format === 'single_elimination' && (
               <div className="mt-8 overflow-x-auto pb-6">
                 <div className="flex gap-8 min-w-max px-4">
                   {rounds.map(r => {
@@ -169,26 +204,19 @@ export function TournamentTab() {
                         {roundMatches.map(m => {
                           const p1 = tParts.find(p => p.id === m.player1Id);
                           const p2 = tParts.find(p => p.id === m.player2Id);
-                          // Si hay jugador 1 pero no hay 2, es un BYE (avanza directo)
                           const isBye = m.player1Id && !m.player2Id;
                           
                           return (
                             <Card key={m.id} className={`flex flex-col overflow-hidden border-2 transition-all ${m.winnerId ? 'border-primary/50 bg-primary/5' : 'border-border bg-card shadow-lg'}`}>
-                              {/* Jugador 1 */}
                               <button disabled={!!m.winnerId || isBye || !p1 || !p2} onClick={() => { if(confirm(`¿Declarar GANADOR a ${p1?.memberName}?`)) setMatchWinner(m.id, p1?.id); }} className={`p-3 text-left transition-colors flex justify-between items-center ${m.winnerId === m.player1Id ? 'bg-primary/20 font-bold text-primary' : m.winnerId ? 'opacity-30 line-through' : 'hover:bg-muted/50 font-semibold'}`}>
                                 <span>{p1 ? p1.memberName : "TBD (Por Definir)"}</span>
                                 {m.winnerId === m.player1Id && <Trophy className="h-4 w-4 text-primary" />}
                               </button>
-                              
                               <div className="bg-border h-[1px] w-full" />
-                              
-                              {/* Jugador 2 o BYE */}
                               <button disabled={!!m.winnerId || isBye || !p1 || !p2} onClick={() => { if(confirm(`¿Declarar GANADOR a ${p2?.memberName}?`)) setMatchWinner(m.id, p2?.id); }} className={`p-3 text-left transition-colors flex justify-between items-center ${m.winnerId === m.player2Id ? 'bg-primary/20 font-bold text-primary' : m.winnerId ? 'opacity-30 line-through' : 'hover:bg-muted/50 font-semibold'}`}>
                                 <span>{isBye ? <span className="text-muted-foreground italic text-xs">Avanza Directo (BYE)</span> : p2 ? p2.memberName : "TBD (Por Definir)"}</span>
                                 {m.winnerId === m.player2Id && <Trophy className="h-4 w-4 text-primary" />}
                               </button>
-
-                              {/* Botón de Reverso si hubo error de ganador */}
                               {m.winnerId && !isBye && (
                                 <button onClick={() => { if(confirm("¿Deshacer resultado de esta partida?")) revertMatchWinner(m.id); }} className="bg-red-500/10 hover:bg-red-500/20 text-red-400 py-1.5 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition-colors">
                                   <Undo2 className="h-3 w-3" /> Reversar Resultado
@@ -208,7 +236,6 @@ export function TournamentTab() {
         );
       })}
 
-      {/* Modal de Inscripción / Cobro (Igual que antes) */}
       <Dialog open={enrollModal.open} onOpenChange={(o) => { if (!o) setEnrollModal({ open: false, tId: null }); }}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle className="font-display">{enrollModal.participantId ? "Cobrar Inscripción" : "Inscribir al Torneo"}</DialogTitle></DialogHeader>
