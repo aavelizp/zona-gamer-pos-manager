@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useStore, fmtUsd, fmtBs, type Tournament, type TournamentParticipant, type TournamentMatch } from "@/lib/store";
+import { useState, useMemo, useRef, useEffect } from "react";
+import { useStore, fmtUsd, fmtBs, type Tournament, type TournamentParticipant, type TournamentMatch, type Member } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -7,8 +7,23 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { MixedPaymentInputs } from "@/components/MixedPaymentInputs";
-import { Trophy, Users, Plus, Trash2, CheckCircle2, AlertTriangle, Receipt, Swords, Undo2, RotateCcw, Calendar, ListOrdered, Percent } from "lucide-react";
+import { Trophy, Users, Plus, Trash2, CheckCircle2, AlertTriangle, Receipt, Swords, Undo2, RotateCcw, Calendar, ListOrdered, Percent, Search, X } from "lucide-react";
 import { toast } from "sonner";
+
+// 👈 BUSCADOR DE CLIENTES INCORPORADO
+function CustomerSearch({ name, idDoc, phone, setName, setIdDoc, setPhone }: any) {
+  const members = useStore((s) => s.members); const [query, setQuery] = useState(""); const [open, setOpen] = useState(false); const [creating, setCreating] = useState(false); const [selected, setSelected] = useState<Member | null>(null); const wrapRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { const onClick = (e: MouseEvent) => { if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false); }; document.addEventListener("mousedown", onClick); return () => document.removeEventListener("mousedown", onClick); }, []);
+  const results = useMemo(() => { const q = query.trim().toLowerCase(); if (!q) return members.slice(0, 8); return members.filter((m) => m.name.toLowerCase().includes(q) || (m.phone || "").includes(q) || (m.idDoc || "").toLowerCase().includes(q)).slice(0, 8); }, [members, query]);
+  const pick = (m: Member) => { setSelected(m); setName(m.name); setIdDoc(m.idDoc || ""); setPhone(m.phone || ""); setQuery(m.name); setOpen(false); setCreating(false); }; const clear = () => { setSelected(null); setName(""); setIdDoc(""); setPhone(""); setQuery(""); setCreating(false); };
+  return (
+    <div className="space-y-2 border border-border rounded-md p-3 bg-background/40">
+      <div className="flex items-center justify-between"><p className="text-xs uppercase tracking-wider text-accent font-semibold">Jugador a Inscribir</p>{(selected || creating || name) && (<Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={clear}><X className="h-3 w-3 mr-1" />Limpiar</Button>)}</div>
+      {!creating && ( <div ref={wrapRef} className="relative"> <div className="flex gap-1"><div className="relative flex-1"><Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" /><Input value={query} onChange={(e) => { setQuery(e.target.value); setOpen(true); if (selected) setSelected(null); }} onFocus={() => setOpen(true)} placeholder="Buscar en Club Gamer..." className="pl-7" /></div><Button type="button" size="icon" variant="outline" onClick={() => { setCreating(true); setOpen(false); setSelected(null); setName(query); setIdDoc(""); setPhone(""); }}><Plus className="h-4 w-4" /></Button></div> {open && (<div className="absolute z-50 mt-1 w-full bg-popover border border-border rounded-md shadow-lg max-h-56 overflow-auto">{results.length === 0 ? (<div className="p-2 text-xs text-muted-foreground">Sin coincidencias. <button type="button" className="text-primary underline" onClick={() => { setCreating(true); setOpen(false); setName(query); }}>Inscribir nuevo jugador "{query}"</button></div>) : results.map((m) => (<button key={m.id} type="button" onClick={() => pick(m)} className="w-full text-left px-3 py-2 hover:bg-accent/30 border-b border-border/40 last:border-0"><p className="text-sm font-semibold">{m.name}</p><p className="text-[11px] text-muted-foreground">{m.phone || "sin tel"} · {Math.round(m.totalMinutes / 60)}h</p></button>))}</div>)} {selected && (<p className="text-[10px] text-success mt-1">✓ {selected.name} es miembro del Club Gamer.</p>)} </div> )}
+      {(creating || selected) && ( <div className="space-y-2"> {creating && (<div><Label className="text-xs">Nombre y Apellido / Nickname *</Label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej: ShadowNinja99" autoFocus /></div>)} <div className="grid grid-cols-2 gap-2"><div><Label className="text-xs">Cédula/RIF (Opcional)</Label><Input value={idDoc} onChange={(e) => setIdDoc(e.target.value)} placeholder="V-12345678" /></div><div><Label className="text-xs">Teléfono (Opcional)</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="04141234567" /></div></div> </div> )}
+    </div>
+  );
+}
 
 export function TournamentTab() {
   const tournaments = useStore((s) => s.tournaments || []);
@@ -29,19 +44,25 @@ export function TournamentTab() {
 
   const [tName, setTName] = useState(""); const [tGame, setTGame] = useState(""); const [tMax, setTMax] = useState(16); const [tFee, setTFee] = useState(5);
   const [tFormat, setTFormat] = useState<"single_elimination" | "league">("single_elimination");
-  const [tDates, setTDates] = useState("");
-  const [tPrizePct, setTPrizePct] = useState(70); // 👈 ESTADO PARA EL PORCENTAJE (70% por defecto)
+  
+  // 👈 NUEVOS CALENDARIOS DE FECHAS
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  
+  const [tPrizePct, setTPrizePct] = useState(70);
 
   const [enrollModal, setEnrollModal] = useState<{ open: boolean; tId: string | null; participantId?: string }>({ open: false, tId: null });
-  const [playerName, setPlayerName] = useState(""); const [paymentType, setPaymentType] = useState<"pending" | "pay_now">("pending");
+  const [name, setName] = useState(""); const [idDoc, setIdDoc] = useState(""); const [phone, setPhone] = useState("");
+  const [paymentType, setPaymentType] = useState<"pending" | "pay_now">("pending");
   const [method, setMethod] = useState<"full" | "mixed">("full"); const [fullPayMode, setFullPayMode] = useState<"cash" | "mobile" | "cash_bs">("cash");
   const [cashUsd, setCashUsd] = useState(""); const [mobileBs, setMobileBs] = useState(""); const [cashBs, setCashBs] = useState("");
   const [mobileBank, setMobileBank] = useState(""); const [mobileRef, setMobileRef] = useState("");
 
   const handleCreate = () => { 
-    if (!tName || !tGame || tMax < 2 || !tDates || tPrizePct < 1 || tPrizePct > 100) { toast.error("Revisa todos los campos. El porcentaje debe estar entre 1 y 100."); return; }
+    if (!tName || !tGame || tMax < 2 || !startDate || !endDate || tPrizePct < 1 || tPrizePct > 100) { toast.error("Revisa todos los campos de creación."); return; }
+    const tDates = startDate === endDate ? startDate : `${startDate} al ${endDate}`;
     createTournament({ name: tName, game: tGame, maxPlayers: tMax, entryFee: tFee, prizePercentage: tPrizePct, format: tFormat, dateRange: tDates }); 
-    setTName(""); setTGame(""); setTMax(16); setTFee(5); setTDates(""); setTPrizePct(70);
+    setTName(""); setTGame(""); setTMax(16); setTFee(5); setStartDate(""); setEndDate(""); setTPrizePct(70);
     toast.success("Torneo creado exitosamente"); 
   };
 
@@ -50,12 +71,10 @@ export function TournamentTab() {
   const cashUsdN = parseFloat(cashUsd) || 0; const mobileBsN = parseFloat(mobileBs) || 0; const cashBsN = parseFloat(cashBs) || 0;
   const mobileUsd = rate > 0 ? mobileBsN / rate : 0; const cashBsUsd = rate > 0 ? cashBsN / rate : 0;
   const paid = method === "full" ? total : cashUsdN + mobileUsd + cashBsUsd; const remaining = total - paid;
-  
   const resolvedCashUsd = method === "full" ? (fullPayMode === "cash" ? total : 0) : method === "mixed" ? cashUsdN : 0;
   const resolvedMobileBs = method === "full" ? (fullPayMode === "mobile" ? total * rate : 0) : method === "mixed" ? mobileBsN : 0;
   const resolvedCashBs = method === "full" ? (fullPayMode === "cash_bs" ? total * rate : 0) : method === "mixed" ? cashBsN : 0;
   const finalMethod = method === "full" && fullPayMode === "cash_bs" ? "cash_bs" : method as any;
-
   const needsRef = (method === "full" && fullPayMode === "mobile") || (method === "mixed" && mobileBsN > 0);
   const isValidRef = !needsRef || (mobileBank !== "" && mobileRef.length >= 4);
 
@@ -66,14 +85,14 @@ export function TournamentTab() {
       payEnrollment(enrollModal.participantId, { method: finalMethod, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, mobileBank: needsRef ? mobileBank : undefined, mobileRef: needsRef ? mobileRef : undefined, cashBs: resolvedCashBs, total });
       toast.success("Pago registrado.");
     } else {
-      if (!playerName.trim()) return;
+      if (!name.trim()) return;
       const isPaid = paymentType === "pay_now";
       const payload = isPaid ? { method: finalMethod, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, mobileBank: needsRef ? mobileBank : undefined, mobileRef: needsRef ? mobileRef : undefined, cashBs: resolvedCashBs, total } : undefined;
-      enrollParticipant(activeT.id, playerName.trim(), isPaid, payload);
+      enrollParticipant(activeT.id, name.trim(), isPaid, payload);
       toast.success("Jugador inscrito.");
     }
     setEnrollModal({ open: false, tId: null });
-    setPlayerName(""); setPaymentType("pending"); setCashUsd(""); setMobileBs(""); setCashBs(""); setMobileBank(""); setMobileRef("");
+    setName(""); setIdDoc(""); setPhone(""); setPaymentType("pending"); setCashUsd(""); setMobileBs(""); setCashBs(""); setMobileBank(""); setMobileRef("");
   };
 
   if (tournaments.length === 0) {
@@ -90,17 +109,19 @@ export function TournamentTab() {
             </div>
 
             <div className="grid grid-cols-2 gap-4 border-y border-border py-4">
-              <div><Label className="text-xs uppercase flex items-center gap-1 text-accent"><Calendar className="h-3 w-3"/> Días del Torneo</Label><Input value={tDates} onChange={(e)=>setTDates(e.target.value)} placeholder="Ej: Viernes al Domingo" className="mt-1" /></div>
+              <div className="grid grid-cols-2 gap-2">
+                <div><Label className="text-[10px] uppercase flex items-center gap-1 text-accent"><Calendar className="h-3 w-3"/> Inicio</Label><Input type="date" value={startDate} onChange={(e)=>setStartDate(e.target.value)} className="mt-1 text-xs" /></div>
+                <div><Label className="text-[10px] uppercase flex items-center gap-1 text-accent"><Calendar className="h-3 w-3"/> Fin</Label><Input type="date" value={endDate} onChange={(e)=>setEndDate(e.target.value)} className="mt-1 text-xs" /></div>
+              </div>
               <div><Label className="text-xs uppercase flex items-center gap-1 text-accent"><ListOrdered className="h-3 w-3"/> Formato</Label><select className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm mt-1 focus:ring-1 focus:ring-primary" value={tFormat} onChange={(e) => setTFormat(e.target.value as any)}><option value="single_elimination">Eliminación Directa</option><option value="league">Liga / Puntos</option></select></div>
             </div>
 
             <div className="grid grid-cols-3 gap-4">
               <div><Label className="text-xs uppercase">Cupo Límite</Label><Input type="number" min={2} value={tMax} onChange={(e)=>setTMax(parseInt(e.target.value)||16)} /></div>
               <div><Label className="text-xs uppercase">Inscripción ($)</Label><Input type="number" min={0} value={tFee} onChange={(e)=>setTFee(parseFloat(e.target.value)||0)} /></div>
-              {/* 👈 NUEVO CAMPO DE PORCENTAJE AL CREAR */}
               <div><Label className="text-xs uppercase text-purple-400">% Para el Pozo</Label><div className="relative mt-1"><Percent className="absolute left-2 top-2 h-4 w-4 text-muted-foreground" /><Input type="number" min={1} max={100} value={tPrizePct} onChange={(e)=>setTPrizePct(parseInt(e.target.value)||70)} className="pl-8" /></div></div>
             </div>
-            <Button className="w-full bg-gradient-to-r from-primary to-accent" disabled={!tName || !tGame || !tDates} onClick={handleCreate}>Abrir Taquilla de Inscripciones</Button>
+            <Button className="w-full bg-gradient-to-r from-primary to-accent" disabled={!tName || !tGame || !startDate || !endDate} onClick={handleCreate}>Abrir Taquilla de Inscripciones</Button>
           </div>
         </Card>
       </div>
@@ -114,9 +135,8 @@ export function TournamentTab() {
         const fillPercent = Math.min(100, (tParts.length / t.maxPlayers) * 100);
         const isFull = tParts.length >= t.maxPlayers;
         
-        // 👈 CÁLCULOS MATEMÁTICOS DEL POZO (PRIZE POOL VS CASA)
         const totalCollected = tParts.filter(p => p.paymentStatus === 'paid').length * t.entryFee;
-        const currentPct = t.prizePercentage || 100; // Por si hay torneos viejos sin el %
+        const currentPct = t.prizePercentage || 100;
         const prizePool = totalCollected * (currentPct / 100);
         const houseCut = totalCollected - prizePool;
 
@@ -129,7 +149,6 @@ export function TournamentTab() {
             {/* Dashboard del Torneo */}
             <Card className="p-6 bg-[#131022] border-[#9E54FF]/40 shadow-[0_0_30px_rgba(158,84,255,0.15)] relative overflow-hidden">
               <div className="absolute top-0 right-0 p-4 opacity-10"><Trophy className="h-32 w-32" /></div>
-              
               <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
@@ -144,8 +163,6 @@ export function TournamentTab() {
                     <span className="flex items-center gap-1"><Swords className="h-4 w-4" /> {t.format === 'league' ? "Formato Liga" : "Eliminación Directa"}</span>
                   </p>
                 </div>
-                
-                {/* 👈 TABLERO FINANCIERO DESGLOSADO */}
                 <div className="text-right flex flex-col items-end">
                   <p className="text-[10px] text-[#00E5FF] uppercase font-bold tracking-widest bg-[#00E5FF]/10 px-2 py-1 rounded">💰 Pozo de Premio ({currentPct}%)</p>
                   <p className="font-display text-4xl text-white drop-shadow-[0_0_10px_rgba(0,229,255,0.5)] mt-1">{fmtUsd(prizePool)}</p>
@@ -155,35 +172,27 @@ export function TournamentTab() {
                   </div>
                 </div>
               </div>
-
               {isRegistering && (
                 <div className="mt-8 relative z-10">
                   <div className="flex justify-between text-xs font-semibold mb-2"><span className="text-white">CUPOS OCUPADOS: {tParts.length}</span><span className="text-muted-foreground">MÁXIMO: {t.maxPlayers} JUGADORES</span></div>
                   <div className="h-4 w-full bg-black/50 rounded-full overflow-hidden border border-white/5"><div className="h-full bg-gradient-to-r from-[#9E54FF] to-[#00E5FF] transition-all duration-1000 shadow-[0_0_10px_#9E54FF]" style={{ width: `${fillPercent}%` }} /></div>
                 </div>
               )}
-
               <div className="mt-6 flex flex-wrap items-center gap-3 relative z-10 border-t border-white/10 pt-4">
                 {isRegistering ? (
                   <>
-                    <Button className="bg-white text-black hover:bg-zinc-200 font-display" disabled={isFull} onClick={() => { setPlayerName(""); setPaymentType("pending"); setEnrollModal({ open: true, tId: t.id }); }}><Plus className="h-4 w-4 mr-2" /> Inscribir Jugador</Button>
+                    <Button className="bg-white text-black hover:bg-zinc-200 font-display" disabled={isFull} onClick={() => { setName(""); setIdDoc(""); setPhone(""); setPaymentType("pending"); setEnrollModal({ open: true, tId: t.id }); }}><Plus className="h-4 w-4 mr-2" /> Inscribir Jugador</Button>
                     <Button variant="default" className="bg-blue-600 hover:bg-blue-700 text-white font-display" disabled={tParts.length < 2} onClick={() => { 
-                      if(t.format === 'league') { toast.info("El formato de Liga está en desarrollo. Configura uno de Eliminación Directa."); return; }
+                      if(t.format === 'league') { toast.info("El formato de Liga está en desarrollo."); return; }
                       if(confirm("¿Cerrar inscripciones y generar las llaves de enfrentamiento?")) generateBracket(t.id); 
                     }}><Swords className="h-4 w-4 mr-2" /> ¡GENERAR LLAVES (BRACKET)!</Button>
                   </>
-                ) : (
-                  <Button variant="outline" className="border-yellow-500/30 text-yellow-500 hover:bg-yellow-500/10" onClick={() => { if(confirm("⚠️ ¿Destruir todo el torneo y devolverlo a fase de inscripción? (Se borrarán los avances de las llaves)")) revertTournamentToRegistering(t.id); }}><RotateCcw className="h-4 w-4 mr-2" /> Reversar a Inscripciones</Button>
-                )}
-                
-                {/* 👈 BOTÓN RÁPIDO PARA CAMBIAR EL % DEL PREMIO */}
+                ) : ( <Button variant="outline" className="border-yellow-500/30 text-yellow-500 hover:bg-yellow-500/10" onClick={() => { if(confirm("⚠️ ¿Destruir todo el torneo y devolverlo a fase de inscripción? (Se borrarán los avances de las llaves)")) revertTournamentToRegistering(t.id); }}><RotateCcw className="h-4 w-4 mr-2" /> Reversar a Inscripciones</Button> )}
                 <Button variant="outline" className="border-white/20 text-white hover:bg-white/10 ml-auto" onClick={() => {
                   const newPctStr = prompt("¿Qué porcentaje de lo recaudado irá al premio? (Ej: 70)", currentPct.toString());
                   const newPct = parseInt(newPctStr || "");
                   if (!isNaN(newPct) && newPct >= 1 && newPct <= 100) { updateTournamentPrize(t.id, newPct); toast.success("Porcentaje actualizado"); } else { toast.error("Número inválido."); }
-                }}>
-                  Editar % Premio
-                </Button>
+                }}> Editar % Premio </Button>
                 <Button variant="outline" className="border-red-500/30 text-red-400 hover:bg-red-500/10" onClick={() => { if(confirm(`¿Seguro que deseas eliminar el torneo ${t.name}?`)) deleteTournament(t.id); }}><Trash2 className="h-4 w-4" /></Button>
               </div>
             </Card>
@@ -194,14 +203,14 @@ export function TournamentTab() {
                 <table className="w-full text-sm text-left"><thead className="bg-muted/50 text-muted-foreground uppercase text-xs font-display tracking-wider border-b border-border"><tr><th className="p-3 w-12 text-center">#</th><th className="p-3">Gamer (Participante)</th><th className="p-3 text-center">Estado del Pago</th><th className="p-3 text-right">Acciones</th></tr></thead><tbody className="divide-y divide-border/60">
                   {tParts.length === 0 ? ( <tr><td colSpan={4} className="text-center p-8 text-muted-foreground italic">Aún no hay jugadores inscritos. ¡Asegura los cupos!</td></tr> ) : (
                     tParts.map((p, i) => (
-                      <tr key={p.id} className="hover:bg-muted/20"><td className="p-3 text-center text-muted-foreground font-mono">{i + 1}</td><td className="p-3 font-semibold text-white text-base">{p.memberName}</td><td className="p-3 text-center">{p.paymentStatus === 'paid' ? (<span className="inline-flex items-center gap-1 bg-green-500/20 text-green-400 font-bold px-2 py-0.5 rounded text-[10px] uppercase border border-green-500/30"><CheckCircle2 className="h-3 w-3" /> Pagado</span>) : (<span className="inline-flex items-center gap-1 bg-yellow-500/20 text-yellow-500 font-bold px-2 py-0.5 rounded text-[10px] uppercase border border-yellow-500/30 animate-pulse"><AlertTriangle className="h-3 w-3" /> Reservado (Debe)</span>)}</td><td className="p-3 text-right"><div className="flex justify-end gap-2">{p.paymentStatus === 'pending' && (<Button size="sm" variant="outline" className="border-green-500/50 text-green-400 hover:bg-green-500/10" onClick={() => { setPlayerName(p.memberName); setPaymentType("pay_now"); setEnrollModal({ open: true, tId: t.id, participantId: p.id }); }}><Receipt className="h-4 w-4 mr-1" /> Cobrar</Button>)}<Button size="sm" variant="ghost" className="text-red-400 hover:bg-red-500/10" onClick={() => { if(confirm(`¿Quitar a ${p.memberName}? Si ya pagó, el dinero se descontará de la caja hoy.`)) removeParticipant(p.id); }}><Trash2 className="h-4 w-4" /></Button></div></td></tr>
+                      <tr key={p.id} className="hover:bg-muted/20"><td className="p-3 text-center text-muted-foreground font-mono">{i + 1}</td><td className="p-3 font-semibold text-white text-base">{p.memberName}</td><td className="p-3 text-center">{p.paymentStatus === 'paid' ? (<span className="inline-flex items-center gap-1 bg-green-500/20 text-green-400 font-bold px-2 py-0.5 rounded text-[10px] uppercase border border-green-500/30"><CheckCircle2 className="h-3 w-3" /> Pagado</span>) : (<span className="inline-flex items-center gap-1 bg-yellow-500/20 text-yellow-500 font-bold px-2 py-0.5 rounded text-[10px] uppercase border border-yellow-500/30 animate-pulse"><AlertTriangle className="h-3 w-3" /> Reservado (Debe)</span>)}</td><td className="p-3 text-right"><div className="flex justify-end gap-2">{p.paymentStatus === 'pending' && (<Button size="sm" variant="outline" className="border-green-500/50 text-green-400 hover:bg-green-500/10" onClick={() => { setName(p.memberName); setPaymentType("pay_now"); setEnrollModal({ open: true, tId: t.id, participantId: p.id }); }}><Receipt className="h-4 w-4 mr-1" /> Cobrar</Button>)}<Button size="sm" variant="ghost" className="text-red-400 hover:bg-red-500/10" onClick={() => { if(confirm(`¿Quitar a ${p.memberName}? Si ya pagó, el dinero se descontará de la caja hoy.`)) removeParticipant(p.id); }}><Trash2 className="h-4 w-4" /></Button></div></td></tr>
                     ))
                   )}
                 </tbody></table>
               </div>
             )}
 
-            {/* FASE 2: MOTOR DE LLAVES (BRACKETS) VISUAL */}
+            {/* FASE 2: MOTOR DE LLAVES (BRACKETS) */}
             {!isRegistering && t.format === 'single_elimination' && (
               <div className="mt-8 overflow-x-auto pb-6">
                 <div className="flex gap-8 min-w-max px-4">
@@ -215,7 +224,6 @@ export function TournamentTab() {
                           const p1 = tParts.find(p => p.id === m.player1Id);
                           const p2 = tParts.find(p => p.id === m.player2Id);
                           const isBye = m.player1Id && !m.player2Id;
-                          
                           return (
                             <Card key={m.id} className={`flex flex-col overflow-hidden border-2 transition-all ${m.winnerId ? 'border-primary/50 bg-primary/5' : 'border-border bg-card shadow-lg'}`}>
                               <button disabled={!!m.winnerId || isBye || !p1 || !p2} onClick={() => { if(confirm(`¿Declarar GANADOR a ${p1?.memberName}?`)) setMatchWinner(m.id, p1?.id); }} className={`p-3 text-left transition-colors flex justify-between items-center ${m.winnerId === m.player1Id ? 'bg-primary/20 font-bold text-primary' : m.winnerId ? 'opacity-30 line-through' : 'hover:bg-muted/50 font-semibold'}`}>
@@ -250,7 +258,10 @@ export function TournamentTab() {
           <DialogHeader><DialogTitle className="font-display">{enrollModal.participantId ? "Cobrar Inscripción" : "Inscribir al Torneo"}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <Card className="p-3 bg-secondary/40"><div className="flex justify-between font-display text-lg"><span>TOTAL INSCRIPCIÓN</span><span className="text-primary">{fmtUsd(total)}</span></div><div className="flex justify-between text-sm text-accent"><span>En Bs</span><span>{fmtBs(total, rate)}</span></div></Card>
-            {!enrollModal.participantId && ( <div><Label className="text-xs uppercase font-semibold text-muted-foreground">Nombre del Jugador</Label><Input value={playerName} onChange={(e) => setPlayerName(e.target.value)} placeholder="Ej: ShadowNinja99" className="mt-1" /></div> )}
+            
+            {/* 👈 AQUÍ LLAMAMOS AL BUSCADOR EN LUGAR DEL INPUT SIMPLE */}
+            {!enrollModal.participantId && ( <CustomerSearch name={name} idDoc={idDoc} phone={phone} setName={setName} setIdDoc={setIdDoc} setPhone={setPhone} /> )}
+            
             {!enrollModal.participantId && ( <div className="space-y-2 border border-border rounded-md p-3 bg-background/40"><Label className="text-xs uppercase font-semibold text-muted-foreground">Estatus de Inscripción</Label><RadioGroup value={paymentType} onValueChange={(v) => setPaymentType(v as any)} className="grid grid-cols-2 gap-2 mt-1"><label className={`flex flex-col items-center justify-center gap-1 border rounded-md p-3 cursor-pointer text-center ${paymentType === "pay_now" ? "border-green-500 bg-green-500/10" : "border-border"}`}><RadioGroupItem value="pay_now" className="sr-only" /><Receipt className={`h-5 w-5 ${paymentType === "pay_now" ? "text-green-500" : "text-muted-foreground"}`} /><span className="text-xs font-semibold">Va a Pagar Ahora</span></label><label className={`flex flex-col items-center justify-center gap-1 border rounded-md p-3 cursor-pointer text-center ${paymentType === "pending" ? "border-yellow-500 bg-yellow-500/10" : "border-border"}`}><RadioGroupItem value="pending" className="sr-only" /><AlertTriangle className={`h-5 w-5 ${paymentType === "pending" ? "text-yellow-500" : "text-muted-foreground"}`} /><span className="text-xs font-semibold">Reservar (Paga luego)</span></label></RadioGroup></div> )}
             {paymentType === "pay_now" && (
               <>
@@ -261,7 +272,7 @@ export function TournamentTab() {
               </>
             )}
           </div>
-          <DialogFooter className="mt-4"><Button variant="ghost" onClick={() => setEnrollModal({ open: false, tId: null })}>Cancelar</Button><Button onClick={submitEnrollment} disabled={(!enrollModal.participantId && !playerName.trim()) || (paymentType === "pay_now" && method === "mixed" && remaining > 0.01) || (paymentType === "pay_now" && !isValidRef)} className="bg-gradient-to-r from-primary to-accent">Confirmar</Button></DialogFooter>
+          <DialogFooter className="mt-4"><Button variant="ghost" onClick={() => setEnrollModal({ open: false, tId: null })}>Cancelar</Button><Button onClick={submitEnrollment} disabled={(!enrollModal.participantId && !name.trim()) || (paymentType === "pay_now" && method === "mixed" && remaining > 0.01) || (paymentType === "pay_now" && !isValidRef)} className="bg-gradient-to-r from-primary to-accent">Confirmar</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

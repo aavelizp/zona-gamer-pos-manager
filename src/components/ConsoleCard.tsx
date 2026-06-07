@@ -62,7 +62,6 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
           <Card className="p-3 bg-secondary/40"><div className="flex justify-between text-sm"><span>Tiempo ({minutes} min)</span><span>{fmtUsd(timeAmount)}</span></div><div className="flex justify-between text-sm"><span>Extras</span><span>{fmtUsd(extrasAmount)}</span></div><div className="border-t border-border my-2" /><div className="flex justify-between font-display text-lg"><span>TOTAL</span><span>{fmtUsd(total)}</span></div><div className="flex justify-between text-sm text-accent"><span>En Bs</span><span>{fmtBs(total, rate)}</span></div></Card>
           <CustomerSearch name={name} idDoc={idDoc} phone={phone} setName={setName} setIdDoc={setIdDoc} setPhone={setPhone} />
           
-          {/* Si el total es 0 (ej: Solo Torneo sin snacks), mostramos un botón directo */}
           {total === 0 ? (
             <div className="text-center p-4 bg-green-500/10 text-green-400 font-bold border border-green-500/30 rounded-md">
               <p>Monto a cobrar: $0.00</p>
@@ -97,9 +96,6 @@ function Checkout({ open, onClose, consoleObj }: CheckoutProps) {
   );
 }
 
-// Omito PrepayCheckout y PayExtrasDialog para mantener limpio el bloque visual principal
-// Son idénticos al de antes.
-
 export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleState; suggested: boolean; }) {
   const rate = useStore((s) => s.rate); const soundOn = useStore((s) => s.soundOn); 
   const startSession = useStore((s) => s.startSession); 
@@ -112,7 +108,7 @@ export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleStat
   const addExtraController = useStore((s) => (s as any).addExtraController); 
   const now = useNow();
 
-  const [snackOpen, setSnackOpen] = useState(false); const [comboOpen, setComboOpen] = useState(false); const [checkoutOpen, setCheckoutOpen] = useState(false); const [extendOpen, setExtendOpen] = useState<null | number>(null); const [transferOpen, setTransferOpen] = useState(false); 
+  const [snackOpen, setSnackOpen] = useState(false); const [comboOpen, setComboOpen] = useState(false); const [checkoutOpen, setCheckoutOpen] = useState(false); const [transferOpen, setTransferOpen] = useState(false); 
   const releaseConsole = useStore((s) => s.releaseConsole);
 
   const isPS5 = consoleObj.type === "PS5"; const session = consoleObj.session; const occupied = !!session; const paused = !!session?.pausedAt; const isFixed = session?.mode === "fixed"; const refNow = paused ? session!.pausedAt! : now; const remainingMs = session?.endsAt ? session.endsAt - refNow : 0; const expired = isFixed && remainingMs <= 0 && !paused; const elapsedMs = session ? refNow - session.startedAt : 0; const { amount: timeAmount, minutes } = computeTimeAmount(consoleObj, now); const extras = consoleObj.charges.reduce((a, c) => a + c.amount, 0); const total = timeAmount + extras;
@@ -148,7 +144,6 @@ export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleStat
         <div className={`rounded-lg p-3 text-center ${isTournament ? 'bg-purple-500/20 border border-purple-500/30' : 'bg-secondary/40'}`}>
           {!occupied ? ( <p className="text-sm text-muted-foreground">Sin sesión</p> ) : isFixed ? ( <><p className="text-xs text-muted-foreground">Restante</p><p className={`font-display text-3xl tabular-nums ${expired ? "text-destructive" : ""}`}>{formatDuration(remainingMs)}</p></> ) : ( <><p className="text-xs text-muted-foreground">Tiempo libre</p><p className="font-display text-3xl tabular-nums">{formatDuration(elapsedMs)}</p></> )}
           {occupied && !isPrepaid && !isTournament && <p className="text-sm mt-1"><span className="text-accent font-semibold">{fmtUsd(total)}</span> · {fmtBs(total, rate)}</p>}
-          {/* 👈 ETIQUETA VISUAL DE TORNEO ACTIVO */}
           {occupied && isTournament && <p className="text-sm mt-1 text-purple-400 font-bold uppercase tracking-widest animate-pulse flex items-center justify-center gap-1"><Trophy className="h-4 w-4"/> Partida de Torneo</p>}
         </div>
 
@@ -159,7 +154,6 @@ export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleStat
             <div className="grid grid-cols-3 gap-2"><Button size="sm" variant="outline" onClick={() => startSession(consoleObj.id)}>Libre</Button><Button size="sm" onClick={() => startSession(consoleObj.id, 30)}>30 min</Button><Button size="sm" onClick={() => startSession(consoleObj.id, 60)}>1 hora</Button></div>
             <div className="grid grid-cols-2 gap-2">
               <Button size="sm" className="bg-gradient-to-r from-accent to-primary" onClick={() => toast.info("Botón prepago desde la vista principal para simplificar.")}><Coins className="h-4 w-4 mr-1" /> Prepago</Button>
-              {/* 👈 BOTÓN DE MODO TORNEO */}
               <Button size="sm" variant="outline" className="border-purple-500/50 text-purple-400 hover:bg-purple-500/10" onClick={() => { 
                 const p1 = prompt("Escribe el nombre del Jugador 1 (Opcional):"); 
                 if (p1 === null) return; 
@@ -167,9 +161,7 @@ export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleStat
                 const title = (p1 && p2) ? `${p1} vs ${p2}` : (p1 || p2 || "Partida de Torneo");
                 startSession(consoleObj.id, undefined, title, true); 
                 toast.success("Consola iniciada en Modo Torneo (Costo $0)");
-              }}>
-                <Trophy className="h-4 w-4 mr-1" /> Torneo
-              </Button>
+              }}><Trophy className="h-4 w-4 mr-1" /> Torneo</Button>
             </div>
           </div>
         ) : (
@@ -183,7 +175,13 @@ export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleStat
             </div>
 
             <div className="flex gap-2">
-              {isPrepaid ? ( <Button className="flex-1" variant="secondary" onClick={tryRelease} disabled={pendingExtras > 0.001}><Coins className="h-4 w-4 mr-2" /> Liberar</Button> ) : ( <Button className="flex-1 glow-primary" onClick={() => setCheckoutOpen(true)}><Coins className="h-4 w-4 mr-2" /> Cobrar {fmtUsd(total)}</Button> )}
+              {isPrepaid ? ( <Button className="flex-1" variant="secondary" onClick={tryRelease} disabled={pendingExtras > 0.001}><Coins className="h-4 w-4 mr-2" /> Liberar</Button> ) : ( 
+                /* 👈 MAGIA: AL DAR COBRAR, SE PAUSA LA CONSOLA AUTOMÁTICAMENTE */
+                <Button className="flex-1 glow-primary" onClick={() => { 
+                  if (!paused) pauseSession(consoleObj.id); 
+                  setCheckoutOpen(true); 
+                }}><Coins className="h-4 w-4 mr-2" /> Cobrar {fmtUsd(total)}</Button> 
+              )}
               <Button variant="outline" className="px-3 border-red-500/40 text-red-400 hover:bg-red-500/15" onClick={() => { if (confirm(`⚠️ ¿CANCELAR sesión sin cobrar?`)) cancelSession(consoleObj.id); }}><Trash2 className="h-4 w-4" /></Button>
             </div>
           </div>
