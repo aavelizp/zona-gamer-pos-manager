@@ -8,8 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConsoleCard } from "@/components/ConsoleCard";
-import { InventoryTab } from "@/components/InventoryCombos";
-import { CombosTab } from "@/components/InventoryCombos";
+import { InventoryTab, CombosTab } from "@/components/InventoryCombos";
 import { CreditsTab } from "@/components/CreditsTab";
 import { WaitQueue } from "@/components/WaitQueue";
 import { CloseDayDialog } from "@/components/CloseDayDialog";
@@ -75,22 +74,28 @@ function Index() {
   const setRate = useStore((s) => s.setRate);
   const soundOn = useStore((s) => s.soundOn);
   const toggleSound = useStore((s) => s.toggleSound);
-  const consoles = useStore((s) => s.consoles);
-  const sales = useStore((s) => s.sales);
-  const products = useStore((s) => s.products);
-  const credits = useStore((s) => s.credits);
+  const consoles = useStore((s) => s.consoles || []);
+  const sales = useStore((s) => s.sales || []);
+  const products = useStore((s) => s.products || []);
+  const credits = useStore((s) => s.credits || []);
   
   const [closeOpen, setCloseOpen] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [saleOpen, setSaleOpen] = useState(false);
   const [multiCheckoutOpen, setMultiCheckoutOpen] = useState(false);
 
-  const today = useMemo(() => { return sales.reduce((total, s) => total + s.total, 0); }, [sales]);
+  // 👈 FIX: Filtro de turno inteligente para que la caja no muestre datos falsos
+  const today = useMemo(() => { 
+    const shiftStart = new Date();
+    if (shiftStart.getHours() < 6) shiftStart.setDate(shiftStart.getDate() - 1);
+    shiftStart.setHours(6, 0, 0, 0);
+    return sales.filter(s => s.ts >= shiftStart.getTime()).reduce((total, s) => total + (s.total || 0), 0); 
+  }, [sales]);
 
   const suggested = useMemo(() => {
     const free = consoles.filter((c) => !c.session);
-    const ps4 = free.filter((c) => c.type === "PS4").sort((a, b) => a.totalMinutes - b.totalMinutes)[0]?.id;
-    const ps5 = free.filter((c) => c.type === "PS5").sort((a, b) => a.totalMinutes - b.totalMinutes)[0]?.id;
+    const ps4 = free.filter((c) => c.type === "PS4").sort((a, b) => (a.totalMinutes || 0) - (b.totalMinutes || 0))[0]?.id;
+    const ps5 = free.filter((c) => c.type === "PS5").sort((a, b) => (a.totalMinutes || 0) - (b.totalMinutes || 0))[0]?.id;
     return new Set([ps4, ps5].filter(Boolean) as string[]);
   }, [consoles]);
 
