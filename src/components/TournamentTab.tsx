@@ -43,11 +43,8 @@ export function TournamentTab() {
 
   const [tName, setTName] = useState(""); const [tGame, setTGame] = useState(""); const [tMax, setTMax] = useState(16); const [tFee, setTFee] = useState(5);
   const [tFormat, setTFormat] = useState<"single_elimination" | "league">("single_elimination");
-  
-  // CALENDARIOS DINÁMICOS
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  
   const [tPrizePct, setTPrizePct] = useState(70);
 
   const [enrollModal, setEnrollModal] = useState<{ open: boolean; tId: string | null; participantId?: string }>({ open: false, tId: null });
@@ -59,15 +56,11 @@ export function TournamentTab() {
 
   const handleCreate = () => { 
     if (!tName || !tGame || tMax < 2 || !startDate || !endDate || tPrizePct < 1 || tPrizePct > 100) { toast.error("Revisa todos los campos de creación."); return; }
-    
-    // Convertimos la fecha (Ej: 2026-06-12 -> 12 jun.)
     const formatD = (ds: string) => {
       const [y, m, d] = ds.split("-");
       return new Date(parseInt(y), parseInt(m)-1, parseInt(d)).toLocaleDateString("es-VE", { day: 'numeric', month: 'short' });
     };
-
     const tDates = startDate === endDate ? formatD(startDate) : `Del ${formatD(startDate)} al ${formatD(endDate)}`;
-
     createTournament({ name: tName, game: tGame, maxPlayers: tMax, entryFee: tFee, prizePercentage: tPrizePct, format: tFormat, dateRange: tDates }); 
     setTName(""); setTGame(""); setTMax(16); setTFee(5); setStartDate(""); setEndDate(""); setTPrizePct(70);
     toast.success("Torneo creado exitosamente"); 
@@ -115,20 +108,36 @@ export function TournamentTab() {
               <div><Label className="text-xs uppercase">Juego</Label><Input value={tGame} onChange={(e)=>setTGame(e.target.value)} placeholder="Ej: EA FC 26" /></div>
             </div>
 
-            {/* 👈 CALENDARIO DINÁMICO */}
             <div className="grid grid-cols-2 gap-4 border-y border-border py-4">
               <div className="grid grid-cols-2 gap-2">
-                <div><Label className="text-[10px] uppercase flex items-center gap-1 text-accent"><Calendar className="h-3 w-3"/> Inicio</Label>
-                  <Input type="date" value={startDate} onChange={(e) => { 
-                    setStartDate(e.target.value); 
-                    if (endDate && e.target.value > endDate) setEndDate(e.target.value); 
-                  }} className="mt-1 text-xs" />
+                {/* 👈 MAGIA AQUÍ: onClick={...showPicker()} para abrir el calendario donde sea que toques */}
+                <div>
+                  <Label className="text-[10px] uppercase flex items-center gap-1 text-accent"><Calendar className="h-3 w-3"/> Inicio</Label>
+                  <Input 
+                    type="date" 
+                    value={startDate} 
+                    onClick={(e) => 'showPicker' in HTMLInputElement.prototype && e.currentTarget.showPicker()}
+                    onChange={(e) => { 
+                      setStartDate(e.target.value); 
+                      if (endDate && e.target.value > endDate) setEndDate(e.target.value); 
+                    }} 
+                    className="mt-1 text-xs cursor-pointer" 
+                  />
                 </div>
-                <div><Label className="text-[10px] uppercase flex items-center gap-1 text-accent"><Calendar className="h-3 w-3"/> Fin</Label>
-                  <Input type="date" min={startDate} value={endDate} onChange={(e)=>setEndDate(e.target.value)} disabled={!startDate} className="mt-1 text-xs" />
+                <div>
+                  <Label className="text-[10px] uppercase flex items-center gap-1 text-accent"><Calendar className="h-3 w-3"/> Fin</Label>
+                  <Input 
+                    type="date" 
+                    min={startDate} 
+                    value={endDate} 
+                    onClick={(e) => 'showPicker' in HTMLInputElement.prototype && e.currentTarget.showPicker()}
+                    onChange={(e)=>setEndDate(e.target.value)} 
+                    disabled={!startDate} 
+                    className="mt-1 text-xs cursor-pointer" 
+                  />
                 </div>
               </div>
-              <div><Label className="text-xs uppercase flex items-center gap-1 text-accent"><ListOrdered className="h-3 w-3"/> Formato</Label><select className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm mt-1 focus:ring-1 focus:ring-primary" value={tFormat} onChange={(e) => setTFormat(e.target.value as any)}><option value="single_elimination">Eliminación Directa</option><option value="league">Liga / Puntos</option></select></div>
+              <div><Label className="text-xs uppercase flex items-center gap-1 text-accent"><ListOrdered className="h-3 w-3"/> Formato</Label><select className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm mt-1 focus:ring-1 focus:ring-primary cursor-pointer" value={tFormat} onChange={(e) => setTFormat(e.target.value as any)}><option value="single_elimination">Eliminación Directa</option><option value="league">Liga / Puntos</option></select></div>
             </div>
 
             <div className="grid grid-cols-3 gap-4">
@@ -160,14 +169,12 @@ export function TournamentTab() {
         const isCompleted = t.status === "completed";
         const rounds = Array.from(new Set(tMatches.map(m => m.round))).sort((a, b) => a - b);
 
-        // 👈 LÓGICA DEL CAMPEÓN
         const finalMatch = tMatches.find(m => !m.nextMatchId);
         const championId = finalMatch?.winnerId;
         const champion = tParts.find(p => p.id === championId);
 
         return (
           <div key={t.id} className="space-y-6 border-b-2 border-border/40 pb-12 last:border-0">
-            {/* Dashboard del Torneo */}
             <Card className="p-6 bg-[#131022] border-[#9E54FF]/40 shadow-[0_0_30px_rgba(158,84,255,0.15)] relative overflow-hidden">
               <div className="absolute top-0 right-0 p-4 opacity-10"><Trophy className="h-32 w-32" /></div>
               <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -220,7 +227,6 @@ export function TournamentTab() {
               </div>
             </Card>
 
-            {/* 👈 CINTILLO DE CELEBRACIÓN (Aparece solo cuando el torneo se cierra) */}
             {isCompleted && champion && (
               <div className="bg-gradient-to-r from-yellow-500/20 via-yellow-500/10 to-yellow-500/20 border-y-2 border-yellow-500/50 py-8 px-4 flex flex-col items-center justify-center shadow-[0_0_40px_rgba(234,179,8,0.2)] animate-in zoom-in duration-500">
                  <Trophy className="h-20 w-20 text-yellow-400 mb-4 animate-bounce" />
@@ -233,7 +239,6 @@ export function TournamentTab() {
               </div>
             )}
 
-            {/* TABLA DE INSCRITOS */}
             {isRegistering && (
               <div className="rounded-md border border-border bg-card overflow-hidden">
                 <table className="w-full text-sm text-left"><thead className="bg-muted/50 text-muted-foreground uppercase text-xs font-display tracking-wider border-b border-border"><tr><th className="p-3 w-12 text-center">#</th><th className="p-3">Gamer (Participante)</th><th className="p-3 text-center">Estado del Pago</th><th className="p-3 text-right">Acciones</th></tr></thead><tbody className="divide-y divide-border/60">
@@ -246,7 +251,6 @@ export function TournamentTab() {
               </div>
             )}
 
-            {/* FASE 2: MOTOR DE LLAVES (BRACKETS) VISUAL */}
             {!isRegistering && t.format === 'single_elimination' && (
               <div className="mt-8 overflow-x-auto pb-6">
                 <div className="flex gap-8 min-w-max px-4">
