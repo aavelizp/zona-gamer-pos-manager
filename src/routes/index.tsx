@@ -19,7 +19,9 @@ import { ExpenseDialog } from "@/components/ExpenseDialog";
 import { ExpensesTab } from "@/components/ExpensesTab";
 import { BusinessConfigTab } from "@/components/BusinessConfigTab";
 import { DirectSaleDialog } from "@/components/DirectSaleDialog";
-import { Volume2, VolumeX, FileSpreadsheet, Receipt, Wallet, LogOut, ShoppingCart } from "lucide-react";
+import { SalesTab } from "@/components/SalesTab"; 
+import { MultiCheckoutDialog } from "@/components/MultiCheckoutDialog"; // 👈 IMPORTACIÓN DEL COMPONENTE
+import { Volume2, VolumeX, FileSpreadsheet, Receipt, Wallet, LogOut, ShoppingCart, Layers } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -82,6 +84,7 @@ function Index() {
   const [closeOpen, setCloseOpen] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [saleOpen, setSaleOpen] = useState(false);
+  const [multiCheckoutOpen, setMultiCheckoutOpen] = useState(false); // 👈 ESTADO PARA EL BOTÓN
 
   const today = useMemo(() => {
     const startOfToday = new Date();
@@ -118,7 +121,6 @@ function Index() {
   return (
     <div className="min-h-screen bg-background bg-grid relative">
       
-      {/* 👈 MARCA DE AGUA AL 30% DE OPACIDAD PARA MÁXIMA VISIBILIDAD */}
       <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden">
         <img 
           src="/logo.png" 
@@ -127,7 +129,6 @@ function Index() {
         />
       </div>
 
-      {/* CONTENIDO PRINCIPAL POR ENCIMA DE LA MARCA DE AGUA */}
       <div className="relative z-10 flex flex-col min-h-screen">
         <header className="border-b border-border/60 bg-card/40 backdrop-blur sticky top-0 z-30">
           <div className="max-w-[1600px] mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
@@ -179,6 +180,7 @@ function Index() {
           <Tabs defaultValue="dashboard" className="space-y-4">
             <TabsList className="bg-card border border-border flex-wrap h-auto shadow-sm">
               <TabsTrigger value="dashboard">Consolas</TabsTrigger>
+              <TabsTrigger value="sales" className="text-blue-400 hover:text-blue-300">📊 Ventas Hoy</TabsTrigger>
               <TabsTrigger value="inventory">Inventario</TabsTrigger>
               <TabsTrigger value="combos">Combos</TabsTrigger>
               <TabsTrigger value="credits">Fiados {credits.length > 0 && <span className="ml-1 text-accent font-bold">({credits.length})</span>}</TabsTrigger>
@@ -190,6 +192,18 @@ function Index() {
             </TabsList>
 
             <TabsContent value="dashboard">
+              
+              {/* 👈 BOTÓN DE COBRO MÚLTIPLE */}
+              <div className="flex justify-between items-center mb-4 mt-2">
+                <h2 className="font-display text-lg text-primary/80 uppercase tracking-widest hidden md:block">Estado en Vivo</h2>
+                <Button 
+                  onClick={() => setMultiCheckoutOpen(true)} 
+                  className="bg-gradient-to-r from-purple-600 to-primary text-white shadow-lg shadow-purple-500/20 hover:scale-[1.02] transition-transform ml-auto"
+                >
+                  <Layers className="h-4 w-4 mr-2" /> Cobro Múltiple (Unir Cuentas)
+                </Button>
+              </div>
+
               <div className="grid xl:grid-cols-[1fr_320px] gap-4">
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                   {consoles.map((c) => (
@@ -200,6 +214,7 @@ function Index() {
               </div>
             </TabsContent>
 
+            <TabsContent value="sales"><SalesTab /></TabsContent>
             <TabsContent value="inventory"><InventoryTab /></TabsContent>
             <TabsContent value="combos"><CombosTab /></TabsContent>
             <TabsContent value="credits"><CreditsTab /></TabsContent>
@@ -218,6 +233,9 @@ function Index() {
         <DirectSaleDialog open={saleOpen} onOpenChange={setSaleOpen} />
         <CloseDayDialog open={closeOpen} onOpenChange={setCloseOpen} />
         <ExpenseDialog open={expenseOpen} onOpenChange={setExpenseOpen} />
+        
+        {/* 👈 MODAL QUE SE ACTIVA AL PRESIONAR EL BOTÓN */}
+        <MultiCheckoutDialog open={multiCheckoutOpen} onClose={() => setMultiCheckoutOpen(false)} />
       </div>
     </div>
   );

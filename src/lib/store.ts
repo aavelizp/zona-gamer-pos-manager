@@ -195,6 +195,12 @@ interface State {
     payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; cashBs?: number; customer?: string; total: number; timeAmount: number; extrasAmount: number; minutes: number; customerInfo?: CustomerInfo }
   ) => void;
 
+  // 👈 NUEVA FUNCIÓN PARA COBRAR VARIAS CONSOLAS JUNTAS
+  finalizeMultipleConsoles: (
+    consoleIds: string[],
+    payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; cashBs?: number; customer?: string; total: number; timeAmount: number; extrasAmount: number; totalMinutes: number; customerInfo?: CustomerInfo; items: { name: string; qty: number; price: number }[] }
+  ) => void;
+
   directSale: (payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; cashBs?: number; total: number; customer?: string; items: { productId: string; qty: number; price: number; name: string }[] }) => void;
 
   payCredit: (creditId: string, payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; amount: number }) => void;
@@ -220,7 +226,6 @@ interface State {
   addExpense: (e: { description: string; amount: number; method: "cash" | "mobile"; amountBs?: number; category?: ExpenseCategory; ts?: number }) => void;
   setConsoleRate: (type: ConsoleType, ratePerHour: number) => void;
 
-  // 👈 NUEVAS FUNCIONES DE BORRADO
   deleteSale: (saleId: string) => void;
   resetConsoleStats: (consoleId: string) => void;
 }
@@ -395,6 +400,71 @@ export const useStore = create<State>()(
           return { consoles: s.consoles.map((x) => x.id === consoleId ? { ...x, session: undefined, charges: [], totalMinutes: x.totalMinutes + payload.minutes, maintenanceMinutes: (x.maintenanceMinutes || 0) + payload.minutes } : x ), sales: payload.method === "credit" ? s.sales : [...s.sales, sale], credits: newCredits, members: newMembers, sessionHistory: [histEntry, ...s.sessionHistory] };
         }),
 
+      // 👈 LA MAGIA DE UNIR CUENTAS (COBRO MÚLTIPLE)
+      finalizeMultipleConsoles: (consoleIds, payload) =>
+        set((s) => {
+          const involved = s.consoles.filter((c) => consoleIds.includes(c.id));
+          if (involved.length === 0) return s;
+
+          const sale: SaleRecord = {
+            id: uid(),
+            ts: Date.now(),
+            consoleName: involved.map(c => c.name).join(" + "),
+            minutes: payload.totalMinutes,
+            timeAmount: payload.timeAmount,
+            extrasAmount: payload.extrasAmount,
+            total: payload.total,
+            cashUsd: payload.cashUsd,
+            mobileBs: payload.mobileBs,
+            cashBs: payload.cashBs || 0,
+            rate: s.rate,
+            method: payload.method,
+            customer: payload.customerInfo?.name || payload.customer,
+            concept: "Cobro Múltiple",
+            items: payload.items,
+          };
+
+          const newCredits = payload.method === "credit" ? [ ...s.credits, { id: uid(), customer: payload.customerInfo?.name || payload.customer || "Sin nombre", amount: payload.total, createdAt: Date.now(), note: sale.consoleName } ] : s.credits;
+
+          let newMembers = s.members;
+          const ci = payload.customerInfo;
+          if (ci && ci.name?.trim() && ci.phone?.trim()) {
+            const key = ci.phone.trim();
+            const existing = s.members.find((m) => m.phone === key);
+            if (existing) {
+              const newReward = existing.rewardMinutes + payload.totalMinutes;
+              const earned = Math.floor(newReward / 600);
+              newMembers = s.members.map((m) => m.id === existing.id ? { ...m, name: ci.name.trim(), idDoc: ci.idDoc?.trim() || m.idDoc, totalMinutes: m.totalMinutes + payload.totalMinutes, rewardMinutes: newReward - earned * 600, pendingRewards: m.pendingRewards + earned, lastVisit: Date.now() } : m );
+            } else {
+              const earned = Math.floor(payload.totalMinutes / 600);
+              newMembers = [ ...s.members, { id: uid(), name: ci.name.trim(), idDoc: ci.idDoc?.trim(), phone: key, totalMinutes: payload.totalMinutes, rewardMinutes: payload.totalMinutes - earned * 600, pendingRewards: earned, createdAt: Date.now(), lastVisit: Date.now() } ];
+            }
+          }
+
+          const newHistEntries: SessionHistoryEntry[] = involved.map((c) => {
+            const ref = c.session?.pausedAt ?? Date.now();
+            const elapsedMs = Math.max(0, ref - (c.session?.startedAt ?? ref));
+            const mins = Math.ceil(elapsedMs / 60_000);
+            return { id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, customer: payload.customerInfo?.name || payload.customer, minutes: mins, amount: 0, prepaid: !!c.session?.prepaid };
+          });
+
+          return {
+            consoles: s.consoles.map((c) => {
+              if (consoleIds.includes(c.id)) {
+                const ref = c.session?.pausedAt ?? Date.now();
+                const elapsedMs = Math.max(0, ref - (c.session?.startedAt ?? ref));
+                const mins = Math.ceil(elapsedMs / 60_000);
+                return { ...c, session: undefined, charges: [], totalMinutes: c.totalMinutes + mins, maintenanceMinutes: (c.maintenanceMinutes || 0) + mins };
+              }
+              return c;
+            }),
+            sales: payload.method === "credit" ? s.sales : [...s.sales, sale],
+            credits: newCredits,
+            members: newMembers,
+            sessionHistory: [...newHistEntries, ...s.sessionHistory]
+          };
+        }),
+
       directSale: (payload) =>
         set((s) => {
           let newProducts = s.products;
@@ -474,7 +544,6 @@ export const useStore = create<State>()(
       addExpense: ({ ts, ...rest }) => set((s) => ({ expenses: [ { id: uid(), ts: ts ?? Date.now(), createdAt: Date.now(), rate: s.rate, ...rest }, ...s.expenses ] })),
       setConsoleRate: (type, ratePerHour) => set((s) => ({ consoles: s.consoles.map((c) => c.type === type ? { ...c, ratePerHour: Math.max(0, ratePerHour) } : c ) })),
       
-      // 👈 IMPLEMENTACIÓN DE LAS FUNCIONES DE BORRADO Y RESET
       deleteSale: (id) => set((s) => ({ sales: s.sales.filter((x) => x.id !== id) })),
       resetConsoleStats: (consoleId) => set((s) => ({
         consoles: s.consoles.map((c) => c.id === consoleId ? { ...c, totalMinutes: 0, maintenanceMinutes: 0 } : c),
