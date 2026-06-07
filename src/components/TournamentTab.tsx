@@ -10,7 +10,6 @@ import { MixedPaymentInputs } from "@/components/MixedPaymentInputs";
 import { Trophy, Users, Plus, Trash2, CheckCircle2, AlertTriangle, Receipt, Swords, Undo2, RotateCcw, Calendar, ListOrdered, Percent, Search, X } from "lucide-react";
 import { toast } from "sonner";
 
-// 👈 BUSCADOR DE CLIENTES INCORPORADO
 function CustomerSearch({ name, idDoc, phone, setName, setIdDoc, setPhone }: any) {
   const members = useStore((s) => s.members); const [query, setQuery] = useState(""); const [open, setOpen] = useState(false); const [creating, setCreating] = useState(false); const [selected, setSelected] = useState<Member | null>(null); const wrapRef = useRef<HTMLDivElement>(null);
   useEffect(() => { const onClick = (e: MouseEvent) => { if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false); }; document.addEventListener("mousedown", onClick); return () => document.removeEventListener("mousedown", onClick); }, []);
@@ -45,7 +44,7 @@ export function TournamentTab() {
   const [tName, setTName] = useState(""); const [tGame, setTGame] = useState(""); const [tMax, setTMax] = useState(16); const [tFee, setTFee] = useState(5);
   const [tFormat, setTFormat] = useState<"single_elimination" | "league">("single_elimination");
   
-  // 👈 NUEVOS CALENDARIOS DE FECHAS
+  // CALENDARIOS DINÁMICOS
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   
@@ -60,7 +59,15 @@ export function TournamentTab() {
 
   const handleCreate = () => { 
     if (!tName || !tGame || tMax < 2 || !startDate || !endDate || tPrizePct < 1 || tPrizePct > 100) { toast.error("Revisa todos los campos de creación."); return; }
-    const tDates = startDate === endDate ? startDate : `${startDate} al ${endDate}`;
+    
+    // Convertimos la fecha (Ej: 2026-06-12 -> 12 jun.)
+    const formatD = (ds: string) => {
+      const [y, m, d] = ds.split("-");
+      return new Date(parseInt(y), parseInt(m)-1, parseInt(d)).toLocaleDateString("es-VE", { day: 'numeric', month: 'short' });
+    };
+
+    const tDates = startDate === endDate ? formatD(startDate) : `Del ${formatD(startDate)} al ${formatD(endDate)}`;
+
     createTournament({ name: tName, game: tGame, maxPlayers: tMax, entryFee: tFee, prizePercentage: tPrizePct, format: tFormat, dateRange: tDates }); 
     setTName(""); setTGame(""); setTMax(16); setTFee(5); setStartDate(""); setEndDate(""); setTPrizePct(70);
     toast.success("Torneo creado exitosamente"); 
@@ -108,10 +115,18 @@ export function TournamentTab() {
               <div><Label className="text-xs uppercase">Juego</Label><Input value={tGame} onChange={(e)=>setTGame(e.target.value)} placeholder="Ej: EA FC 26" /></div>
             </div>
 
+            {/* 👈 CALENDARIO DINÁMICO */}
             <div className="grid grid-cols-2 gap-4 border-y border-border py-4">
               <div className="grid grid-cols-2 gap-2">
-                <div><Label className="text-[10px] uppercase flex items-center gap-1 text-accent"><Calendar className="h-3 w-3"/> Inicio</Label><Input type="date" value={startDate} onChange={(e)=>setStartDate(e.target.value)} className="mt-1 text-xs" /></div>
-                <div><Label className="text-[10px] uppercase flex items-center gap-1 text-accent"><Calendar className="h-3 w-3"/> Fin</Label><Input type="date" value={endDate} onChange={(e)=>setEndDate(e.target.value)} className="mt-1 text-xs" /></div>
+                <div><Label className="text-[10px] uppercase flex items-center gap-1 text-accent"><Calendar className="h-3 w-3"/> Inicio</Label>
+                  <Input type="date" value={startDate} onChange={(e) => { 
+                    setStartDate(e.target.value); 
+                    if (endDate && e.target.value > endDate) setEndDate(e.target.value); 
+                  }} className="mt-1 text-xs" />
+                </div>
+                <div><Label className="text-[10px] uppercase flex items-center gap-1 text-accent"><Calendar className="h-3 w-3"/> Fin</Label>
+                  <Input type="date" min={startDate} value={endDate} onChange={(e)=>setEndDate(e.target.value)} disabled={!startDate} className="mt-1 text-xs" />
+                </div>
               </div>
               <div><Label className="text-xs uppercase flex items-center gap-1 text-accent"><ListOrdered className="h-3 w-3"/> Formato</Label><select className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm mt-1 focus:ring-1 focus:ring-primary" value={tFormat} onChange={(e) => setTFormat(e.target.value as any)}><option value="single_elimination">Eliminación Directa</option><option value="league">Liga / Puntos</option></select></div>
             </div>
@@ -142,7 +157,13 @@ export function TournamentTab() {
 
         const tMatches = matches.filter(m => m.tournamentId === t.id);
         const isRegistering = t.status === "registering";
+        const isCompleted = t.status === "completed";
         const rounds = Array.from(new Set(tMatches.map(m => m.round))).sort((a, b) => a - b);
+
+        // 👈 LÓGICA DEL CAMPEÓN
+        const finalMatch = tMatches.find(m => !m.nextMatchId);
+        const championId = finalMatch?.winnerId;
+        const champion = tParts.find(p => p.id === championId);
 
         return (
           <div key={t.id} className="space-y-6 border-b-2 border-border/40 pb-12 last:border-0">
@@ -153,8 +174,8 @@ export function TournamentTab() {
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <span className="bg-primary/20 text-primary text-[10px] uppercase font-bold px-2 py-0.5 rounded tracking-widest">{t.game}</span>
-                    <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded tracking-widest ${isRegistering ? 'bg-green-500/20 text-green-400' : t.status === 'completed' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-blue-500/20 text-blue-400'}`}>
-                      {isRegistering ? 'Inscripciones Abiertas' : t.status === 'active' ? 'Torneo en Curso' : 'Torneo Finalizado 🏆'}
+                    <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded tracking-widest ${isRegistering ? 'bg-green-500/20 text-green-400' : isCompleted ? 'bg-yellow-500/20 text-yellow-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                      {isRegistering ? 'Inscripciones Abiertas' : isCompleted ? 'Torneo Finalizado 🏆' : 'Torneo en Curso'}
                     </span>
                   </div>
                   <h2 className="font-display text-3xl text-white tracking-wide uppercase">{t.name}</h2>
@@ -172,12 +193,14 @@ export function TournamentTab() {
                   </div>
                 </div>
               </div>
+              
               {isRegistering && (
                 <div className="mt-8 relative z-10">
                   <div className="flex justify-between text-xs font-semibold mb-2"><span className="text-white">CUPOS OCUPADOS: {tParts.length}</span><span className="text-muted-foreground">MÁXIMO: {t.maxPlayers} JUGADORES</span></div>
                   <div className="h-4 w-full bg-black/50 rounded-full overflow-hidden border border-white/5"><div className="h-full bg-gradient-to-r from-[#9E54FF] to-[#00E5FF] transition-all duration-1000 shadow-[0_0_10px_#9E54FF]" style={{ width: `${fillPercent}%` }} /></div>
                 </div>
               )}
+
               <div className="mt-6 flex flex-wrap items-center gap-3 relative z-10 border-t border-white/10 pt-4">
                 {isRegistering ? (
                   <>
@@ -197,6 +220,19 @@ export function TournamentTab() {
               </div>
             </Card>
 
+            {/* 👈 CINTILLO DE CELEBRACIÓN (Aparece solo cuando el torneo se cierra) */}
+            {isCompleted && champion && (
+              <div className="bg-gradient-to-r from-yellow-500/20 via-yellow-500/10 to-yellow-500/20 border-y-2 border-yellow-500/50 py-8 px-4 flex flex-col items-center justify-center shadow-[0_0_40px_rgba(234,179,8,0.2)] animate-in zoom-in duration-500">
+                 <Trophy className="h-20 w-20 text-yellow-400 mb-4 animate-bounce" />
+                 <h3 className="text-yellow-500 font-display text-3xl uppercase tracking-widest text-center">¡TENEMOS CAMPEÓN!</h3>
+                 <p className="text-white font-black text-5xl mt-2 text-center drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]">{champion.memberName}</p>
+                 <div className="mt-4 inline-flex items-center gap-2 bg-yellow-500/20 px-6 py-2 rounded-full border border-yellow-500/30">
+                    <span className="text-yellow-200 text-sm font-bold uppercase tracking-widest">Premio Recaudado:</span>
+                    <span className="text-yellow-400 font-display text-2xl">{fmtUsd(prizePool)}</span>
+                 </div>
+              </div>
+            )}
+
             {/* TABLA DE INSCRITOS */}
             {isRegistering && (
               <div className="rounded-md border border-border bg-card overflow-hidden">
@@ -210,7 +246,7 @@ export function TournamentTab() {
               </div>
             )}
 
-            {/* FASE 2: MOTOR DE LLAVES (BRACKETS) */}
+            {/* FASE 2: MOTOR DE LLAVES (BRACKETS) VISUAL */}
             {!isRegistering && t.format === 'single_elimination' && (
               <div className="mt-8 overflow-x-auto pb-6">
                 <div className="flex gap-8 min-w-max px-4">
@@ -258,10 +294,7 @@ export function TournamentTab() {
           <DialogHeader><DialogTitle className="font-display">{enrollModal.participantId ? "Cobrar Inscripción" : "Inscribir al Torneo"}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <Card className="p-3 bg-secondary/40"><div className="flex justify-between font-display text-lg"><span>TOTAL INSCRIPCIÓN</span><span className="text-primary">{fmtUsd(total)}</span></div><div className="flex justify-between text-sm text-accent"><span>En Bs</span><span>{fmtBs(total, rate)}</span></div></Card>
-            
-            {/* 👈 AQUÍ LLAMAMOS AL BUSCADOR EN LUGAR DEL INPUT SIMPLE */}
             {!enrollModal.participantId && ( <CustomerSearch name={name} idDoc={idDoc} phone={phone} setName={setName} setIdDoc={setIdDoc} setPhone={setPhone} /> )}
-            
             {!enrollModal.participantId && ( <div className="space-y-2 border border-border rounded-md p-3 bg-background/40"><Label className="text-xs uppercase font-semibold text-muted-foreground">Estatus de Inscripción</Label><RadioGroup value={paymentType} onValueChange={(v) => setPaymentType(v as any)} className="grid grid-cols-2 gap-2 mt-1"><label className={`flex flex-col items-center justify-center gap-1 border rounded-md p-3 cursor-pointer text-center ${paymentType === "pay_now" ? "border-green-500 bg-green-500/10" : "border-border"}`}><RadioGroupItem value="pay_now" className="sr-only" /><Receipt className={`h-5 w-5 ${paymentType === "pay_now" ? "text-green-500" : "text-muted-foreground"}`} /><span className="text-xs font-semibold">Va a Pagar Ahora</span></label><label className={`flex flex-col items-center justify-center gap-1 border rounded-md p-3 cursor-pointer text-center ${paymentType === "pending" ? "border-yellow-500 bg-yellow-500/10" : "border-border"}`}><RadioGroupItem value="pending" className="sr-only" /><AlertTriangle className={`h-5 w-5 ${paymentType === "pending" ? "text-yellow-500" : "text-muted-foreground"}`} /><span className="text-xs font-semibold">Reservar (Paga luego)</span></label></RadioGroup></div> )}
             {paymentType === "pay_now" && (
               <>
