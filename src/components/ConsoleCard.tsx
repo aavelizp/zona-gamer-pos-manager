@@ -157,15 +157,6 @@ function PayExtrasDialog({ open, onClose, consoleObj }: any) {
 }
 
 export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleState; suggested: boolean; }) {
-  const [snackOpen, setSnackOpen] = useState(false); 
-  const [comboOpen, setComboOpen] = useState(false); 
-  const [checkoutOpen, setCheckoutOpen] = useState(false); 
-  const [prepayOpen, setPrepayOpen] = useState(false); 
-  const [extendOpen, setExtendOpen] = useState<null | number>(null); 
-  const [transferOpen, setTransferOpen] = useState(false); 
-  const [payExtrasOpen, setPayExtrasOpen] = useState(false);
-
-  // Todo esto es 100% seguro y nunca generará errores en React.
   const rate = useStore((s) => s.rate); 
   const soundOn = useStore((s) => s.soundOn); 
   const startSession = useStore((s) => s.startSession); 
@@ -180,6 +171,15 @@ export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleStat
 
   const now = useNow();
 
+  const [snackOpen, setSnackOpen] = useState(false); 
+  const [comboOpen, setComboOpen] = useState(false); 
+  const [checkoutOpen, setCheckoutOpen] = useState(false); 
+  const [prepayOpen, setPrepayOpen] = useState(false); 
+  const [extendOpen, setExtendOpen] = useState<null | number>(null); 
+  const [transferOpen, setTransferOpen] = useState(false); 
+  const [payExtrasOpen, setPayExtrasOpen] = useState(false);
+
+  // Todo esto es 100% seguro y nunca generará errores en React.
   const isPS5 = consoleObj?.type === "PS5"; 
   const session = consoleObj?.session; 
   const occupied = !!session; 
@@ -240,12 +240,15 @@ export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleStat
         </div>
 
         <div className={`rounded-lg p-3 text-center ${isTournament ? 'bg-purple-500/20 border border-purple-500/30' : 'bg-secondary/40'}`}>
-          {!occupied ? ( <p className="text-sm text-muted-foreground">Sin sesión</p> ) : isFixed ? ( <><p className="text-xs text-muted-foreground">Restante</p><p className={`font-display text-3xl tabular-nums ${expired ? "text-destructive" : ""}`}>{formatDuration(remainingMs)}</p></> ) : ( <><p className="text-xs text-muted-foreground">Tiempo libre</p><p className="font-display text-3xl tabular-nums">{formatDuration(elapsedMs)}</p></> )}
-          {occupied && !isPrepaid && !isTournament && <p className="text-sm mt-1"><span className="text-accent font-semibold">{fmtUsd(total)}</span> · {fmtBs(total, rate)}</p>}
+          {!occupied ? ( <p className="text-sm text-muted-foreground">Sin sesión</p> ) : isFixed ? ( <><p className="text-xs text-muted-foreground">Restante</p>
+          {/* 👈 CINTURÓN DE SEGURIDAD PARA EL TRADUCTOR: className="notranslate" en los números */}
+          <p className={`font-display text-3xl tabular-nums notranslate ${expired ? "text-destructive" : ""}`}>{formatDuration(remainingMs)}</p></> ) : ( <><p className="text-xs text-muted-foreground">Tiempo libre</p>
+          <p className="font-display text-3xl tabular-nums notranslate">{formatDuration(elapsedMs)}</p></> )}
+          {occupied && !isPrepaid && !isTournament && <p className="text-sm mt-1 notranslate"><span className="text-accent font-semibold">{fmtUsd(total)}</span> · {fmtBs(total, rate)}</p>}
           {occupied && isTournament && <p className="text-sm mt-1 text-purple-400 font-bold uppercase tracking-widest animate-pulse flex items-center justify-center gap-1"><Trophy className="h-4 w-4"/> Partida de Torneo</p>}
         </div>
 
-        {occupied && ( <div className={`rounded-md p-2 border ${pendingExtras > 0 ? "bg-warning/10 border-warning/40" : "bg-secondary/20 border-border/40"}`}><div className="flex justify-between items-center"><span className="text-xs uppercase tracking-wider text-muted-foreground">Adicional Pendiente</span><span className={`font-display text-base ${pendingExtras > 0 ? "text-warning" : "text-muted-foreground"}`}>{fmtUsd(pendingExtras)}</span></div></div> )}
+        {occupied && ( <div className={`rounded-md p-2 border ${pendingExtras > 0 ? "bg-warning/10 border-warning/40" : "bg-secondary/20 border-border/40"}`}><div className="flex justify-between items-center"><span className="text-xs uppercase tracking-wider text-muted-foreground">Adicional Pendiente</span><span className={`font-display text-base notranslate ${pendingExtras > 0 ? "text-warning" : "text-muted-foreground"}`}>{fmtUsd(pendingExtras)}</span></div></div> )}
         {blockedRelease && ( <div className="rounded-md p-2 border border-destructive bg-destructive/10 flex items-start gap-2"><AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" /><p className="text-xs text-destructive">Tiempo agotado con saldo pendiente.</p></div> )}
 
         {!occupied ? (
@@ -277,13 +280,13 @@ export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleStat
               {paused ? ( <Button size="sm" variant="default" className="col-span-2 bg-warning text-foreground hover:bg-warning/90" onClick={() => resumeSession(consoleObj.id)}><Play className="h-4 w-4 mr-1" />Reanudar</Button> ) : ( <Button size="sm" variant="outline" className="col-span-2" onClick={() => pauseSession(consoleObj.id)}><Pause className="h-4 w-4 mr-1" />Pausar</Button> )}
             </div>
 
-            {isPrepaid && pendingExtras > 0.001 && ( <Button className="w-full" variant="default" onClick={() => setPayExtrasOpen(true)}><Coins className="h-4 w-4 mr-2" /> Cobrar Adicional {fmtUsd(pendingExtras)}</Button> )}
+            {isPrepaid && pendingExtras > 0.001 && ( <Button className="w-full" variant="default" onClick={() => setPayExtrasOpen(true)}><Coins className="h-4 w-4 mr-2" /> Cobrar Adicional <span className="notranslate ml-1">{fmtUsd(pendingExtras)}</span></Button> )}
             <div className="flex gap-2">
               {isPrepaid ? ( <Button className="flex-1" variant="secondary" onClick={tryRelease} disabled={pendingExtras > 0.001}><Coins className="h-4 w-4 mr-2" /> Liberar</Button> ) : ( 
                 <Button className="flex-1 glow-primary" onClick={() => { 
                   if (!paused) pauseSession(consoleObj.id); 
                   setCheckoutOpen(true); 
-                }}><Coins className="h-4 w-4 mr-2" /> Cobrar {fmtUsd(total)}</Button> 
+                }}><Coins className="h-4 w-4 mr-2" /> Cobrar <span className="notranslate ml-1">{fmtUsd(total)}</span></Button> 
               )}
               <Button variant="outline" className="px-3 border-red-500/40 text-red-400 hover:bg-red-500/15" onClick={() => { if (confirm(`⚠️ ¿CANCELAR sesión sin cobrar?`)) cancelSession(consoleObj.id); }}><Trash2 className="h-4 w-4" /></Button>
             </div>
