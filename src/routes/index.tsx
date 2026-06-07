@@ -20,7 +20,7 @@ import { ExpensesTab } from "@/components/ExpensesTab";
 import { BusinessConfigTab } from "@/components/BusinessConfigTab";
 import { DirectSaleDialog } from "@/components/DirectSaleDialog";
 import { SalesTab } from "@/components/SalesTab"; 
-import { MultiCheckoutDialog } from "@/components/MultiCheckoutDialog"; // 👈 IMPORTACIÓN DEL COMPONENTE
+import { MultiCheckoutDialog } from "@/components/MultiCheckoutDialog"; 
 import { Volume2, VolumeX, FileSpreadsheet, Receipt, Wallet, LogOut, ShoppingCart, Layers } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -84,17 +84,11 @@ function Index() {
   const [closeOpen, setCloseOpen] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [saleOpen, setSaleOpen] = useState(false);
-  const [multiCheckoutOpen, setMultiCheckoutOpen] = useState(false); // 👈 ESTADO PARA EL BOTÓN
+  const [multiCheckoutOpen, setMultiCheckoutOpen] = useState(false);
 
+  // 👈 AQUÍ ELIMINAMOS EL FILTRO POR FECHA Y LO DEJAMOS COMO EL LOTE COMPLETO
   const today = useMemo(() => {
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-    return sales
-      .filter((s) => {
-        const saleDate = new Date(s.ts);
-        return saleDate >= startOfToday;
-      })
-      .reduce((total, s) => total + s.total, 0);
+    return sales.reduce((total, s) => total + s.total, 0);
   }, [sales]);
 
   const suggested = useMemo(() => {
@@ -192,8 +186,6 @@ function Index() {
             </TabsList>
 
             <TabsContent value="dashboard">
-              
-              {/* 👈 BOTÓN DE COBRO MÚLTIPLE */}
               <div className="flex justify-between items-center mb-4 mt-2">
                 <h2 className="font-display text-lg text-primary/80 uppercase tracking-widest hidden md:block">Estado en Vivo</h2>
                 <Button 
@@ -233,8 +225,6 @@ function Index() {
         <DirectSaleDialog open={saleOpen} onOpenChange={setSaleOpen} />
         <CloseDayDialog open={closeOpen} onOpenChange={setCloseOpen} />
         <ExpenseDialog open={expenseOpen} onOpenChange={setExpenseOpen} />
-        
-        {/* 👈 MODAL QUE SE ACTIVA AL PRESIONAR EL BOTÓN */}
         <MultiCheckoutDialog open={multiCheckoutOpen} onClose={() => setMultiCheckoutOpen(false)} />
       </div>
     </div>
