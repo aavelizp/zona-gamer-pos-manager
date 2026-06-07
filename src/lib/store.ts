@@ -95,7 +95,6 @@ export const useStore = create<State>()(
       directSale: (payload) => set((s) => { let newProducts = s.products || []; for (const it of payload.items) { newProducts = newProducts.map((p) => p.id === it.productId ? { ...p, stock: p.stock - it.qty } : p ); } const sale: SaleRecord = { id: uid(), ts: Date.now(), timeAmount: 0, extrasAmount: payload.total, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, cashBs: payload.cashBs || 0, rate: s.rate, method: payload.method, customer: payload.customer, concept: "Venta Directa", items: payload.items.map((it) => ({ name: it.name, qty: it.qty, price: it.price })) }; const newCredits = payload.method === "credit" ? [ ...(s.credits||[]), { id: uid(), customer: payload.customer || "Sin nombre", amount: payload.total, createdAt: Date.now(), note: "Venta Directa" } ] : (s.credits||[]); return { products: newProducts, sales: [...(s.sales||[]), sale], credits: newCredits }; }),
       payCredit: (creditId, payload) => set((s) => { const credit = (s.credits||[]).find((c) => c.id === creditId); if (!credit) return s; const sale: SaleRecord = { id: uid(), ts: Date.now(), timeAmount: 0, extrasAmount: payload.amount, total: payload.amount, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, rate: s.rate, method: payload.method, customer: credit.customer, concept: "Deuda Cobrada", items: [{ name: `Deuda de ${credit.customer}`, qty: 1, price: payload.amount }] }; const remaining = credit.amount - payload.amount; return { sales: [...(s.sales||[]), sale], credits: remaining > 0.001 ? (s.credits||[]).map((c) => (c.id === creditId ? { ...c, amount: remaining } : c)) : (s.credits||[]).filter((c) => c.id !== creditId) }; }),
       enqueue: (e) => set((s) => ({ queue: [...(s.queue||[]), { ...e, id: uid(), ts: Date.now() }] })), dequeue: (id) => set((s) => ({ queue: (s.queue||[]).filter((q) => q.id !== id) })), redeemReward: (memberId) => set((s) => ({ members: (s.members||[]).map((m) => m.id === memberId && (m.pendingRewards||0) > 0 ? { ...m, pendingRewards: m.pendingRewards - 1, rewardMinutes: 0 } : m ) })), removeMember: (memberId) => set({ members: (get().members||[]).filter((m) => m.id !== memberId) }),
-      addMember: (data) => set((s) => { if (data.phone && (s.members||[]).some((m) => m.phone === data.phone)) return s; const newMember: Member = { id: uid(), name: data.name, idDoc: data.idDoc, phone: data.phone, totalMinutes: 0, rewardMinutes: 0, pendingRewards: 0, createdAt: Date.now(), lastVisit: Date.now() }; return { members: [...(s.members||[]), newMember] }; }), updateMember: (memberId, data) => set((s) => ({ members: (s.members||[]).map((m) => (m.id === memberId ? { ...m, ...data } : m)) })),
       closeDay: () => set((s) => { return { sales: [], sessionHistory: [], consoles: (s.consoles||[]).map((c) => ({ ...c, session: undefined, charges: [] })) }; }),
       registerMaintenance: (consoleId, description, date) => set((s) => { const c = (s.consoles||[]).find((x) => x.id === consoleId); if (!c) return s; const log: MaintenanceLog = { id: uid(), consoleId: c.id, consoleName: c.name, description, date, minutesAtService: c.maintenanceMinutes || 0 }; return { consoles: (s.consoles||[]).map((x) => x.id === consoleId ? { ...x, maintenanceMinutes: 0 } : x ), maintenanceLogs: [log, ...(s.maintenanceLogs||[])] }; }),
       deleteMaintenanceLog: (logId) => set((s) => { const log = (s.maintenanceLogs||[]).find(l => l.id === logId); if (!log) return s; const consoles = (s.consoles||[]).map(c => { if (c.id === log.consoleId) { return { ...c, maintenanceMinutes: (c.maintenanceMinutes || 0) + log.minutesAtService }; } return c; }); return { maintenanceLogs: (s.maintenanceLogs||[]).filter(l => l.id !== logId), consoles }; }),
@@ -123,7 +122,7 @@ export const useStore = create<State>()(
       name: "gamerzone-store-v1",
       storage: {
         getItem: async (name) => { try { const { data, error } = await supabase.from('app_state').select('state').eq('id', name).maybeSingle(); if (!error && data && data.state) { const safeData = vaccinateZustandPayload(data.state); localStorage.setItem(name, JSON.stringify(safeData)); return safeData; } } catch (err) {} const local = localStorage.getItem(name); if (local) { try { return vaccinateZustandPayload(JSON.parse(local)); } catch(e) {} } return null; },
-        setItem: async (name, value) => { localStorage.setItem(name, typeof value === 'string' ? value : JSON.stringify(value)); if ((window as any).isSincronizando || (window as any).bloquearSync) return; (window as any).estadoPendiente = value; if ((window as any).relojSubida) clearTimeout((window as any).relojSubida); (window as any).relojSubida = setTimeout(async () => { try { await supabase.from('app_state').upsert({ id: name, state: typeof (window as any).estadoPendiente === 'string' ? JSON.parse((window as any).estadoPendiente) : (window as any).estadoPendiente }); } catch (err) {} }, 800); },
+        setItem: async (name, value) => { localStorage.setItem(name, typeof value === 'string' ? value : JSON.stringify(value)); if ((window as any).isSincronizando) return; (window as any).estadoPendiente = value; if ((window as any).relojSubida) clearTimeout((window as any).relojSubida); (window as any).relojSubida = setTimeout(async () => { try { await supabase.from('app_state').upsert({ id: name, state: typeof (window as any).estadoPendiente === 'string' ? JSON.parse((window as any).estadoPendiente) : (window as any).estadoPendiente }); } catch (err) {} }, 800); },
         removeItem: async (name) => { localStorage.removeItem(name); try { await supabase.from('app_state').delete().eq('id', name); } catch (err) {} }
       }
     }
@@ -142,17 +141,20 @@ export const computeTimeAmount = (consoleObj: ConsoleState, nowMs: number): { mi
   return { minutes, amount: (minutes / 60) * (consoleObj.ratePerHour || 0) }; 
 };
 
-// 👈 BLOQUEO DE BUCLE INFINITO EN SUPABASE
+// 👈 LA PROTECCIÓN ANTI-BUCLES MAESTRA: Solo actualiza si los datos de la nube son estrictamente diferentes a los locales
 supabase.channel('escuchar-nube').on('postgres_changes', { event: '*', schema: 'public', table: 'app_state' }, (payload) => { 
-  if ((window as any).isSincronizando || (window as any).bloquearSync) return; 
   let rawState = payload.new ? (payload.new as any).state : null; 
   if (typeof rawState === 'string') { try { rawState = JSON.parse(rawState); } catch(e) {} } 
   rawState = vaccinateZustandPayload(rawState); 
   if (rawState?.state) { 
-    (window as any).bloquearSync = true;
-    useStore.setState(rawState.state); 
-    localStorage.setItem("gamerzone-store-v1", JSON.stringify(rawState)); 
-    setTimeout(() => { (window as any).bloquearSync = false; }, 800); 
+    const estadoActual = JSON.stringify(useStore.getState()); 
+    const estadoNube = JSON.stringify(rawState.state);
+    if (estadoActual !== estadoNube) { 
+      (window as any).isSincronizando = true; 
+      useStore.setState(rawState.state); 
+      localStorage.setItem("gamerzone-store-v1", JSON.stringify(rawState)); 
+      setTimeout(() => { (window as any).isSincronizando = false; }, 500); 
+    } 
   } 
 }).subscribe();
 
