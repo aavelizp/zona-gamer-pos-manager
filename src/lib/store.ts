@@ -30,8 +30,12 @@ export interface Tournament { id: string; name: string; game: string; maxPlayers
 export interface TournamentParticipant { id: string; tournamentId: string; memberId?: string; memberName: string; paymentStatus: "paid" | "pending"; enrolledAt: number; enrollSaleId?: string; }
 export interface TournamentMatch { id: string; tournamentId: string; round: number; matchIndex: number; player1Id?: string; player2Id?: string; winnerId?: string; isDraw?: boolean; nextMatchId?: string; }
 
+// 👈 NUEVA BÓVEDA DE CIERRES
+export interface PastClosure { id: string; date: number; totalSales: number; totalExpenses: number; sales: SaleRecord[]; expenses: Expense[]; }
+
 interface State {
   rate: number; soundOn: boolean; products: Product[]; combos: Combo[]; consoles: ConsoleState[]; sales: SaleRecord[]; credits: Credit[]; queue: QueueEntry[]; members: Member[]; maintenanceLogs: MaintenanceLog[]; sessionHistory: SessionHistoryEntry[]; expenses: Expense[]; tournaments: Tournament[]; participants: TournamentParticipant[]; matches: TournamentMatch[];
+  pastClosures: PastClosure[]; // 👈 Bóveda añadida al estado
 
   setRate: (n: number) => void; toggleSound: () => void;
   addProduct: (p: Omit<Product, "id">) => void; updateProduct: (id: string, p: Partial<Product>) => void; removeProduct: (id: string) => void;
@@ -73,6 +77,7 @@ const vaccinateZustandPayload = (payload: any) => {
     payload.state.queue = Array.isArray(payload.state.queue) ? payload.state.queue : []; 
     payload.state.sessionHistory = Array.isArray(payload.state.sessionHistory) ? payload.state.sessionHistory : []; 
     payload.state.expenses = Array.isArray(payload.state.expenses) ? payload.state.expenses : [];
+    payload.state.pastClosures = Array.isArray(payload.state.pastClosures) ? payload.state.pastClosures : [];
   } 
   return payload; 
 };
@@ -80,7 +85,7 @@ const vaccinateZustandPayload = (payload: any) => {
 export const useStore = create<State>()(
   persist(
     (set, get) => ({
-      rate: 40, soundOn: true, products: [{ id: uid(), name: "Pepsi 355ml", price: 1, stock: 24 }, { id: uid(), name: "Doritos", price: 1.5, stock: 12 }, { id: uid(), name: "Agua 500ml", price: 0.75, stock: 30 }], combos: [], consoles: defaultConsoles, sales: [], credits: [], queue: [], members: [], maintenanceLogs: [], sessionHistory: [], expenses: [], tournaments: [], participants: [], matches: [],
+      rate: 40, soundOn: true, products: [{ id: uid(), name: "Pepsi 355ml", price: 1, stock: 24 }, { id: uid(), name: "Doritos", price: 1.5, stock: 12 }, { id: uid(), name: "Agua 500ml", price: 0.75, stock: 30 }], combos: [], consoles: defaultConsoles, sales: [], credits: [], queue: [], members: [], maintenanceLogs: [], sessionHistory: [], expenses: [], tournaments: [], participants: [], matches: [], pastClosures: [],
       setRate: (n) => set({ rate: Math.max(0, n) }), toggleSound: () => set((s) => ({ soundOn: !s.soundOn })),
       addProduct: (p) => set((s) => ({ products: [...(s.products||[]), { ...p, id: uid() }] })), updateProduct: (id, p) => set((s) => ({ products: (s.products||[]).map((x) => (x?.id === id ? { ...x, ...p } : x)) })), removeProduct: (id) => set((s) => ({ products: (s.products||[]).filter((p) => p?.id !== id) })),
       addCombo: (c) => set((s) => ({ combos: [...(s.combos||[]), { ...c, id: uid() }] })), removeCombo: (id) => set((s) => ({ combos: (s.combos||[]).filter((c) => c?.id !== id) })),
@@ -96,7 +101,20 @@ export const useStore = create<State>()(
       directSale: (payload) => set((s) => { let newProducts = s.products || []; for (const it of payload.items) { newProducts = newProducts.map((p) => p?.id === it.productId ? { ...p, stock: p.stock - it.qty } : p ); } const sale: SaleRecord = { id: uid(), ts: Date.now(), timeAmount: 0, extrasAmount: payload.total, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, cashBs: payload.cashBs || 0, rate: s.rate, method: payload.method, customer: payload.customer, concept: "Venta Directa", items: payload.items.map((it) => ({ name: it.name, qty: it.qty, price: it.price })) }; const newCredits = payload.method === "credit" ? [ ...(s.credits||[]), { id: uid(), customer: payload.customer || "Sin nombre", amount: payload.total, createdAt: Date.now(), note: "Venta Directa" } ] : (s.credits||[]); return { products: newProducts, sales: [...(s.sales||[]), sale], credits: newCredits }; }),
       payCredit: (creditId, payload) => set((s) => { const credit = (s.credits||[]).find((c) => c?.id === creditId); if (!credit) return s; const sale: SaleRecord = { id: uid(), ts: Date.now(), timeAmount: 0, extrasAmount: payload.amount, total: payload.amount, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, rate: s.rate, method: payload.method, customer: credit.customer, concept: "Deuda Cobrada", items: [{ name: `Deuda de ${credit.customer}`, qty: 1, price: payload.amount }] }; const remaining = credit.amount - payload.amount; return { sales: [...(s.sales||[]), sale], credits: remaining > 0.001 ? (s.credits||[]).map((c) => (c?.id === creditId ? { ...c, amount: remaining } : c)) : (s.credits||[]).filter((c) => c?.id !== creditId) }; }),
       enqueue: (e) => set((s) => ({ queue: [...(s.queue||[]), { ...e, id: uid(), ts: Date.now() }] })), dequeue: (id) => set((s) => ({ queue: (s.queue||[]).filter((q) => q?.id !== id) })), redeemReward: (memberId) => set((s) => ({ members: (s.members||[]).map((m) => m?.id === memberId && (m.pendingRewards||0) > 0 ? { ...m, pendingRewards: m.pendingRewards - 1, rewardMinutes: 0 } : m ) })), removeMember: (memberId) => set({ members: (get().members||[]).filter((m) => m?.id !== memberId) }),
-      closeDay: () => set((s) => { return { sales: [], sessionHistory: [], consoles: (s.consoles||[]).map((c) => ({ ...c, session: undefined, charges: [] })) }; }),
+      
+      // 👈 REPARACIÓN DEL CIERRE DE CAJA: Toma la foto antes de limpiar
+      closeDay: () => set((s) => { 
+        const totalSales = (s.sales || []).reduce((acc, x) => acc + (x?.total || 0), 0);
+        const totalExpenses = (s.expenses || []).reduce((acc, x) => acc + (x?.amount || 0), 0);
+        const snapshot: PastClosure = { id: uid(), date: Date.now(), totalSales, totalExpenses, sales: [...(s.sales || [])], expenses: [...(s.expenses || [])] };
+        return { 
+          pastClosures: [snapshot, ...(s.pastClosures || [])], 
+          sales: [], 
+          sessionHistory: [], 
+          consoles: (s.consoles||[]).map((c) => ({ ...c, session: undefined, charges: [] })) 
+        }; 
+      }),
+      
       registerMaintenance: (consoleId, description, date) => set((s) => { const c = (s.consoles||[]).find((x) => x?.id === consoleId); if (!c) return s; const log: MaintenanceLog = { id: uid(), consoleId: c.id, consoleName: c.name, description, date, minutesAtService: c.maintenanceMinutes || 0 }; return { consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, maintenanceMinutes: 0 } : x ), maintenanceLogs: [log, ...(s.maintenanceLogs||[])] }; }),
       deleteMaintenanceLog: (logId) => set((s) => { const log = (s.maintenanceLogs||[]).find(l => l?.id === logId); if (!log) return s; const consoles = (s.consoles||[]).map(c => { if (c?.id === log.consoleId) { return { ...c, maintenanceMinutes: (c.maintenanceMinutes || 0) + log.minutesAtService }; } return c; }); return { maintenanceLogs: (s.maintenanceLogs||[]).filter(l => l?.id !== logId), consoles }; }),
       prepaySession: (consoleId, minutes, payload) => set((s) => { const c = (s.consoles||[]).find((x) => x?.id === consoleId); if (!c) return s; const combo = payload.comboId ? (s.combos||[]).find((cm) => cm?.id === payload.comboId) : undefined; let newProducts = s.products || []; const items: SaleRecord["items"] = []; if (combo) { for (const it of combo.items || []) { const p = (s.products||[]).find((pp) => pp?.id === it.productId); if (!p || p.stock < it.qty) return s; } newProducts = (s.products||[]).map((p) => { const it = (combo.items||[]).find((i) => i.productId === p?.id); return it ? { ...p, stock: p.stock - it.qty } : p; }); items.push({ name: `Combo: ${combo.name} - ${c.name} (${minutes} min)`, qty: 1, price: payload.total }); for (const it of combo.items || []) { const p = (s.products||[]).find((pp) => pp?.id === it.productId); if (p) items.push({ name: `  · ${p.name}`, qty: it.qty, price: 0 }); } } else { items.push({ name: `Prepago ${c.name} (${minutes} min)`, qty: 1, price: payload.total }); } const sale: SaleRecord = { id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, minutes, timeAmount: payload.total, extrasAmount: 0, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, cashBs: payload.cashBs || 0, rate: s.rate, method: payload.method, customer: payload.customerInfo?.name, concept: "Consola", items }; let newMembers = s.members || []; const ci = payload.customerInfo; if (ci && ci.name?.trim() && ci.phone?.trim()) { const key = ci.phone.trim(); const existing = newMembers.find((m) => m?.phone === key); if (existing) { const newReward = (existing.rewardMinutes||0) + minutes; const earned = Math.floor(newReward / 600); newMembers = newMembers.map((m) => m?.id === existing.id ? { ...m, name: ci.name.trim(), idDoc: ci.idDoc?.trim() || m.idDoc, totalMinutes: (m.totalMinutes||0) + minutes, rewardMinutes: newReward - earned * 600, pendingRewards: (m.pendingRewards||0) + earned, lastVisit: Date.now() } : m ); } else { const earned = Math.floor(minutes / 600); newMembers = [...newMembers, { id: uid(), name: ci.name.trim(), idDoc: ci.idDoc?.trim(), phone: key, totalMinutes: minutes, rewardMinutes: minutes - earned * 600, pendingRewards: earned, createdAt: Date.now(), lastVisit: Date.now() }]; } } return { products: newProducts, consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, session: { mode: "fixed", startedAt: Date.now(), endsAt: Date.now() + minutes * 60_000, prepaid: true, prepaidMinutes: minutes, customerName: ci?.name?.trim() } } : x ), sales: [...(s.sales||[]), sale], members: newMembers }; }),
