@@ -1,215 +1,120 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 import { useStore, fmtUsd, fmtBs } from "@/lib/store";
-import { exportData } from "@/lib/excel";
-import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { AlertTriangle, FileSpreadsheet, RotateCcw, Gamepad2, ShoppingBag, Banknote, Smartphone, HandCoins, Receipt, ImageDown } from "lucide-react";
-import { toast } from "sonner";
-import { toPng } from "html-to-image";
+import { Receipt, AlertTriangle } from "lucide-react";
 
-interface Props {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-}
-
-export function CloseDayDialog({ open, onOpenChange }: Props) {
-  const rate = useStore((s) => s.rate);
-  const sales = useStore((s) => s.sales);
-  const products = useStore((s) => s.products);
-  const credits = useStore((s) => s.credits);
-  const expenses = useStore((s) => s.expenses);
+export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const sales = useStore((s) => s.sales || []);
+  const expenses = useStore((s) => s.expenses || []);
   const closeDay = useStore((s) => s.closeDay);
-  const [confirming, setConfirming] = useState(false);
-  const [downloading, setDownloading] = useState(false);
-  const reportRef = useRef<HTMLDivElement>(null);
+  const rate = useStore((s) => s.rate);
 
-  const downloadImage = async () => {
-    if (!reportRef.current) return;
-    setDownloading(true);
-    try {
-      // Wait a frame so layout is stable
-      await new Promise((r) => requestAnimationFrame(() => r(null)));
-      const dataUrl = await toPng(reportRef.current, {
-        backgroundColor: "#ffffff",
-        pixelRatio: 2,
-        cacheBust: true,
-      });
-      const link = document.createElement("a");
-      const date = new Date().toISOString().slice(0, 10);
-      link.download = `Cierre_Caja_${date}.png`;
-      link.href = dataUrl;
-      link.click();
-      toast.success("Imagen descargada");
-    } catch (e) {
-      console.error(e);
-      toast.error("Error al generar la imagen");
-    } finally {
-      setDownloading(false);
+  const stats = useMemo(() => {
+    // 👈 MAGIA AQUÍ: Le enseñamos a la ventana que el turno comienza a las 6:00 AM
+    // Así, si estás a la 1:00 AM, buscará las ventas del día anterior correctamente.
+    const shiftStart = new Date();
+    if (shiftStart.getHours() < 6) {
+      shiftStart.setDate(shiftStart.getDate() - 1);
     }
-  };
+    shiftStart.setHours(6, 0, 0, 0);
+    const shiftTime = shiftStart.getTime();
 
-  const report = useMemo(() => {
-    const start = new Date(); start.setHours(0, 0, 0, 0);
-    const today = sales.filter((s) => s.ts >= start.getTime());
-    const todayExpenses = expenses.filter((e) => e.ts >= start.getTime());
+    const todaySales = sales.filter((s) => s && s.ts && s.ts >= shiftTime);
+    const todayExpenses = expenses.filter((e) => e && e.ts && e.ts >= shiftTime);
 
-    const totalUsd = today.reduce((a, s) => a + s.total, 0);
-    const horasUsd = today.reduce((a, s) => a + (s.timeAmount || 0), 0);
-    const inventarioUsd = today.reduce((a, s) => a + (s.concept === "Consola" ? (s.extrasAmount || 0) : 0), 0);
-    const cashUsdGross = today.reduce((a, s) => a + (s.cashUsd || 0), 0);
-    const mobileBsGross = today.reduce((a, s) => a + (s.mobileBs || 0), 0);
-    const deudasCobradas = today.filter((s) => s.concept === "Deuda Cobrada").reduce((a, s) => a + s.total, 0);
+    let cashUsd = 0;
+    let mobileBs = 0;
+    let cashBs = 0;
+    let credit = 0;
 
-    // Gastos
-    const gastosCashUsd = todayExpenses.filter((e) => e.method === "cash").reduce((a, e) => a + e.amount, 0);
-    const gastosMobileBs = todayExpenses.filter((e) => e.method === "mobile").reduce((a, e) => a + (e.amountBs || 0), 0);
-    const gastosTotalUsd = todayExpenses.reduce((a, e) => a + e.amount, 0);
+    todaySales.forEach((s) => {
+      if (s.method === "credit") {
+        credit += s.total || 0;
+      } else {
+        cashUsd += s.cashUsd || 0;
+        mobileBs += s.mobileBs || 0;
+        cashBs += s.cashBs || 0;
+      }
+    });
 
-    const cashUsd = cashUsdGross - gastosCashUsd;
-    const mobileBs = mobileBsGross - gastosMobileBs;
+    let expCashUsd = 0;
+    let expMobileBs = 0;
 
-    const fiadoHoy = credits.filter((c) => c.createdAt >= start.getTime()).reduce((a, c) => a + c.amount, 0);
+    todayExpenses.forEach((e) => {
+      if (e.method === "cash") expCashUsd += e.amount || 0;
+      if (e.method === "mobile") expMobileBs += e.amountBs || (e.amount * rate);
+    });
 
-    return { today, todayExpenses, totalUsd, horasUsd, inventarioUsd, cashUsd, mobileBs, cashUsdGross, mobileBsGross, gastosCashUsd, gastosMobileBs, gastosTotalUsd, deudasCobradas, fiadoHoy };
-  }, [sales, credits, expenses]);
+    const netCashUsd = cashUsd - expCashUsd;
+    const netMobileBs = mobileBs - expMobileBs;
 
-  const handleClose = () => {
-    // Force backup export first
-    exportData({ sales: report.today, products, credits, rate });
-    closeDay();
-    toast.success("Caja cerrada. Respaldo descargado.");
-    setConfirming(false);
-    onOpenChange(false);
+    return { 
+      cashUsd: netCashUsd, 
+      mobileBs: netMobileBs, 
+      cashBs, 
+      credit, 
+      count: todaySales.length 
+    };
+  }, [sales, expenses, rate]);
+
+  const handleCloseDay = () => {
+    if (confirm("⚠️ ¿Estás seguro de CERRAR LA CAJA? Esto pondrá los contadores en cero. ¡Asegúrate de descargar el Excel primero!")) {
+      closeDay();
+      onOpenChange(false);
+    }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle className="font-display text-2xl flex items-center gap-2">
-            <Receipt className="h-6 w-6 text-primary" /> CIERRE DE CAJA
+          <DialogTitle className="font-display flex items-center gap-2">
+            <Receipt className="h-5 w-5 text-primary" /> Cierre de Caja
           </DialogTitle>
-          <p className="text-xs text-muted-foreground">{new Date().toLocaleString("es-VE")} · Tasa: Bs {rate}/$</p>
         </DialogHeader>
 
-        <div ref={reportRef} style={{ backgroundColor: "#ffffff", color: "#0f172a", padding: "20px", borderRadius: 8, fontFamily: "Hind, system-ui, sans-serif" }}>
-          <div style={{ textAlign: "center", paddingBottom: 12, borderBottom: "2px solid #0f172a", marginBottom: 16 }}>
-            <h2 style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 24, margin: 0, color: "#0f172a" }}>RESUMEN DE CIERRE DIARIO · TWINS GAMER</h2>
-            <p style={{ fontSize: 12, margin: "4px 0 0", color: "#475569" }}>{new Date().toLocaleString("es-VE")} · Tasa: Bs {rate}/$</p>
-          </div>
+        <div className="space-y-4 py-4">
+          <Card className="p-4 bg-secondary/30 space-y-2 border-primary/20">
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground">Ventas del Turno:</span>
+              <span className="font-bold">{stats.count}</span>
+            </div>
+            <div className="border-t border-border/50 my-2" />
+            
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-semibold text-green-400">Efectivo ($) en Caja:</span>
+              <span className="font-display text-lg text-green-400">{fmtUsd(stats.cashUsd)}</span>
+            </div>
+            
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-semibold text-blue-400">Pago Móvil (Bs):</span>
+              <span className="font-display text-lg text-blue-400">{fmtBs(stats.mobileBs / rate, rate)}</span>
+            </div>
 
-          {/* Total */}
-          <div style={{ padding: 16, borderRadius: 8, backgroundColor: "#eff6ff", border: "2px solid #3b82f6", marginBottom: 12 }}>
-            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 2, color: "#475569" }}>Total Facturado Hoy</div>
-            <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 32, color: "#1d4ed8" }}>{fmtUsd(report.totalUsd)}</div>
-            <div style={{ color: "#0e7490" }}>{fmtBs(report.totalUsd, rate)}</div>
-          </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-semibold text-emerald-400">Efectivo Bs:</span>
+              <span className="font-display text-lg text-emerald-400">{fmtBs(stats.cashBs / rate, rate)}</span>
+            </div>
 
-          {/* Por categoría */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-            <div style={{ padding: 12, borderRadius: 8, border: "1px solid #cbd5e1", backgroundColor: "#f8fafc" }}>
-              <div style={{ fontSize: 11, color: "#475569" }}>🎮 Horas de Juego</div>
-              <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 20, color: "#0f172a" }}>{fmtUsd(report.horasUsd)}</div>
-              <div style={{ fontSize: 11, color: "#0e7490" }}>{fmtBs(report.horasUsd, rate)}</div>
+            <div className="border-t border-border/50 my-2" />
+            
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-yellow-500">Fiado (Por Cobrar):</span>
+              <span className="font-display text-yellow-500">{fmtUsd(stats.credit)}</span>
             </div>
-            <div style={{ padding: 12, borderRadius: 8, border: "1px solid #cbd5e1", backgroundColor: "#f8fafc" }}>
-              <div style={{ fontSize: 11, color: "#475569" }}>🛍️ Inventario / Snacks</div>
-              <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 20, color: "#0f172a" }}>{fmtUsd(report.inventarioUsd)}</div>
-              <div style={{ fontSize: 11, color: "#0e7490" }}>{fmtBs(report.inventarioUsd, rate)}</div>
-            </div>
-          </div>
+          </Card>
 
-          {/* Arqueo */}
-          <h3 style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 13, textTransform: "uppercase", letterSpacing: 2, color: "#475569", margin: "12px 0 8px" }}>Arqueo por Método de Pago</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-            <div style={{ padding: 12, borderRadius: 8, border: "1px solid #22c55e", backgroundColor: "#f0fdf4" }}>
-              <div style={{ fontSize: 11, color: "#475569" }}>💵 Efectivo en Caja ($)</div>
-              <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 20, color: "#15803d" }}>{fmtUsd(report.cashUsd)}</div>
-            </div>
-            <div style={{ padding: 12, borderRadius: 8, border: "1px solid #3b82f6", backgroundColor: "#eff6ff" }}>
-              <div style={{ fontSize: 11, color: "#475569" }}>📱 Pago Móvil / Transferencia (Bs)</div>
-              <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 20, color: "#1d4ed8" }}>Bs {report.mobileBs.toLocaleString("es-VE", { maximumFractionDigits: 2 })}</div>
-              <div style={{ fontSize: 11, color: "#475569" }}>≈ {fmtUsd(report.mobileBs / (rate || 1))}</div>
-            </div>
-            <div style={{ padding: 12, borderRadius: 8, border: "1px solid #f59e0b", backgroundColor: "#fffbeb" }}>
-              <div style={{ fontSize: 11, color: "#475569" }}>🤝 Fiado Otorgado Hoy</div>
-              <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 20, color: "#b45309" }}>{fmtUsd(report.fiadoHoy)}</div>
-              <div style={{ fontSize: 11, color: "#475569" }}>No está en caja</div>
-            </div>
-            <div style={{ padding: 12, borderRadius: 8, border: "1px solid #10b981", backgroundColor: "#ecfdf5" }}>
-              <div style={{ fontSize: 11, color: "#475569" }}>🧾 Deudas Recuperadas Hoy</div>
-              <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 20, color: "#047857" }}>{fmtUsd(report.deudasCobradas)}</div>
-            </div>
-          </div>
-
-          {/* Gastos del día */}
-          {report.todayExpenses.length > 0 && (
-            <div style={{ padding: 12, borderRadius: 8, border: "1px solid #ef4444", backgroundColor: "#fef2f2", marginBottom: 12 }}>
-              <h3 style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 13, textTransform: "uppercase", letterSpacing: 2, color: "#991b1b", margin: "0 0 8px" }}>
-                💸 Gastos del Día (Caja Chica)
-              </h3>
-              {report.todayExpenses.map((e) => (
-                <div key={e.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#0f172a", borderBottom: "1px dashed #fecaca", padding: "4px 0" }}>
-                  <span>{e.description} <span style={{ color: "#64748b" }}>({e.method === "cash" ? "Efectivo $" : "Pago Móvil Bs"})</span></span>
-                  <span style={{ fontFamily: "'Archivo Black', sans-serif" }}>
-                    {e.method === "cash" ? `-${fmtUsd(e.amount)}` : `-Bs ${(e.amountBs || 0).toLocaleString("es-VE")}`}
-                  </span>
-                </div>
-              ))}
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: "#991b1b", paddingTop: 8, marginTop: 4, borderTop: "1px solid #fca5a5" }}>
-                <span style={{ fontFamily: "'Archivo Black', sans-serif" }}>TOTAL GASTOS</span>
-                <span style={{ fontFamily: "'Archivo Black', sans-serif" }}>{fmtUsd(report.gastosTotalUsd)}</span>
-              </div>
-            </div>
-          )}
-
-          {/* Cuadre */}
-          <div style={{ padding: 12, borderRadius: 8, border: "1px solid #cbd5e1", backgroundColor: "#f1f5f9" }}>
-            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 2, color: "#475569", marginBottom: 4 }}>Total Esperado en Caja (Neto · post-gastos)</div>
-            <div style={{ fontSize: 13, color: "#0f172a" }}>
-              Efectivo $: <span style={{ fontFamily: "'Archivo Black', sans-serif" }}>{fmtUsd(report.cashUsd)}</span>
-              {report.gastosCashUsd > 0 && <span style={{ fontSize: 11, color: "#991b1b" }}> (bruto {fmtUsd(report.cashUsdGross)} − gastos {fmtUsd(report.gastosCashUsd)})</span>}
-            </div>
-            <div style={{ fontSize: 13, color: "#0f172a" }}>
-              Pago Móvil Bs: <span style={{ fontFamily: "'Archivo Black', sans-serif" }}>Bs {report.mobileBs.toLocaleString("es-VE", { maximumFractionDigits: 2 })}</span>
-              {report.gastosMobileBs > 0 && <span style={{ fontSize: 11, color: "#991b1b" }}> (bruto Bs {report.mobileBsGross.toLocaleString("es-VE")} − gastos Bs {report.gastosMobileBs.toLocaleString("es-VE")})</span>}
-            </div>
+          <div className="bg-warning/10 border border-warning/30 p-3 rounded-md flex gap-2">
+            <AlertTriangle className="h-5 w-5 text-warning shrink-0" />
+            <p className="text-[10px] text-warning">Recuerda descargar el reporte en Excel antes de cerrar la caja, ya que los montos volverán a cero.</p>
           </div>
         </div>
 
-
-        {confirming && (
-          <Card className="p-3 border-destructive/60 bg-destructive/10">
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
-              <div className="text-sm">
-                <p className="font-bold">¿Estás seguro?</p>
-                <p className="text-xs text-muted-foreground">Se borrarán los datos de ventas de HOY. Asegúrate de haber descargado tu reporte primero. NO se tocarán: inventario, cuentas por cobrar, clientes del Club Gamer, ni los minutos acumulados históricos de las consolas.</p>
-              </div>
-            </div>
-          </Card>
-        )}
-
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={() => exportData({ sales: report.today, products, credits, rate })}>
-            <FileSpreadsheet className="h-4 w-4 mr-1" /> Excel
-          </Button>
-          <Button variant="outline" onClick={downloadImage} disabled={downloading}>
-            <ImageDown className="h-4 w-4 mr-1" /> {downloading ? "Generando..." : "Descargar Resumen (Imagen)"}
-          </Button>
-          {!confirming ? (
-            <Button variant="destructive" onClick={() => setConfirming(true)}>
-              <RotateCcw className="h-4 w-4 mr-1" /> Finalizar Día y Reiniciar Caja
-            </Button>
-          ) : (
-            <>
-              <Button variant="ghost" onClick={() => setConfirming(false)}>Cancelar</Button>
-              <Button variant="destructive" onClick={handleClose}>
-                <RotateCcw className="h-4 w-4 mr-1" /> Sí, Cerrar y Reiniciar
-              </Button>
-            </>
-          )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button onClick={handleCloseDay} className="bg-gradient-to-r from-primary to-accent">Confirmar Cierre</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
