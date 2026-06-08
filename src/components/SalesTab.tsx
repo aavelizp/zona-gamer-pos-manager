@@ -1,107 +1,105 @@
-import { useState } from "react";
-import { useStore, fmtUsd, type SaleRecord } from "@/lib/store";
+import { useStore, fmtUsd, fmtBs } from "@/lib/store";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ReceiptDialog, type ReceiptData } from "@/components/Receipt";
-import { Trash2, FileText, AlertTriangle } from "lucide-react";
+import { FileSpreadsheet, Clock, AlertOctagon, Trash2 } from "lucide-react";
+import { exportData } from "@/lib/excel";
 
 export function SalesTab() {
-  const sales = useStore((s) => s.sales);
-  const deleteSale = useStore((s) => (s as any).deleteSale);
-  const resetConsoleStats = useStore((s) => (s as any).resetConsoleStats);
-  const consoles = useStore((s) => s.consoles);
+  const sales = useStore((s) => s.sales || []);
+  const pastClosures = useStore((s) => (s as any).pastClosures || []);
+  const products = useStore((s) => s.products || []);
+  const credits = useStore((s) => s.credits || []);
+  const rate = useStore((s) => s.rate);
+  const deleteSale = useStore((s) => s.deleteSale);
 
-  const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
-
-  // Ordenar ventas mostrando las más recientes primero
-  const sortedSales = [...sales].sort((a, b) => b.ts - a.ts);
-
-  const handleShowReceipt = (sale: SaleRecord) => {
-    setReceiptData({
-      ts: sale.ts,
-      rate: sale.rate,
-      consoleName: sale.consoleName,
-      minutes: sale.minutes || 0,
-      timeAmount: sale.timeAmount,
-      items: sale.items,
-      total: sale.total,
-      method: sale.method,
-      cashUsd: sale.cashUsd,
-      mobileBs: sale.mobileBs,
-      cashBs: sale.cashBs,
-      customer: { name: sale.customer || "Consumidor Final" }
+  const formatDate = (ts: number) => {
+    if (!ts) return "Fecha desconocida";
+    return new Date(ts).toLocaleString("es-VE", {
+      day: "2-digit", month: "2-digit", year: "numeric",
+      hour: "2-digit", minute: "2-digit", hour12: true
     });
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-end">
-        <h2 className="font-display text-xl text-primary">📊 Ventas del Día</h2>
-        <p className="text-sm text-muted-foreground">{sales.length} transacciones</p>
+      <div className="bg-red-500/10 border border-red-500/30 p-4 rounded-md flex items-start gap-3">
+        <AlertOctagon className="h-6 w-6 text-red-500 shrink-0" />
+        <div>
+          <h3 className="text-red-400 font-bold uppercase tracking-widest">Panel de Rescate de Datos</h3>
+          <p className="text-sm text-muted-foreground mt-1">
+            Aquí ves <b>TODO</b> el historial sin filtros de fecha ni hora. Si el sistema te ocultó las ventas por pasar de la medianoche, las encontrarás en la primera tabla. Si por error le diste a "Cerrar Caja", las encontrarás intactas en la <b>Bóveda de Cierres Anteriores</b> más abajo.
+          </p>
+        </div>
       </div>
 
-      <div className="rounded-md border border-border bg-card overflow-hidden">
-        <table className="w-full text-sm text-left">
-          <thead className="bg-muted/50 text-muted-foreground uppercase text-xs font-display tracking-wider border-b border-border">
-            <tr>
-              <th className="p-3">Hora</th>
-              <th className="p-3">Concepto</th>
-              <th className="p-3">Cliente</th>
-              <th className="p-3">Método</th>
-              <th className="p-3 text-right">Total</th>
-              <th className="p-3 text-center">Acciones</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border/60">
-            {sortedSales.length === 0 ? (
-              <tr><td colSpan={6} className="text-center p-8 text-muted-foreground">No hay ventas registradas hoy.</td></tr>
-            ) : (
-              sortedSales.map((s) => (
-                <tr key={s.id} className="hover:bg-muted/20 transition-colors">
-                  <td className="p-3 text-muted-foreground">{new Date(s.ts).toLocaleTimeString("es-VE", { hour: '2-digit', minute: '2-digit' })}</td>
-                  <td className="p-3 font-semibold">{s.concept} {s.consoleName ? `(${s.consoleName})` : ""}</td>
-                  <td className="p-3">{s.customer || "—"}</td>
-                  <td className="p-3 uppercase text-xs">{s.method}</td>
-                  <td className="p-3 text-right font-display text-accent">{fmtUsd(s.total)}</td>
-                  <td className="p-3 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <Button variant="outline" size="sm" className="h-8 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10" onClick={() => handleShowReceipt(s)}>
-                        <FileText className="h-4 w-4" />
-                      </Button>
-                      <Button variant="outline" size="sm" className="h-8 text-red-400 hover:text-red-300 hover:bg-red-500/10" onClick={() => {
-                        if (confirm("⚠️ ¿Estás seguro de eliminar esta venta? El monto se restará inmediatamente de la caja del día.")) {
-                          deleteSale(s.id);
-                        }
-                      }}>
+      <Card className="p-4 border-primary/30 shadow-[0_0_15px_rgba(158,84,255,0.1)]">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-display text-lg text-primary flex items-center gap-2">
+            <Clock className="h-5 w-5" /> Ventas Activas en Memoria
+          </h3>
+          <Button onClick={() => exportData({ sales, products, credits, rate })} variant="outline" className="border-green-500/50 text-green-400 hover:bg-green-500/10">
+            <FileSpreadsheet className="h-4 w-4 mr-2" /> Exportar a Excel
+          </Button>
+        </div>
+        
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-left">
+            <thead className="bg-muted/50 text-muted-foreground uppercase text-[10px] tracking-wider">
+              <tr>
+                <th className="p-2">Fecha/Hora</th>
+                <th className="p-2">Concepto</th>
+                <th className="p-2">Cliente</th>
+                <th className="p-2 text-right">Total</th>
+                <th className="p-2 text-center">Acción</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/50">
+              {sales.length === 0 ? (
+                <tr><td colSpan={5} className="p-4 text-center text-muted-foreground italic">No hay ventas activas. Si cerraste la caja, revisa la bóveda abajo.</td></tr>
+              ) : (
+                [...sales].sort((a,b) => b.ts - a.ts).map(s => (
+                  <tr key={s.id} className="hover:bg-muted/20">
+                    <td className="p-2 font-mono text-xs">{formatDate(s.ts)}</td>
+                    <td className="p-2">{s.concept}</td>
+                    <td className="p-2">{s.customer || "---"}</td>
+                    <td className="p-2 text-right font-bold text-accent">{fmtUsd(s.total)}</td>
+                    <td className="p-2 text-center">
+                      <Button variant="ghost" size="icon" className="h-6 w-6 text-red-400 hover:bg-red-500/10" onClick={() => { if(confirm("¿Seguro que deseas eliminar esta venta?")) deleteSale(s.id); }}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="border-t border-border pt-6 mt-6">
-        <h2 className="font-display text-lg text-destructive flex items-center gap-2 mb-4">
-          <AlertTriangle className="h-5 w-5" /> Limpiar Historial de Consolas (Datos de Prueba)
-        </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          {consoles.map(c => (
-            <Button key={c.id} variant="outline" className="border-red-500/30 text-red-400 hover:bg-red-500/10" onClick={() => {
-              if (confirm(`⚠️ ¿Borrar todo el historial y dejar en 0 horas a la ${c.name}?`)) {
-                resetConsoleStats(c.id);
-              }
-            }}>
-              Resetear {c.name}
-            </Button>
-          ))}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
-        <p className="text-xs text-muted-foreground mt-3">Al resetear una consola, sus horas totales jugadas volverán a 0. Ideal para borrar datos de pruebas.</p>
-      </div>
+      </Card>
 
-      <ReceiptDialog open={!!receiptData} onClose={() => setReceiptData(null)} data={receiptData} />
+      <Card className="p-4 border-yellow-500/30 shadow-[0_0_15px_rgba(234,179,8,0.1)]">
+        <h3 className="font-display text-lg text-yellow-500 mb-4 flex items-center gap-2">
+          <Clock className="h-5 w-5" /> Bóveda de Cierres Anteriores (Caja Fuerte)
+        </h3>
+        <div className="space-y-4">
+          {pastClosures.length === 0 ? (
+            <p className="text-center text-muted-foreground italic p-4">No hay cierres guardados en la bóveda aún.</p>
+          ) : (
+            [...pastClosures].sort((a:any, b:any) => b.date - a.date).map((closure: any) => (
+              <div key={closure.id} className="border border-border/50 rounded-md p-4 bg-secondary/20 flex flex-wrap justify-between items-center gap-4">
+                <div>
+                  <p className="font-bold text-yellow-400 text-lg">Cierre del {formatDate(closure.date)}</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Cantidad de Ventas: {closure.sales?.length || 0} | Ingreso Bruto: <span className="text-white font-bold">{fmtUsd(closure.totalSales)}</span>
+                  </p>
+                </div>
+                <Button onClick={() => exportData({ sales: closure.sales || [], products, credits, rate })} variant="outline" className="border-green-500/50 text-green-400 hover:bg-green-500/10">
+                  <FileSpreadsheet className="h-4 w-4 mr-2" /> Descargar Excel de este Cierre
+                </Button>
+              </div>
+            ))
+          )}
+        </div>
+      </Card>
     </div>
   );
 }
