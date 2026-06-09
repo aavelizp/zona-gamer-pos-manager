@@ -1,8 +1,8 @@
 import { useMemo } from "react";
-import { useStore, fmtUsd, fmtBs } from "@/lib/store";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { useStore, fmtUsd } from "@/lib/store";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Receipt, AlertTriangle, Download } from "lucide-react";
+import { Download, AlertTriangle } from "lucide-react";
 import { exportData } from "@/lib/excel";
 
 export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
@@ -14,7 +14,7 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   const rate = useStore((s) => s.rate);
 
   const stats = useMemo(() => {
-    // Matemática intacta: El turno inicia a las 6:00 AM
+    // El turno comienza a las 6:00 AM para evitar cierres erróneos a medianoche
     const shiftStart = new Date();
     if (shiftStart.getHours() < 6) {
       shiftStart.setDate(shiftStart.getDate() - 1);
@@ -25,117 +25,162 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     const todaySales = sales.filter((s) => s && s.ts && s.ts >= shiftTime);
     const todayExpenses = expenses.filter((e) => e && e.ts && e.ts >= shiftTime);
 
-    let cashUsd = 0;
-    let mobileBs = 0;
-    let cashBs = 0;
-    let credit = 0;
+    let totalFacturado = 0;
+    let horasJuego = 0;
+    let snacks = 0;
+    
+    let efectivo = 0;
+    let pagoMovilBs = 0;
+    let fiado = 0;
+    let deudas = 0;
 
     todaySales.forEach((s) => {
-      if (s.method === "credit") {
-        credit += s.total || 0;
+      if (s.concept === "Deuda Cobrada") {
+        deudas += s.total || 0;
+        efectivo += s.cashUsd || 0;
+        pagoMovilBs += (s.mobileBs || 0) + ((s.cashBs || 0) * rate);
       } else {
-        cashUsd += s.cashUsd || 0;
-        mobileBs += s.mobileBs || 0;
-        cashBs += s.cashBs || 0;
+        totalFacturado += s.total || 0;
+        horasJuego += s.timeAmount || 0;
+        snacks += s.extrasAmount || 0;
+
+        if (s.method === "credit") {
+          fiado += s.total || 0;
+        } else {
+          efectivo += s.cashUsd || 0;
+          pagoMovilBs += (s.mobileBs || 0) + ((s.cashBs || 0) * rate);
+        }
       }
     });
 
     let expCashUsd = 0;
     let expMobileBs = 0;
-
     todayExpenses.forEach((e) => {
       if (e.method === "cash") expCashUsd += e.amount || 0;
       if (e.method === "mobile") expMobileBs += e.amountBs || (e.amount * rate);
     });
 
-    const netCashUsd = cashUsd - expCashUsd;
-    const netMobileBs = mobileBs - expMobileBs;
+    const netCashUsd = efectivo - expCashUsd;
+    const netMobileBs = pagoMovilBs - expMobileBs;
 
     return { 
-      cashUsd: netCashUsd, 
-      mobileBs: netMobileBs, 
-      cashBs, 
-      credit, 
-      count: todaySales.length,
-      todaySales // Guardamos esto para el botón de Excel rápido
+      totalFacturado,
+      horasJuego,
+      snacks,
+      efectivo,
+      pagoMovilBs,
+      fiado,
+      deudas,
+      netCashUsd,
+      netMobileBs,
+      todaySales
     };
   }, [sales, expenses, rate]);
 
   const handleCloseDay = () => {
-    if (confirm("⚠️ ¿Estás seguro de CERRAR LA CAJA? Esto guardará el turno en la Bóveda y pondrá la pantalla de inicio en $0.00.")) {
+    if (confirm("⚠️ ¿Estás seguro de CERRAR LA CAJA? Esto guardará el reporte en la Bóveda y reiniciará los contadores.")) {
       closeDay();
       onOpenChange(false);
     }
   };
 
+  const nowStr = new Date().toLocaleString("es-VE", { 
+    day: "numeric", month: "numeric", year: "numeric", 
+    hour: "numeric", minute: "numeric", second: "numeric", hour12: true 
+  });
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md bg-[#0B0914] border-primary/50 shadow-[0_0_40px_rgba(158,84,255,0.2)]">
-        <DialogHeader className="flex flex-col items-center justify-center pt-4 pb-2">
-          {/* Logo Restaurado con Efecto Glow */}
-          <div className="relative h-20 w-20 mb-3">
-            <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full" />
-            <img src="/logo.png" alt="Twins Gamer" className="relative h-full w-full object-contain animate-pulse" />
+      {/* Forzamos fondo blanco y diseño limpio para que parezca un documento impreso */}
+      <DialogContent className="max-w-4xl p-0 bg-white text-slate-900 border-none overflow-hidden rounded-xl shadow-2xl">
+        <DialogTitle className="sr-only">Cierre de Caja</DialogTitle>
+        
+        <div className="p-8 max-h-[85vh] overflow-y-auto bg-white font-sans">
+          
+          {/* ENCABEZADO */}
+          <h2 className="text-3xl font-black text-center text-slate-900 tracking-wider uppercase mb-1">
+            RESUMEN DE CIERRE DIARIO · TWINS GAMER
+          </h2>
+          <p className="text-center text-slate-500 text-sm mb-6">
+            {nowStr} · Tasa: Bs {rate}/$
+          </p>
+          <div className="border-b-2 border-slate-900 mb-6" />
+
+          {/* TOTAL FACTURADO (AZUL) */}
+          <div className="bg-[#f0f7ff] border border-[#b6d4fe] rounded-xl p-6 mb-4 shadow-sm">
+            <p className="text-xs uppercase tracking-widest text-slate-500 font-semibold mb-2">TOTAL FACTURADO HOY</p>
+            <p className="text-6xl font-black text-blue-600 mb-1">{fmtUsd(stats.totalFacturado)}</p>
+            <p className="text-lg text-teal-600 font-medium">Bs {(stats.totalFacturado * rate).toLocaleString("es-VE", { maximumFractionDigits: 2 })}</p>
           </div>
-          <DialogTitle className="font-display text-2xl text-white tracking-widest uppercase">
-            Cierre de Caja
-          </DialogTitle>
-          <p className="text-xs text-muted-foreground uppercase tracking-widest mt-1">Resumen del Turno</p>
-        </DialogHeader>
 
-        <div className="space-y-4 px-2">
-          <div className="bg-[#131022] rounded-xl border border-primary/20 p-5 space-y-3 relative overflow-hidden">
-            <div className="flex justify-between items-center text-sm border-b border-white/5 pb-2">
-              <span className="text-muted-foreground uppercase tracking-wider text-[10px] font-bold">Ventas Registradas</span>
-              <span className="font-display text-lg text-primary">{stats.count}</span>
+          {/* HORAS Y SNACKS */}
+          <div className="grid grid-cols-2 gap-4 mb-8">
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 shadow-sm">
+              <p className="text-sm text-slate-600 mb-2 flex items-center gap-2">🎮 Horas de Juego</p>
+              <p className="text-3xl font-black text-slate-900">{fmtUsd(stats.horasJuego)}</p>
+              <p className="text-sm text-teal-600 mt-1">Bs {(stats.horasJuego * rate).toLocaleString("es-VE", { maximumFractionDigits: 2 })}</p>
             </div>
-            
-            <div className="flex justify-between items-center pt-1">
-              <span className="text-xs font-semibold text-green-400 uppercase tracking-wider">Efectivo Caja ($)</span>
-              <span className="font-display text-xl text-green-400 drop-shadow-[0_0_8px_rgba(74,222,128,0.5)]">{fmtUsd(stats.cashUsd)}</span>
-            </div>
-            
-            <div className="flex justify-between items-center">
-              <span className="text-xs font-semibold text-[#00E5FF] uppercase tracking-wider">Pago Móvil (Bs)</span>
-              <span className="font-display text-xl text-[#00E5FF] drop-shadow-[0_0_8px_rgba(0,229,255,0.5)]">{fmtBs(stats.mobileBs / rate, rate)}</span>
-            </div>
-
-            <div className="flex justify-between items-center">
-              <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Efectivo Bs 💵</span>
-              <span className="font-display text-lg text-emerald-400">{fmtBs(stats.cashBs / rate, rate)}</span>
-            </div>
-
-            <div className="border-t border-white/5 my-2" />
-            
-            <div className="flex justify-between items-center">
-              <span className="text-[10px] text-yellow-500 uppercase tracking-wider font-bold">Fiado (Por Cobrar)</span>
-              <span className="font-display text-yellow-500">{fmtUsd(stats.credit)}</span>
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 shadow-sm">
+              <p className="text-sm text-slate-600 mb-2 flex items-center gap-2">🛍️ Inventario / Snacks</p>
+              <p className="text-3xl font-black text-slate-900">{fmtUsd(stats.snacks)}</p>
+              <p className="text-sm text-teal-600 mt-1">Bs {(stats.snacks * rate).toLocaleString("es-VE", { maximumFractionDigits: 2 })}</p>
             </div>
           </div>
 
-          {/* Botón de Excel integrado en el modal */}
-          <Button 
-            variant="outline" 
-            className="w-full border-green-500/30 text-green-400 hover:bg-green-500/10 hover:text-green-300 font-bold"
-            onClick={() => exportData({ sales: stats.todaySales, products, credits, rate })}
-          >
-            <Download className="h-4 w-4 mr-2" /> Descargar Excel del Turno
-          </Button>
-
-          <div className="bg-red-500/10 border border-red-500/30 p-3 rounded-md flex gap-3 items-center">
-            <AlertTriangle className="h-6 w-6 text-red-400 shrink-0 animate-pulse" />
-            <p className="text-[10px] text-red-200 leading-tight">
-              Al confirmar, los contadores de la pantalla volverán a $0.00. Una copia intacta de este turno se guardará en la <b>Bóveda de Cierres</b>.
-            </p>
+          {/* ARQUEO DE CAJA */}
+          <h3 className="text-lg font-black uppercase text-slate-700 tracking-widest mb-4">ARQUEO POR MÉTODO DE PAGO</h3>
+          
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="bg-[#f0fdf4] border border-[#4ade80] rounded-xl p-5 shadow-sm">
+              <p className="text-sm text-slate-600 mb-2 flex items-center gap-2">💵 Efectivo en Caja ($)</p>
+              <p className="text-4xl font-black text-[#166534]">{fmtUsd(stats.efectivo)}</p>
+            </div>
+            
+            <div className="bg-[#eff6ff] border border-[#60a5fa] rounded-xl p-5 shadow-sm">
+              <p className="text-sm text-slate-600 mb-2 flex items-center gap-2">📱 Pago Móvil / Transferencia (Bs)</p>
+              <p className="text-4xl font-black text-blue-600">Bs {stats.pagoMovilBs.toLocaleString("es-VE", { maximumFractionDigits: 2 })}</p>
+              <p className="text-sm text-slate-500 mt-1">≈ {fmtUsd(stats.pagoMovilBs / rate)}</p>
+            </div>
+            
+            <div className="bg-[#fffbeb] border border-[#fbbf24] rounded-xl p-5 shadow-sm">
+              <p className="text-sm text-slate-600 mb-2 flex items-center gap-2">🤝 Fiado Otorgado Hoy</p>
+              <p className="text-4xl font-black text-[#b45309]">{fmtUsd(stats.fiado)}</p>
+              <p className="text-sm text-slate-500 mt-1">No está en caja</p>
+            </div>
+            
+            <div className="bg-[#ecfdf5] border border-[#34d399] rounded-xl p-5 shadow-sm">
+              <p className="text-sm text-slate-600 mb-2 flex items-center gap-2">🧾 Deudas Recuperadas Hoy</p>
+              <p className="text-4xl font-black text-[#059669]">{fmtUsd(stats.deudas)}</p>
+            </div>
           </div>
+
+          {/* TOTAL ESPERADO (POST GASTOS) */}
+          <div className="bg-slate-100 border border-slate-300 rounded-xl p-6 shadow-sm">
+            <p className="text-xs uppercase tracking-widest text-slate-500 font-semibold mb-4">TOTAL ESPERADO EN CAJA (NETO · POST-GASTOS)</p>
+            <p className="text-xl text-slate-800 mb-2">Efectivo $: <span className="font-black text-black">{fmtUsd(stats.netCashUsd)}</span></p>
+            <p className="text-xl text-slate-800">Pago Móvil Bs: <span className="font-black text-black">Bs {stats.netMobileBs.toLocaleString("es-VE", { maximumFractionDigits: 2 })}</span></p>
+          </div>
+
         </div>
 
-        <DialogFooter className="mt-2 flex-wrap gap-2 px-2 pb-4">
-          <Button variant="ghost" onClick={() => onOpenChange(false)} className="text-muted-foreground">Cancelar</Button>
-          <Button onClick={handleCloseDay} className="bg-gradient-to-r from-red-600 to-red-900 text-white font-display tracking-widest hover:scale-[1.02] transition-transform shadow-[0_0_15px_rgba(220,38,38,0.5)]">
-            <Receipt className="h-4 w-4 mr-2" /> Confirmar Cierre
-          </Button>
-        </DialogFooter>
+        {/* BARRA DE BOTONES INFERIOR */}
+        <div className="bg-slate-50 border-t border-slate-200 p-4 flex justify-between items-center px-8">
+          <div className="flex items-center gap-2 text-red-500 bg-red-50 px-3 py-2 rounded-lg border border-red-100">
+            <AlertTriangle className="h-5 w-5" />
+            <p className="text-xs font-semibold">Asegúrate de descargar el Excel antes de cerrar.</p>
+          </div>
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={() => onOpenChange(false)} className="border-slate-300 text-slate-700 bg-white hover:bg-slate-100">
+              Cancelar
+            </Button>
+            <Button onClick={() => exportData({ sales: stats.todaySales, products, credits, rate })} className="bg-green-600 hover:bg-green-700 text-white shadow-md font-bold">
+              <Download className="h-4 w-4 mr-2" /> Descargar Excel
+            </Button>
+            <Button onClick={handleCloseDay} className="bg-slate-900 hover:bg-slate-800 text-white shadow-md font-bold tracking-wider">
+              CONFIRMAR CIERRE
+            </Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );
