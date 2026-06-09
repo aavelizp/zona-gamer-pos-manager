@@ -88,23 +88,39 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     }
   };
 
-  // 📸 Función para tomar la foto y descargarla
+  // 📸 FUNCIÓN CORREGIDA Y BLINDADA PARA DESCARGAR LA IMAGEN
   const handleDownloadImage = async () => {
-    if (!printRef.current) return;
+    if (!printRef.current) {
+      toast.error("No se pudo ubicar el área a capturar.");
+      return;
+    }
+    
     try {
-      toast.info("Generando imagen...", { id: "img-toast" });
+      toast.loading("Generando imagen...", { id: "img-toast" });
+      
+      // Le damos 300ms a la ventana para asegurar que cargó bien y las animaciones terminaron
+      await new Promise(resolve => setTimeout(resolve, 300));
+
       const canvas = await html2canvas(printRef.current, { 
-        scale: 2, // Alta calidad
+        scale: 2, 
         backgroundColor: '#ffffff',
-        useCORS: true
+        useCORS: true,
+        logging: false
       });
+      
       const dataUrl = canvas.toDataURL("image/png");
       const link = document.createElement("a");
       const dateStr = new Date().toLocaleDateString('es-VE').replace(/\//g, '-');
-      link.download = `Cierre_Caja_TwinsGamer_${dateStr}.png`;
+      
       link.href = dataUrl;
+      link.download = `Cierre_Caja_TwinsGamer_${dateStr}.png`;
+      
+      // 👇 EL TRUCO MAGISTRAL: Pegamos el link temporalmente al fondo de la web para burlar la seguridad del navegador
+      document.body.appendChild(link);
       link.click();
-      toast.success("Imagen descargada con éxito", { id: "img-toast" });
+      document.body.removeChild(link);
+      
+      toast.success("Imagen descargada con éxito 📸", { id: "img-toast" });
     } catch (error) {
       console.error(error);
       toast.error("Hubo un error al generar la imagen", { id: "img-toast" });
@@ -123,7 +139,7 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
         
         <div className="max-h-[85vh] overflow-y-auto bg-white font-sans">
           
-          {/* 👇 ESTE ES EL RECUADRO EXACTO AL QUE SE LE TOMA LA FOTO 👇 */}
+          {/* 👇 RECUADRO EXACTO QUE TOMA LA FOTO 👇 */}
           <div ref={printRef} className="p-8 bg-white">
             {/* ENCABEZADO */}
             <h2 className="text-3xl font-black text-center text-slate-900 tracking-wider uppercase mb-1">
@@ -204,7 +220,6 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
               Cancelar
             </Button>
             
-            {/* BOTÓN NUEVO: DESCARGAR IMAGEN */}
             <Button onClick={handleDownloadImage} className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-md font-bold">
               <Camera className="h-4 w-4 mr-2" /> Imagen
             </Button>
