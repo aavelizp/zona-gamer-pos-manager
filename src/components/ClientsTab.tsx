@@ -1,156 +1,133 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Edit, Trash2, Search, UserPlus, UserCheck } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { Search, Edit2, Trash2, Save, X, UserPlus, Users } from "lucide-react";
+import { Label } from "@/components/ui/label";
 
 export function ClientsTab() {
-  const members = useStore((s) => s.members);
-  const addMember = useStore((s) => (s as any).addMember);
-  const updateMember = useStore((s) => (s as any).updateMember);
+  const members = useStore((s) => s.members || []);
+  const addMember = useStore((s) => s.addMember);
+  const updateMember = useStore((s) => s.updateMember);
   const removeMember = useStore((s) => s.removeMember);
 
-  const [search, setSearch] = useState("");
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingClient, setEditingClient] = useState<any>(null);
-  const [form, setForm] = useState({ name: "", idDoc: "", phone: "" });
+  const [query, setQuery] = useState("");
+  const [name, setName] = useState("");
+  const [idDoc, setIdDoc] = useState("");
+  const [phone, setPhone] = useState("");
+  
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editData, setEditData] = useState({ name: "", idDoc: "", phone: "" });
 
-  const filtered = members.filter((m) =>
-    m.name.toLowerCase().includes(search.toLowerCase()) ||
-    (m.idDoc && m.idDoc.includes(search)) ||
-    (m.phone && m.phone.includes(search))
-  );
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return members;
+    return members.filter((m) => 
+      (m.name || "").toLowerCase().includes(q) || 
+      (m.phone || "").includes(q) || 
+      (m.idDoc || "").toLowerCase().includes(q)
+    );
+  }, [members, query]);
 
-  const handleOpenNew = () => {
-    setEditingClient(null);
-    setForm({ name: "", idDoc: "", phone: "" });
-    setIsModalOpen(true);
-  };
-
-  const handleOpenEdit = (m: any) => {
-    setEditingClient(m);
-    setForm({ name: m.name, idDoc: m.idDoc || "", phone: m.phone || "" });
-    setIsModalOpen(true);
-  };
-
-  const handleSave = () => {
-    if (!form.name.trim()) return;
-    if (editingClient) {
-      updateMember(editingClient.id, form);
-    } else {
-      addMember(form);
-    }
-    setIsModalOpen(false);
+  const handleAdd = () => {
+    if (!name.trim()) return;
+    addMember({ name: name.trim(), idDoc: idDoc.trim(), phone: phone.trim() });
+    setName(""); setIdDoc(""); setPhone("");
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 w-full max-w-md bg-secondary/20 rounded-md px-3 py-1.5 border border-border/40">
-          <Search className="h-4 w-4 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Buscar por nombre, cédula o teléfono..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="bg-transparent border-0 text-sm focus:outline-none w-full text-foreground placeholder:text-muted-foreground"
-          />
-        </div>
-        <Button onClick={handleOpenNew} className="bg-green-600 hover:bg-green-700 text-white font-display tracking-wide">
-          <UserPlus className="h-4 w-4 mr-2" />
-          Agregar Cliente
-        </Button>
-      </div>
-
-      <div className="rounded-md border border-border bg-card overflow-hidden">
-        <table className="w-full text-sm text-left">
-          <thead className="bg-muted/50 text-muted-foreground uppercase text-xs font-display tracking-wider border-b border-border">
-            <tr>
-              <th className="p-3">Nombre del Cliente</th>
-              <th className="p-3">Cédula / Documento</th>
-              <th className="p-3">Teléfono</th>
-              <th className="p-3 text-center">Registro</th>
-              <th className="p-3 text-right">Acciones</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border/60">
-            {filtered.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="text-center p-8 text-muted-foreground">
-                  No hay clientes registrados con este criterio.
-                </td>
-              </tr>
-            ) : (
-              filtered.map((m) => (
-                <tr key={m.id} className="hover:bg-muted/20 transition-colors">
-                  <td className="p-3 font-semibold text-foreground">{m.name}</td>
-                  <td className="p-3 text-muted-foreground">{m.idDoc || "—"}</td>
-                  <td className="p-3 text-muted-foreground">{m.phone || "—"}</td>
-                  <td className="p-3 text-center text-xs text-muted-foreground">
-                    {new Date(m.createdAt || m.lastVisit).toLocaleDateString("es-VE")}
-                  </td>
-                  <td className="p-3 text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
-                        onClick={() => handleOpenEdit(m)}
-                        title="Editar Datos"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                        onClick={() => {
-                          if (confirm(`¿Eliminar a ${m.name}?`)) removeMember(m.id);
-                        }}
-                        title="Eliminar"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-display flex items-center gap-2">
-              {editingClient ? <UserCheck className="h-5 w-5 text-primary" /> : <UserPlus className="h-5 w-5 text-primary" />}
-              {editingClient ? "Editar Datos del Cliente" : "Registrar Cliente Manualmente"}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 py-2 text-sm">
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Nombre Completo *</label>
-              <Input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ej. Juan Pérez" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Cédula / RIF</label>
-              <Input type="text" value={form.idDoc} onChange={(e) => setForm({ ...form, idDoc: e.target.value })} placeholder="Ej. V-12345678" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Número de Teléfono</label>
-              <Input type="text" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="Ej. 04125556677" />
-            </div>
+    <div className="space-y-6">
+      
+      {/* SECCIÓN SUPERIOR: Agregar y Buscar (Apilado en móvil, al lado en PC) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card className="p-4 sm:p-5 border-primary/20 lg:col-span-2">
+          <h3 className="font-display text-base sm:text-lg mb-3 flex items-center gap-2 text-primary">
+            <UserPlus className="h-4 w-4 sm:h-5 sm:w-5" /> Registrar Cliente Manual
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+            <div><Label className="text-xs sm:text-sm mb-1 block">Nombre *</Label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Juan Pérez" className="h-10 sm:h-9" /></div>
+            <div><Label className="text-xs sm:text-sm mb-1 block">Cédula</Label><Input value={idDoc} onChange={(e) => setIdDoc(e.target.value)} placeholder="V-12345678" className="h-10 sm:h-9" /></div>
+            <div><Label className="text-xs sm:text-sm mb-1 block">Teléfono</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0412..." className="h-10 sm:h-9" /></div>
           </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave} className="bg-primary hover:bg-primary/90" disabled={!form.name.trim()}>
-              {editingClient ? "Guardar Cambios" : "Registrar"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <Button onClick={handleAdd} disabled={!name.trim()} className="w-full mt-4 h-10 sm:h-9">Añadir Cliente</Button>
+        </Card>
+
+        <Card className="p-4 sm:p-5 border-border/40 flex flex-col justify-center bg-secondary/10">
+          <Label className="text-xs sm:text-sm mb-2 text-muted-foreground uppercase tracking-wider font-semibold">Buscar en la Base de Datos</Label>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input 
+              value={query} 
+              onChange={(e) => setQuery(e.target.value)} 
+              placeholder="Buscar por nombre, cédula o teléfono..." 
+              className="pl-9 h-10 sm:h-10 w-full bg-background border-primary/30 focus-visible:ring-primary" 
+            />
+          </div>
+          <p className="text-xs text-muted-foreground mt-3 text-right">Total registrados: <span className="font-bold text-foreground">{members.length}</span></p>
+        </Card>
+      </div>
+
+      {/* SECCIÓN DE LA TABLA: Deslizable (Swipe) en móvil */}
+      <Card className="border-border/40 overflow-hidden">
+        <div className="bg-secondary/30 p-3 sm:p-4 border-b border-border/50 flex items-center gap-2">
+          <Users className="h-4 w-4 sm:h-5 sm:w-5 text-accent" />
+          <h3 className="font-display text-sm sm:text-base tracking-wider">Directorio de Clientes</h3>
+        </div>
+        
+        {/* 👇 Contenedor clave para dispositivos móviles 👇 */}
+        <div className="overflow-x-auto">
+          {/* min-w-[800px] asegura que haya suficiente espacio para no cortar los textos */}
+          <table className="w-full text-sm text-left min-w-[800px]">
+            <thead className="bg-secondary/50 text-muted-foreground uppercase text-xs tracking-wider">
+              <tr>
+                <th className="p-3 sm:p-4">Nombre</th>
+                <th className="p-3 sm:p-4">Cédula</th>
+                <th className="p-3 sm:p-4">Teléfono</th>
+                <th className="p-3 sm:p-4">Horas Jugadas</th>
+                <th className="p-3 sm:p-4 text-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/50">
+              {filtered.length === 0 ? (
+                <tr><td colSpan={5} className="p-6 text-center text-muted-foreground italic">No se encontraron clientes.</td></tr>
+              ) : (
+                filtered.map((m) => (
+                  <tr key={m.id} className="hover:bg-secondary/10 transition-colors">
+                    <td className="p-3 sm:p-4 font-medium">
+                      {editingId === m.id ? <Input value={editData.name} onChange={(e) => setEditData({...editData, name: e.target.value})} className="h-8" /> : m.name}
+                    </td>
+                    <td className="p-3 sm:p-4 text-muted-foreground">
+                      {editingId === m.id ? <Input value={editData.idDoc} onChange={(e) => setEditData({...editData, idDoc: e.target.value})} className="h-8" /> : (m.idDoc || "---")}
+                    </td>
+                    <td className="p-3 sm:p-4 text-muted-foreground">
+                      {editingId === m.id ? <Input value={editData.phone} onChange={(e) => setEditData({...editData, phone: e.target.value})} className="h-8" /> : (m.phone || "---")}
+                    </td>
+                    <td className="p-3 sm:p-4">
+                      <span className="bg-primary/10 text-primary px-2 py-1 rounded-md text-xs font-bold">
+                        {Math.floor((m.totalMinutes || 0) / 60)}h {(m.totalMinutes || 0) % 60}m
+                      </span>
+                    </td>
+                    <td className="p-3 sm:p-4 flex justify-center gap-2">
+                      {editingId === m.id ? (
+                        <>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-green-400 hover:bg-green-500/20" onClick={() => { updateMember(m.id, editData); setEditingId(null); }}><Save className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:bg-secondary" onClick={() => setEditingId(null)}><X className="h-4 w-4" /></Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-primary hover:bg-primary/20" onClick={() => { setEditingId(m.id); setEditData({ name: m.name, idDoc: m.idDoc || "", phone: m.phone || "" }); }}><Edit2 className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/20" onClick={() => { if(confirm("¿Eliminar cliente? Perderá sus horas acumuladas.")) removeMember(m.id); }}><Trash2 className="h-4 w-4" /></Button>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
     </div>
   );
 }

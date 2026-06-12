@@ -69,7 +69,12 @@ function Checkout({ open, onClose, consoleObj, now }: any) {
                 <div className="space-y-2 border border-border rounded-md p-3 bg-background/40">
                   <Label className="text-xs uppercase tracking-wider text-accent font-semibold">¿Cómo pagó?</Label>
                   <RadioGroup value={fullPayMode} onValueChange={(v) => setFullPayMode(v as any)} className="grid grid-cols-1 gap-2"><label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "cash" ? "border-primary bg-primary/10" : "border-border"}`}><RadioGroupItem value="cash" /><div><p className="text-sm font-semibold">Efectivo $</p></div></label><label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "mobile" ? "border-primary bg-primary/10" : "border-border"}`}><RadioGroupItem value="mobile" /><div><p className="text-sm font-semibold">Pago Móvil Bs</p></div></label><label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "cash_bs" ? "border-primary bg-primary/10" : "border-border"}`}><RadioGroupItem value="cash_bs" /><div><p className="text-sm font-semibold">Efectivo Bs 💵</p></div></label></RadioGroup>
-                  {fullPayMode === "mobile" && ( <div className="grid grid-cols-2 gap-2 mt-3 p-3 bg-primary/10 rounded-md border border-primary/20"><div><Label className="text-[10px] uppercase font-bold text-primary tracking-wider">Banco *</Label><select className="w-full h-9 rounded-md border border-input bg-background px-2 text-xs focus:ring-1 focus:ring-primary" value={mobileBank} onChange={(e) => setMobileBank(e.target.value)}><option value="">Seleccione...</option><option value="Banesco">Banesco</option><option value="Mercantil">Mercantil</option><option value="Venezuela">Venezuela</option><option value="Provincial">Provincial</option><option value="BNC">BNC</option><option value="Bancamiga">Bancamiga</option><option value="Tesoro">Tesoro</option><option value="Otro">Otro</option></select></div><div><Label className="text-[10px] uppercase font-bold text-primary tracking-wider">Referencia *</Label><Input type="text" maxLength={8} value={mobileRef} onChange={(e) => setMobileRef(e.target.value.replace(/\D/g, ''))} className="h-9 text-xs font-display tracking-widest bg-background" placeholder="Ej: 1234" /></div></div> )}
+                  {fullPayMode === "mobile" && ( 
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 p-4 bg-primary/10 rounded-md border border-primary/20">
+                      <div><Label className="text-[10px] uppercase font-bold text-primary tracking-wider block mb-1">Banco Emisor *</Label><select className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:ring-1 focus:ring-primary" value={mobileBank} onChange={(e) => setMobileBank(e.target.value)}><option value="">Seleccione banco...</option><option value="Banesco">Banesco</option><option value="Mercantil">Mercantil</option><option value="Venezuela">Venezuela</option><option value="Provincial">Provincial</option><option value="BNC">BNC</option><option value="Bancamiga">Bancamiga</option><option value="Tesoro">Tesoro</option><option value="Otro">Otro</option></select></div>
+                      <div><Label className="text-[10px] uppercase font-bold text-primary tracking-wider block mb-1">Referencia *</Label><Input type="text" maxLength={8} value={mobileRef} onChange={(e) => setMobileRef(e.target.value.replace(/\D/g, ''))} className="h-10 text-sm font-display tracking-widest bg-background" placeholder="Ej: 1234" /></div>
+                    </div> 
+                  )}
                 </div>
               )}
               {method === "mixed" && ( <MixedPaymentInputs total={total} cashUsd={cashUsd} mobileBs={mobileBs} cashBs={cashBs} mobileBank={mobileBank} mobileRef={mobileRef} setCashUsd={setCashUsd} setMobileBs={setMobileBs} setCashBs={setCashBs} setMobileBank={setMobileBank} setMobileRef={setMobileRef} /> )}
@@ -112,7 +117,14 @@ function PrepayCheckout({ open, onClose, consoleObj }: any) {
               <Card className="p-3 bg-secondary/40"><div className="flex justify-between font-display text-lg"><span>TOTAL</span><span>{fmtUsd(total)}</span></div></Card>
               <CustomerSearch name={name} idDoc={idDoc} phone={phone} setName={setName} setIdDoc={setIdDoc} setPhone={setPhone} />
               <div className="grid grid-cols-2 gap-2"><Button variant={method === "full" ? "default" : "outline"} onClick={() => setMethod("full")}>Completo</Button><Button variant={method === "mixed" ? "default" : "outline"} onClick={() => setMethod("mixed")}>Mixto</Button></div>
-              {method === "full" && ( <> <div className="grid grid-cols-3 gap-2"><Button size="sm" variant={fullPayMode === "cash" ? "default" : "outline"} onClick={() => setFullPayMode("cash")}>Efectivo $</Button><Button size="sm" variant={fullPayMode === "mobile" ? "default" : "outline"} onClick={() => setFullPayMode("mobile")}>Pago Móvil</Button><Button size="sm" variant={fullPayMode === "cash_bs" ? "default" : "outline"} onClick={() => setFullPayMode("cash_bs")}>Efectivo Bs</Button></div> {fullPayMode === "mobile" && (<div className="grid grid-cols-2 gap-2 mt-2 p-3 bg-primary/10 rounded-md border border-primary/20"><div><Label className="text-[10px] uppercase font-bold text-primary tracking-wider">Banco *</Label><select className="w-full h-9 rounded-md border border-input bg-background px-2 text-xs focus:ring-1 focus:ring-primary" value={mobileBank} onChange={(e) => setMobileBank(e.target.value)}><option value="">Seleccione...</option><option value="Banesco">Banesco</option><option value="Mercantil">Mercantil</option><option value="Venezuela">Venezuela</option><option value="Provincial">Provincial</option><option value="BNC">BNC</option><option value="Bancamiga">Bancamiga</option><option value="Tesoro">Tesoro</option><option value="Otro">Otro</option></select></div><div><Label className="text-[10px] uppercase font-bold text-primary tracking-wider">Referencia *</Label><Input type="text" maxLength={8} value={mobileRef} onChange={(e) => setMobileRef(e.target.value.replace(/\D/g, ''))} className="h-9 text-xs font-display tracking-widest bg-background" placeholder="Ej: 1234" /></div></div>)} </> )}
+              {method === "full" && ( <> <div className="grid grid-cols-3 gap-2"><Button size="sm" variant={fullPayMode === "cash" ? "default" : "outline"} onClick={() => setFullPayMode("cash")}>Efectivo $</Button><Button size="sm" variant={fullPayMode === "mobile" ? "default" : "outline"} onClick={() => setFullPayMode("mobile")}>Pago Móvil</Button><Button size="sm" variant={fullPayMode === "cash_bs" ? "default" : "outline"} onClick={() => setFullPayMode("cash_bs")}>Efectivo Bs</Button></div> 
+                {fullPayMode === "mobile" && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 p-4 bg-primary/10 rounded-md border border-primary/20">
+                    <div><Label className="text-[10px] uppercase font-bold text-primary tracking-wider block mb-1">Banco Emisor *</Label><select className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:ring-1 focus:ring-primary" value={mobileBank} onChange={(e) => setMobileBank(e.target.value)}><option value="">Seleccione banco...</option><option value="Banesco">Banesco</option><option value="Mercantil">Mercantil</option><option value="Venezuela">Venezuela</option><option value="Provincial">Provincial</option><option value="BNC">BNC</option><option value="Bancamiga">Bancamiga</option><option value="Tesoro">Tesoro</option><option value="Otro">Otro</option></select></div>
+                    <div><Label className="text-[10px] uppercase font-bold text-primary tracking-wider block mb-1">Referencia *</Label><Input type="text" maxLength={8} value={mobileRef} onChange={(e) => setMobileRef(e.target.value.replace(/\D/g, ''))} className="h-10 text-sm font-display tracking-widest bg-background" placeholder="Ej: 1234" /></div>
+                  </div>
+                )} 
+              </> )}
               {method === "mixed" && (<MixedPaymentInputs total={total} cashUsd={cashUsd} mobileBs={mobileBs} cashBs={cashBs} mobileBank={mobileBank} mobileRef={mobileRef} setCashUsd={setCashUsd} setMobileBs={setMobileBs} setCashBs={setCashBs} setMobileBank={setMobileBank} setMobileRef={setMobileRef} />)}
               {!isValidRef && <p className="text-xs text-destructive animate-pulse text-center font-bold mt-2">⚠️ REQUERIDO: Selecciona el Banco y escribe la Referencia</p>}
               <DialogFooter><Button onClick={submit} disabled={method === "mixed" && remaining > 0.01 || !isValidRef} className="bg-gradient-to-r from-primary to-accent"><Receipt className="h-4 w-4 mr-1" /> Cobrar y arrancar</Button></DialogFooter>
@@ -144,7 +156,14 @@ function PayExtrasDialog({ open, onClose, consoleObj }: any) {
             <Card className="p-3 bg-secondary/40"><div className="flex justify-between font-display text-lg"><span>TOTAL</span><span>{fmtUsd(total)}</span></div></Card>
             <div><Label className="text-xs">Cliente</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
             <div className="grid grid-cols-3 gap-2"> <Button variant={method === "full" ? "default" : "outline"} onClick={() => setMethod("full")}>Completo</Button> <Button variant={method === "mixed" ? "default" : "outline"} onClick={() => setMethod("mixed")}>Mixto</Button> <Button variant={method === "credit" ? "default" : "outline"} onClick={() => setMethod("credit")}>Fiado</Button> </div>
-            {method === "full" && ( <> <div className="grid grid-cols-3 gap-2"><Button size="sm" variant={fullPayMode === "cash" ? "default" : "outline"} onClick={() => setFullPayMode("cash")}>Efectivo $</Button><Button size="sm" variant={fullPayMode === "mobile" ? "default" : "outline"} onClick={() => setFullPayMode("mobile")}>Pago Móvil</Button><Button size="sm" variant={fullPayMode === "cash_bs" ? "default" : "outline"} onClick={() => setFullPayMode("cash_bs")}>Efectivo Bs</Button></div> {fullPayMode === "mobile" && (<div className="grid grid-cols-2 gap-2 mt-2 p-3 bg-primary/10 rounded-md border border-primary/20"><div><Label className="text-[10px] uppercase font-bold text-primary tracking-wider">Banco *</Label><select className="w-full h-9 rounded-md border border-input bg-background px-2 text-xs focus:ring-1 focus:ring-primary" value={mobileBank} onChange={(e) => setMobileBank(e.target.value)}><option value="">Seleccione...</option><option value="Banesco">Banesco</option><option value="Mercantil">Mercantil</option><option value="Venezuela">Venezuela</option><option value="Provincial">Provincial</option><option value="BNC">BNC</option><option value="Bancamiga">Bancamiga</option><option value="Tesoro">Tesoro</option><option value="Otro">Otro</option></select></div><div><Label className="text-[10px] uppercase font-bold text-primary tracking-wider">Referencia *</Label><Input type="text" maxLength={8} value={mobileRef} onChange={(e) => setMobileRef(e.target.value.replace(/\D/g, ''))} className="h-9 text-xs font-display tracking-widest bg-background" placeholder="Ej: 1234" /></div></div>)} </> )}
+            {method === "full" && ( <> <div className="grid grid-cols-3 gap-2"><Button size="sm" variant={fullPayMode === "cash" ? "default" : "outline"} onClick={() => setFullPayMode("cash")}>Efectivo $</Button><Button size="sm" variant={fullPayMode === "mobile" ? "default" : "outline"} onClick={() => setFullPayMode("mobile")}>Pago Móvil</Button><Button size="sm" variant={fullPayMode === "cash_bs" ? "default" : "outline"} onClick={() => setFullPayMode("cash_bs")}>Efectivo Bs</Button></div> 
+              {fullPayMode === "mobile" && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 p-4 bg-primary/10 rounded-md border border-primary/20">
+                  <div><Label className="text-[10px] uppercase font-bold text-primary tracking-wider block mb-1">Banco Emisor *</Label><select className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:ring-1 focus:ring-primary" value={mobileBank} onChange={(e) => setMobileBank(e.target.value)}><option value="">Seleccione banco...</option><option value="Banesco">Banesco</option><option value="Mercantil">Mercantil</option><option value="Venezuela">Venezuela</option><option value="Provincial">Provincial</option><option value="BNC">BNC</option><option value="Bancamiga">Bancamiga</option><option value="Tesoro">Tesoro</option><option value="Otro">Otro</option></select></div>
+                  <div><Label className="text-[10px] uppercase font-bold text-primary tracking-wider block mb-1">Referencia *</Label><Input type="text" maxLength={8} value={mobileRef} onChange={(e) => setMobileRef(e.target.value.replace(/\D/g, ''))} className="h-10 text-sm font-display tracking-widest bg-background" placeholder="Ej: 1234" /></div>
+                </div>
+              )} 
+            </> )}
             {method === "mixed" && (<MixedPaymentInputs total={total} cashUsd={cashUsd} mobileBs={mobileBs} cashBs={cashBs} mobileBank={mobileBank} mobileRef={mobileRef} setCashUsd={setCashUsd} setMobileBs={setMobileBs} setCashBs={setCashBs} setMobileBank={setMobileBank} setMobileRef={setMobileRef} />)}
             {!isValidRef && <p className="text-xs text-destructive animate-pulse text-center font-bold mt-2">⚠️ REQUERIDO: Selecciona el Banco y escribe la Referencia</p>}
           </div>
@@ -157,6 +176,14 @@ function PayExtrasDialog({ open, onClose, consoleObj }: any) {
 }
 
 export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleState; suggested: boolean; }) {
+  const [snackOpen, setSnackOpen] = useState(false); 
+  const [comboOpen, setComboOpen] = useState(false); 
+  const [checkoutOpen, setCheckoutOpen] = useState(false); 
+  const [prepayOpen, setPrepayOpen] = useState(false); 
+  const [extendOpen, setExtendOpen] = useState<null | number>(null); 
+  const [transferOpen, setTransferOpen] = useState(false); 
+  const [payExtrasOpen, setPayExtrasOpen] = useState(false);
+
   const rate = useStore((s) => s.rate); 
   const soundOn = useStore((s) => s.soundOn); 
   const startSession = useStore((s) => s.startSession); 
@@ -171,15 +198,6 @@ export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleStat
 
   const now = useNow();
 
-  const [snackOpen, setSnackOpen] = useState(false); 
-  const [comboOpen, setComboOpen] = useState(false); 
-  const [checkoutOpen, setCheckoutOpen] = useState(false); 
-  const [prepayOpen, setPrepayOpen] = useState(false); 
-  const [extendOpen, setExtendOpen] = useState<null | number>(null); 
-  const [transferOpen, setTransferOpen] = useState(false); 
-  const [payExtrasOpen, setPayExtrasOpen] = useState(false);
-
-  // Todo esto es 100% seguro y nunca generará errores en React.
   const isPS5 = consoleObj?.type === "PS5"; 
   const session = consoleObj?.session; 
   const occupied = !!session; 
@@ -205,7 +223,6 @@ export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleStat
      } 
   }, [preAlertActive, session, soundOn, markPreAlerted, consoleObj?.id]);
 
-  // EL CORTAFUEGOS: Se ejecuta después de todos los hooks de React.
   if (!consoleObj) return null;
 
   const { amount: timeAmount, minutes } = computeTimeAmount(consoleObj, now); 
@@ -224,71 +241,74 @@ export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleStat
   const tryRelease = () => { const ok = releaseConsole(consoleObj.id); if (!ok) toast.error("Hay saldo adicional pendiente. Cóbralo antes de liberar."); };
 
   return (
-    <Card className={`relative p-4 border-2 ${statusBg} ${isPS5 ? "border-gold/70 ring-1 ring-gold/30" : ""} bg-card transition-all flex flex-col h-full`}>
+    <Card className={`relative p-3 sm:p-4 border-2 ${statusBg} ${isPS5 ? "border-gold/70 ring-1 ring-gold/30" : ""} bg-card transition-all flex flex-col h-full`}>
       {isPS5 && <div className="absolute inset-0 rounded-xl pointer-events-none glow-gold opacity-30" />}
       <div className="relative space-y-3 flex-1">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-2">
-            {isPS5 ? <Sparkles className="h-5 w-5 text-gold" /> : <Gamepad2 className="h-5 w-5 text-primary" />}
-            <div><h3 className={`font-display text-lg leading-tight ${isPS5 ? "text-gold" : ""}`}>{consoleObj.name}</h3><p className="text-xs text-muted-foreground">{fmtUsd(consoleObj.ratePerHour)}/h</p></div>
+            {isPS5 ? <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-gold" /> : <Gamepad2 className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />}
+            <div><h3 className={`font-display text-base sm:text-lg leading-tight ${isPS5 ? "text-gold" : ""}`}>{consoleObj.name}</h3><p className="text-[10px] sm:text-xs text-muted-foreground">{fmtUsd(consoleObj.ratePerHour)}/h</p></div>
           </div>
-          <div className="flex flex-col items-end gap-1"><Badge className={`${statusDot} text-foreground`}>{statusText}</Badge>{suggested && <Badge variant="outline" className="border-gold text-gold"><Star className="h-3 w-3 mr-1 fill-current" /> Sugerida</Badge>}</div>
+          <div className="flex flex-col items-end gap-1"><Badge className={`${statusDot} text-foreground text-[10px] px-1.5`}>{statusText}</Badge>{suggested && <Badge variant="outline" className="border-gold text-gold text-[10px] px-1.5"><Star className="h-3 w-3 mr-1 fill-current hidden sm:block" /> Sugerida</Badge>}</div>
         </div>
 
-        <div className={`flex items-center gap-2 rounded-md px-3 py-2 border ${occupied && customerName ? "bg-primary/15 border-primary/40" : "bg-secondary/30 border-border/40"}`}>
-          <User className={`h-4 w-4 ${occupied && customerName ? "text-primary" : "text-muted-foreground"}`} /><span className={`text-sm font-semibold truncate ${occupied && customerName ? "text-foreground" : "text-muted-foreground italic"}`}>{!occupied ? "Disponible" : customerName || "Cliente sin registrar"}</span>
+        <div className={`flex items-center gap-2 rounded-md px-2 sm:px-3 py-1.5 sm:py-2 border ${occupied && customerName ? "bg-primary/15 border-primary/40" : "bg-secondary/30 border-border/40"}`}>
+          <User className={`h-3 w-3 sm:h-4 sm:w-4 shrink-0 ${occupied && customerName ? "text-primary" : "text-muted-foreground"}`} />
+          <span className={`text-xs sm:text-sm font-semibold truncate ${occupied && customerName ? "text-foreground" : "text-muted-foreground italic"}`}>{!occupied ? "Disponible" : customerName || "Cliente sin registrar"}</span>
         </div>
 
-        <div className={`rounded-lg p-3 text-center ${isTournament ? 'bg-purple-500/20 border border-purple-500/30' : 'bg-secondary/40'}`}>
-          {!occupied ? ( <p className="text-sm text-muted-foreground">Sin sesión</p> ) : isFixed ? ( <><p className="text-xs text-muted-foreground">Restante</p>
-          {/* 👈 CINTURÓN DE SEGURIDAD PARA EL TRADUCTOR: className="notranslate" en los números */}
-          <p className={`font-display text-3xl tabular-nums notranslate ${expired ? "text-destructive" : ""}`}>{formatDuration(remainingMs)}</p></> ) : ( <><p className="text-xs text-muted-foreground">Tiempo libre</p>
-          <p className="font-display text-3xl tabular-nums notranslate">{formatDuration(elapsedMs)}</p></> )}
-          {occupied && !isPrepaid && !isTournament && <p className="text-sm mt-1 notranslate"><span className="text-accent font-semibold">{fmtUsd(total)}</span> · {fmtBs(total, rate)}</p>}
-          {occupied && isTournament && <p className="text-sm mt-1 text-purple-400 font-bold uppercase tracking-widest animate-pulse flex items-center justify-center gap-1"><Trophy className="h-4 w-4"/> Partida de Torneo</p>}
+        <div className={`rounded-lg p-2 sm:p-3 text-center ${isTournament ? 'bg-purple-500/20 border border-purple-500/30' : 'bg-secondary/40'}`}>
+          {!occupied ? ( <p className="text-xs sm:text-sm text-muted-foreground">Sin sesión</p> ) : isFixed ? ( <><p className="text-[10px] sm:text-xs text-muted-foreground">Restante</p><p className={`font-display text-2xl sm:text-3xl tabular-nums notranslate ${expired ? "text-destructive" : ""}`}>{formatDuration(remainingMs)}</p></> ) : ( <><p className="text-[10px] sm:text-xs text-muted-foreground">Tiempo libre</p><p className="font-display text-2xl sm:text-3xl tabular-nums notranslate">{formatDuration(elapsedMs)}</p></> )}
+          {occupied && !isPrepaid && !isTournament && <p className="text-xs sm:text-sm mt-1 notranslate"><span className="text-accent font-semibold">{fmtUsd(total)}</span> <span className="text-muted-foreground text-[10px] sm:text-sm">· {fmtBs(total, rate)}</span></p>}
+          {occupied && isTournament && <p className="text-[10px] sm:text-sm mt-1 text-purple-400 font-bold uppercase tracking-widest animate-pulse flex items-center justify-center gap-1"><Trophy className="h-3 w-3 sm:h-4 sm:w-4"/> Partida de Torneo</p>}
         </div>
 
-        {occupied && ( <div className={`rounded-md p-2 border ${pendingExtras > 0 ? "bg-warning/10 border-warning/40" : "bg-secondary/20 border-border/40"}`}><div className="flex justify-between items-center"><span className="text-xs uppercase tracking-wider text-muted-foreground">Adicional Pendiente</span><span className={`font-display text-base notranslate ${pendingExtras > 0 ? "text-warning" : "text-muted-foreground"}`}>{fmtUsd(pendingExtras)}</span></div></div> )}
-        {blockedRelease && ( <div className="rounded-md p-2 border border-destructive bg-destructive/10 flex items-start gap-2"><AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" /><p className="text-xs text-destructive">Tiempo agotado con saldo pendiente.</p></div> )}
+        {occupied && pendingExtras > 0 && ( <div className="rounded-md p-1.5 sm:p-2 border bg-warning/10 border-warning/40"><div className="flex justify-between items-center"><span className="text-[9px] sm:text-xs uppercase tracking-wider text-muted-foreground">Adicional Pendiente</span><span className="font-display text-sm sm:text-base text-warning notranslate">{fmtUsd(pendingExtras)}</span></div></div> )}
+        {blockedRelease && ( <div className="rounded-md p-1.5 sm:p-2 border border-destructive bg-destructive/10 flex items-start gap-2"><AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4 text-destructive shrink-0 mt-0.5" /><p className="text-[9px] sm:text-xs text-destructive leading-tight">Tiempo agotado con saldo pendiente.</p></div> )}
 
         {!occupied ? (
           <div className="space-y-2 mt-auto">
-            <div className="grid grid-cols-3 gap-2"><Button size="sm" variant="outline" onClick={() => startSession(consoleObj.id)}>Libre</Button><Button size="sm" onClick={() => startSession(consoleObj.id, 30)}>30 min</Button><Button size="sm" onClick={() => startSession(consoleObj.id, 60)}>1 hora</Button></div>
+            {/* 👇 Botones Libres: Responsivos 👇 */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <Button size="sm" variant="outline" className="col-span-2 sm:col-span-1 text-xs sm:text-sm h-8 sm:h-9" onClick={() => startSession(consoleObj.id)}>Libre</Button>
+              <Button size="sm" className="text-xs sm:text-sm h-8 sm:h-9" onClick={() => startSession(consoleObj.id, 30)}>30 min</Button>
+              <Button size="sm" className="text-xs sm:text-sm h-8 sm:h-9" onClick={() => startSession(consoleObj.id, 60)}>1 hora</Button>
+            </div>
             <div className="grid grid-cols-2 gap-2">
-              <Button size="sm" className="bg-gradient-to-r from-accent to-primary" onClick={() => setPrepayOpen(true)}><Coins className="h-4 w-4 mr-1" /> Prepago</Button>
-              <Button size="sm" variant="outline" className="border-purple-500/50 text-purple-400 hover:bg-purple-500/10" onClick={() => { 
+              <Button size="sm" className="bg-gradient-to-r from-accent to-primary text-xs sm:text-sm h-8 sm:h-9 px-1" onClick={() => setPrepayOpen(true)}><Coins className="h-3 w-3 sm:h-4 sm:w-4 mr-1 shrink-0" /> Prepago</Button>
+              <Button size="sm" variant="outline" className="border-purple-500/50 text-purple-400 hover:bg-purple-500/10 text-xs sm:text-sm h-8 sm:h-9 px-1" onClick={() => { 
                 const p1 = prompt("Escribe el nombre del Jugador 1 (Opcional):"); 
                 if (p1 === null) return; 
                 const p2 = prompt("Escribe el nombre del Jugador 2 (Opcional):"); 
-                const title = (p1 && p2) ? `${p1} vs ${p2}` : (p1 || p2 || "Partida de Torneo");
-                startSession(consoleObj.id, undefined, title, true); 
+                startSession(consoleObj.id, undefined, (p1 && p2) ? `${p1} vs ${p2}` : (p1 || p2 || "Partida de Torneo"), true); 
                 toast.success("Consola iniciada en Modo Torneo (Costo $0)");
-              }}><Trophy className="h-4 w-4 mr-1" /> Torneo</Button>
+              }}><Trophy className="h-3 w-3 sm:h-4 sm:w-4 mr-1 shrink-0" /> Torneo</Button>
             </div>
           </div>
         ) : (
           <div className="space-y-2 mt-auto">
             <div className="grid grid-cols-2 gap-2">
-              {isPrepaid ? ( <><Button size="sm" variant="secondary" onClick={() => setExtendOpen(15)}>+15 min (cobrar)</Button><Button size="sm" variant="secondary" onClick={() => setExtendOpen(30)}>+30 min (cobrar)</Button></> ) : ( <><Button size="sm" variant="secondary" onClick={() => extendSession(consoleObj.id, 15)}>+15 min</Button><Button size="sm" variant="secondary" onClick={() => extendSession(consoleObj.id, 30)}>+30 min</Button></> )}
+              {isPrepaid ? ( <><Button size="sm" variant="secondary" className="text-xs h-8 px-1" onClick={() => setExtendOpen(15)}>+15m (cobrar)</Button><Button size="sm" variant="secondary" className="text-xs h-8 px-1" onClick={() => setExtendOpen(30)}>+30m (cobrar)</Button></> ) : ( <><Button size="sm" variant="secondary" className="text-xs h-8" onClick={() => extendSession(consoleObj.id, 15)}>+15 min</Button><Button size="sm" variant="secondary" className="text-xs h-8" onClick={() => extendSession(consoleObj.id, 30)}>+30 min</Button></> )}
             </div>
             
-            <div className="grid grid-cols-3 gap-2">
-              <Button size="sm" variant="outline" onClick={() => setSnackOpen(true)}><ShoppingBag className="h-4 w-4 mr-1" />Snack</Button>
-              <Button size="sm" variant="outline" onClick={() => setComboOpen(true)}><Package className="h-4 w-4 mr-1" />Combo</Button>
-              <Button size="sm" variant="outline" className="border-primary/30 text-primary hover:bg-primary/10 px-1" onClick={() => { if (confirm(`¿Añadir 1 Control Adicional por $1 a ${consoleObj.name}?`)) { addExtraController(consoleObj.id); toast.success("Control añadido"); } }}><Gamepad2 className="h-4 w-4 mr-1" />Ctrl +$1</Button>
-              <Button size="sm" variant="outline" onClick={() => setTransferOpen(true)} className="border-white/20 hover:bg-white/10"><ArrowRightLeft className="h-4 w-4 mr-1" />Mover</Button>
-              {paused ? ( <Button size="sm" variant="default" className="col-span-2 bg-warning text-foreground hover:bg-warning/90" onClick={() => resumeSession(consoleObj.id)}><Play className="h-4 w-4 mr-1" />Reanudar</Button> ) : ( <Button size="sm" variant="outline" className="col-span-2" onClick={() => pauseSession(consoleObj.id)}><Pause className="h-4 w-4 mr-1" />Pausar</Button> )}
+            {/* 👇 Botones de Acción: De 3 columnas apretadas a 2 columnas en móvil 👇 */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <Button size="sm" variant="outline" className="text-xs h-8 px-1" onClick={() => setSnackOpen(true)}><ShoppingBag className="h-3 w-3 mr-1 shrink-0" />Snack</Button>
+              <Button size="sm" variant="outline" className="text-xs h-8 px-1" onClick={() => setComboOpen(true)}><Package className="h-3 w-3 mr-1 shrink-0" />Combo</Button>
+              <Button size="sm" variant="outline" className="border-primary/30 text-primary hover:bg-primary/10 text-xs h-8 px-1" onClick={() => { if (confirm(`¿Añadir 1 Control Adicional por $1 a ${consoleObj.name}?`)) { addExtraController(consoleObj.id); toast.success("Control añadido"); } }}><Gamepad2 className="h-3 w-3 mr-1 shrink-0" />Ctrl +$1</Button>
+              <Button size="sm" variant="outline" onClick={() => setTransferOpen(true)} className="border-white/20 hover:bg-white/10 text-xs h-8 px-1"><ArrowRightLeft className="h-3 w-3 mr-1 shrink-0" />Mover</Button>
+              {paused ? ( <Button size="sm" variant="default" className="col-span-2 sm:col-span-2 bg-warning text-foreground hover:bg-warning/90 text-xs h-8" onClick={() => resumeSession(consoleObj.id)}><Play className="h-3 w-3 mr-1" />Reanudar</Button> ) : ( <Button size="sm" variant="outline" className="col-span-2 sm:col-span-2 text-xs h-8" onClick={() => pauseSession(consoleObj.id)}><Pause className="h-3 w-3 mr-1" />Pausar</Button> )}
             </div>
 
-            {isPrepaid && pendingExtras > 0.001 && ( <Button className="w-full" variant="default" onClick={() => setPayExtrasOpen(true)}><Coins className="h-4 w-4 mr-2" /> Cobrar Adicional <span className="notranslate ml-1">{fmtUsd(pendingExtras)}</span></Button> )}
+            {isPrepaid && pendingExtras > 0.001 && ( <Button className="w-full h-8 sm:h-9 text-xs sm:text-sm" variant="default" onClick={() => setPayExtrasOpen(true)}><Coins className="h-3 w-3 sm:h-4 sm:w-4 mr-2" /> Cobrar Adicional <span className="notranslate ml-1">{fmtUsd(pendingExtras)}</span></Button> )}
             <div className="flex gap-2">
-              {isPrepaid ? ( <Button className="flex-1" variant="secondary" onClick={tryRelease} disabled={pendingExtras > 0.001}><Coins className="h-4 w-4 mr-2" /> Liberar</Button> ) : ( 
-                <Button className="flex-1 glow-primary" onClick={() => { 
+              {isPrepaid ? ( <Button className="flex-1 h-8 sm:h-9 text-xs sm:text-sm" variant="secondary" onClick={tryRelease} disabled={pendingExtras > 0.001}><Coins className="h-3 w-3 sm:h-4 sm:w-4 mr-2" /> Liberar</Button> ) : ( 
+                <Button className="flex-1 glow-primary h-8 sm:h-9 text-xs sm:text-sm" onClick={() => { 
                   if (!paused) pauseSession(consoleObj.id); 
                   setCheckoutOpen(true); 
-                }}><Coins className="h-4 w-4 mr-2" /> Cobrar <span className="notranslate ml-1">{fmtUsd(total)}</span></Button> 
+                }}><Coins className="h-3 w-3 sm:h-4 sm:w-4 mr-2" /> Cobrar <span className="notranslate ml-1">{fmtUsd(total)}</span></Button> 
               )}
-              <Button variant="outline" className="px-3 border-red-500/40 text-red-400 hover:bg-red-500/15" onClick={() => { if (confirm(`⚠️ ¿CANCELAR sesión sin cobrar?`)) cancelSession(consoleObj.id); }}><Trash2 className="h-4 w-4" /></Button>
+              <Button variant="outline" className="px-2 sm:px-3 border-red-500/40 text-red-400 hover:bg-red-500/15 h-8 sm:h-9" onClick={() => { if (confirm(`⚠️ ¿CANCELAR sesión sin cobrar?`)) cancelSession(consoleObj.id); }}><Trash2 className="h-3 w-3 sm:h-4 sm:w-4" /></Button>
             </div>
           </div>
         )}
