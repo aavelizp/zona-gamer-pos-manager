@@ -1,190 +1,154 @@
-import { useState, useMemo } from "react";
-import { useStore, fmtUsd, fmtBs, type Credit } from "@/lib/store";
+import { useState } from "react";
+import { useStore, fmtUsd } from "@/lib/store";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card } from "@/components/ui/card";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { MixedPaymentInputs } from "@/components/MixedPaymentInputs";
-import { ReceiptDialog, type ReceiptData } from "@/components/Receipt";
-import { Search, Receipt as ReceiptIcon } from "lucide-react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { FileText, Receipt, CheckCircle } from "lucide-react";
 
 export function CreditsTab() {
-  const credits = useStore((s) => s.credits);
+  const credits = useStore((s) => s.credits || []);
   const payCredit = useStore((s) => s.payCredit);
   const rate = useStore((s) => s.rate);
-
-  const [search, setSearch] = useState("");
-  const [payObj, setPayObj] = useState<Credit | null>(null);
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return credits;
-    return credits.filter(c => c.customer.toLowerCase().includes(q) || (c.note || "").toLowerCase().includes(q));
-  }, [credits, search]);
-
-  const [method, setMethod] = useState<"full" | "mixed">("full");
-  const [fullPayMode, setFullPayMode] = useState<"cash" | "mobile" | "cash_bs">("cash");
-  const [cashUsd, setCashUsd] = useState("");
-  const [mobileBs, setMobileBs] = useState("");
-  const [cashBs, setCashBs] = useState("");
   
-  // 👈 AUDITORÍA BANCARIA AÑADIDA AQUÍ
+  const [payOpen, setPayOpen] = useState<any>(null);
+  const [amount, setAmount] = useState("");
+  const [payMode, setPayMode] = useState<"cash" | "mobile" | "cash_bs">("cash");
   const [mobileBank, setMobileBank] = useState("");
   const [mobileRef, setMobileRef] = useState("");
-  
-  const [billReceived, setBillReceived] = useState("");
-  const [receipt, setReceipt] = useState<ReceiptData | null>(null);
-  const [pending, setPending] = useState(false);
 
-  const openPay = (c: Credit) => {
-    setPayObj(c);
-    setMethod("full"); setFullPayMode("cash"); setCashUsd(""); setMobileBs(""); setCashBs("");
-    setMobileBank(""); setMobileRef(""); setBillReceived("");
-    setReceipt(null); setPending(false);
-  };
-
-  const closePay = () => setPayObj(null);
-
-  const total = payObj?.amount || 0;
-
-  const cashUsdN = parseFloat(cashUsd) || 0;
-  const mobileBsN = parseFloat(mobileBs) || 0;
-  const cashBsN = parseFloat(cashBs) || 0;
-  const mobileUsd = rate > 0 ? mobileBsN / rate : 0;
-  const cashBsUsd = rate > 0 ? cashBsN / rate : 0;
-  const paid = method === "full" ? total : cashUsdN + mobileUsd + cashBsUsd;
-  const remaining = total - paid;
-  
-  const resolvedCashUsd = method === "full" ? (fullPayMode === "cash" ? total : 0) : cashUsdN;
-  const resolvedMobileBs = method === "full" ? (fullPayMode === "mobile" ? total * rate : 0) : mobileBsN;
-  const resolvedCashBs = method === "full" ? (fullPayMode === "cash_bs" ? total * rate : 0) : cashBsN;
-  const finalMethod = method === "full" && fullPayMode === "cash_bs" ? "cash_bs" : method;
-
-  const billN = parseFloat(billReceived) || 0;
-  const cashTarget = method === "full" && fullPayMode === "cash" ? total : method === "mixed" ? cashUsdN : 0;
-  const rawChange = billN - cashTarget;
-  const showBill = (method === "full" && fullPayMode === "cash") || (method === "mixed" && cashTarget > 0);
-  const changeDisplay = rawChange < 1 ? "$0" : fmtUsd(rawChange);
-
-  // 👈 REGLA DE BLOQUEO CONTABLE
-  const needsRef = (method === "full" && fullPayMode === "mobile") || (method === "mixed" && mobileBsN > 0);
-  const isValidRef = !needsRef || (mobileBank !== "" && mobileRef.length >= 4);
-
-  const submit = () => {
-    if (!payObj) return;
-    if (method === "mixed" && remaining > 0.01) return;
-    if (!isValidRef) return;
+  const handlePay = () => {
+    if (!payOpen) return;
+    const val = parseFloat(amount) || 0;
+    if (val <= 0 || val > payOpen.amount) return;
     
-    setReceipt({
-      ts: Date.now(), rate, minutes: 0, timeAmount: 0,
-      items: [{ name: `Abono de Deuda: ${payObj.customer}`, qty: 1, price: total }],
-      total, method: finalMethod, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, cashBs: resolvedCashBs,
-      customer: { name: payObj.customer }
-    });
-    setPending(true);
+    let payload: any = { amount: val, method: payMode === "cash_bs" ? "cash_bs" : "full", cashUsd: 0, mobileBs: 0 };
+    if (payMode === "cash") payload.cashUsd = val;
+    if (payMode === "mobile") {
+      payload.mobileBs = val * rate;
+      payload.mobileBank = mobileBank;
+      payload.mobileRef = mobileRef;
+    }
+    if (payMode === "cash_bs") payload.cashBs = val * rate;
+
+    payCredit(payOpen.id, payload);
+    setPayOpen(null);
+    setAmount(""); setMobileBank(""); setMobileRef("");
   };
 
-  const handleReceiptClose = () => {
-    setReceipt(null);
-    if (pending && payObj) {
-      payCredit(payObj.id, {
-        method: finalMethod, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs,
-        mobileBank: needsRef ? mobileBank : undefined, mobileRef: needsRef ? mobileRef : undefined,
-        amount: total
-      });
-      setPending(false);
-      closePay();
-    }
-  };
+  const fDate = (ts: number) => new Date(ts).toLocaleDateString("es-VE", {day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit"});
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 w-full max-w-md bg-secondary/20 rounded-md px-3 py-1.5 border border-border/40">
-        <Search className="h-4 w-4 text-muted-foreground" />
-        <input type="text" placeholder="Buscar por cliente o nota..." value={search} onChange={(e) => setSearch(e.target.value)} className="bg-transparent border-0 text-sm focus:outline-none w-full text-foreground placeholder:text-muted-foreground" />
-      </div>
+    <div className="space-y-6">
+      
+      {/* TARJETA SUPERIOR */}
+      <Card className="p-4 sm:p-5 border-border/40 bg-secondary/10 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        <div className="h-10 w-10 bg-yellow-500/20 rounded-full flex items-center justify-center shrink-0">
+          <FileText className="h-5 w-5 text-yellow-500" />
+        </div>
+        <div>
+          <h3 className="font-display text-base sm:text-lg">Cuentas por Cobrar (Fiados)</h3>
+          <p className="text-xs sm:text-sm text-muted-foreground">Gestiona las deudas pendientes de tus clientes.</p>
+        </div>
+      </Card>
 
-      <div className="rounded-md border border-border bg-card overflow-hidden">
-        <table className="w-full text-sm text-left">
-          <thead className="bg-muted/50 text-muted-foreground uppercase text-xs font-display tracking-wider border-b border-border">
-            <tr>
-              <th className="p-3">Fecha</th>
-              <th className="p-3">Cliente</th>
-              <th className="p-3">Nota</th>
-              <th className="p-3 text-right">Deuda</th>
-              <th className="p-3 text-center">Acción</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border/60">
-            {filtered.length === 0 ? (
-              <tr><td colSpan={5} className="text-center p-8 text-muted-foreground">No hay cuentas por cobrar.</td></tr>
-            ) : (
-              filtered.map((c) => (
-                <tr key={c.id} className="hover:bg-muted/20">
-                  <td className="p-3 text-muted-foreground">{new Date(c.createdAt).toLocaleDateString("es-VE")}</td>
-                  <td className="p-3 font-semibold text-foreground">{c.customer}</td>
-                  <td className="p-3 text-muted-foreground text-xs">{c.note || "—"}</td>
-                  <td className="p-3 text-right font-display text-destructive">{fmtUsd(c.amount)}</td>
-                  <td className="p-3 text-center">
-                    <Button size="sm" onClick={() => openPay(c)} className="bg-gradient-to-r from-primary to-accent text-white"><ReceiptIcon className="h-4 w-4 mr-1" /> Cobrar</Button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      {/* TABLA DE FIADOS: Deslizable en celular */}
+      <Card className="border-border/40 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-left min-w-[700px]">
+            <thead className="bg-secondary/50 text-muted-foreground uppercase text-xs tracking-wider">
+              <tr>
+                <th className="p-3 sm:p-4">Fecha / Hora</th>
+                <th className="p-3 sm:p-4">Cliente Deudor</th>
+                <th className="p-3 sm:p-4 w-64">Nota / Concepto</th>
+                <th className="p-3 sm:p-4 font-bold text-yellow-500">Deuda Restante ($)</th>
+                <th className="p-3 sm:p-4 text-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/50">
+              {credits.length === 0 ? (
+                <tr><td colSpan={5} className="p-8 text-center text-muted-foreground italic">No hay cuentas por cobrar. ¡Todo está al día! 🎉</td></tr>
+              ) : (
+                credits.map(c => (
+                  <tr key={c.id} className="hover:bg-secondary/10 transition-colors">
+                    <td className="p-3 sm:p-4 text-xs text-muted-foreground">{fDate(c.createdAt)}</td>
+                    <td className="p-3 sm:p-4 font-semibold text-sm sm:text-base">{c.customer}</td>
+                    <td className="p-3 sm:p-4 text-muted-foreground text-xs">{c.note || "---"}</td>
+                    <td className="p-3 sm:p-4 font-display text-lg text-yellow-500">{fmtUsd(c.amount)}</td>
+                    <td className="p-3 sm:p-4 text-center">
+                      <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white h-8 sm:h-9" onClick={() => { setPayOpen(c); setAmount(c.amount.toString()); }}>
+                        <Receipt className="h-4 w-4 mr-1" /> Cobrar Deuda
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
 
-      <Dialog open={!!payObj && !receipt} onOpenChange={(o) => { if (!o) closePay(); }}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle className="font-display">Cobrar Deuda</DialogTitle></DialogHeader>
-          {payObj && (
-            <div className="space-y-3">
-              <Card className="p-3 bg-secondary/40">
-                <div className="text-xs uppercase text-muted-foreground mb-1">Cliente: {payObj.customer}</div>
-                <div className="flex justify-between font-display text-lg"><span>TOTAL DEUDA</span><span className="text-destructive">{fmtUsd(total)}</span></div>
-                <div className="flex justify-between text-sm text-accent"><span>En Bs</span><span>{fmtBs(total, rate)}</span></div>
-              </Card>
+      {/* MODAL DE PAGO: 100% Responsivo */}
+      {payOpen && (
+        <Dialog open={!!payOpen} onOpenChange={(o) => !o && setPayOpen(null)}>
+          <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="font-display">Registrar Cobro de Deuda</DialogTitle>
+            </DialogHeader>
+            
+            <div className="space-y-4">
+              {/* Info Deuda */}
+              <div className="bg-secondary/30 p-3 sm:p-4 rounded-lg border border-border/50">
+                <p className="text-xs text-muted-foreground uppercase tracking-widest">Cliente</p>
+                <p className="font-bold text-sm sm:text-base mb-2">{payOpen.customer}</p>
+                <p className="text-xs text-muted-foreground uppercase tracking-widest">Monto Adeudado</p>
+                <p className="font-display text-xl sm:text-2xl text-yellow-500">{fmtUsd(payOpen.amount)}</p>
+              </div>
 
-              <div className="grid grid-cols-2 gap-2"><Button variant={method === "full" ? "default" : "outline"} onClick={() => setMethod("full")}>Completo</Button><Button variant={method === "mixed" ? "default" : "outline"} onClick={() => setMethod("mixed")}>Mixto</Button></div>
-              
-              {method === "full" && (
-                <div className="space-y-2 border border-border rounded-md p-3 bg-background/40">
-                  <Label className="text-xs uppercase tracking-wider text-accent font-semibold">¿Cómo pagó?</Label>
-                  <RadioGroup value={fullPayMode} onValueChange={(v) => setFullPayMode(v as any)} className="grid grid-cols-1 gap-2">
-                    <label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "cash" ? "border-primary bg-primary/10" : "border-border"}`}><RadioGroupItem value="cash" /><div><p className="text-sm font-semibold">Efectivo $</p></div></label>
-                    <label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "mobile" ? "border-primary bg-primary/10" : "border-border"}`}><RadioGroupItem value="mobile" /><div><p className="text-sm font-semibold">Pago Móvil Bs</p></div></label>
-                    <label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "cash_bs" ? "border-primary bg-primary/10" : "border-border"}`}><RadioGroupItem value="cash_bs" /><div><p className="text-sm font-semibold">Efectivo Bs 💵</p></div></label>
-                  </RadioGroup>
-                  
-                  {/* 👈 CELDAS DE AUDITORÍA */}
-                  {fullPayMode === "mobile" && (
-                    <div className="grid grid-cols-2 gap-2 mt-3 p-3 bg-primary/10 rounded-md border border-primary/20">
-                      <div><Label className="text-[10px] uppercase font-bold text-primary tracking-wider">Banco *</Label><select className="w-full h-9 rounded-md border border-input bg-background px-2 text-xs focus:ring-1 focus:ring-primary" value={mobileBank} onChange={(e) => setMobileBank(e.target.value)}><option value="">Seleccione...</option><option value="Banesco">Banesco</option><option value="Mercantil">Mercantil</option><option value="Venezuela">Venezuela</option><option value="Provincial">Provincial</option><option value="BNC">BNC</option><option value="Bancamiga">Bancamiga</option><option value="Tesoro">Tesoro</option><option value="Otro">Otro</option></select></div>
-                      <div><Label className="text-[10px] uppercase font-bold text-primary tracking-wider">Referencia *</Label><Input type="text" maxLength={8} value={mobileRef} onChange={(e) => setMobileRef(e.target.value.replace(/\D/g, ''))} className="h-9 text-xs font-display tracking-widest bg-background" placeholder="Ej: 1234" /></div>
+              {/* Monto a Pagar */}
+              <div>
+                <Label className="text-xs mb-1 block uppercase tracking-widest font-semibold">¿Cuánto va a abonar? ($)</Label>
+                <Input type="number" step="0.01" max={payOpen.amount} value={amount} onChange={e => setAmount(e.target.value)} className="h-12 text-xl font-bold text-green-400 bg-background/50 border-green-500/30" />
+              </div>
+
+              {/* Formas de Pago */}
+              <div className="space-y-3 border border-border rounded-md p-3 sm:p-4 bg-background/40">
+                <Label className="text-xs uppercase tracking-wider text-accent font-semibold block mb-1">¿Cómo está pagando?</Label>
+                <RadioGroup value={payMode} onValueChange={(v:any) => setPayMode(v)} className="grid grid-cols-1 gap-2">
+                  <label className={`flex items-center gap-2 border rounded-md p-3 cursor-pointer transition-colors ${payMode === "cash" ? "border-primary bg-primary/10" : "border-border hover:bg-secondary/20"}`}><RadioGroupItem value="cash" /><span className="text-sm font-semibold">Efectivo $</span></label>
+                  <label className={`flex items-center gap-2 border rounded-md p-3 cursor-pointer transition-colors ${payMode === "mobile" ? "border-primary bg-primary/10" : "border-border hover:bg-secondary/20"}`}><RadioGroupItem value="mobile" /><span className="text-sm font-semibold">Pago Móvil Bs</span></label>
+                  <label className={`flex items-center gap-2 border rounded-md p-3 cursor-pointer transition-colors ${payMode === "cash_bs" ? "border-primary bg-primary/10" : "border-border hover:bg-secondary/20"}`}><RadioGroupItem value="cash_bs" /><span className="text-sm font-semibold">Efectivo Bs 💵</span></label>
+                </RadioGroup>
+
+                {/* Sub-formulario Pago Móvil (Apilado en celular) */}
+                {payMode === "mobile" && (
+                  <div className="grid grid-cols-1 gap-3 mt-4 p-3 sm:p-4 bg-primary/10 rounded-md border border-primary/20">
+                    <div>
+                      <Label className="text-[10px] uppercase font-bold text-primary block mb-1">Banco Emisor *</Label>
+                      <select className="w-full h-10 sm:h-11 rounded-md border border-input bg-background px-3 text-sm focus:ring-1 focus:ring-primary" value={mobileBank} onChange={(e) => setMobileBank(e.target.value)}>
+                        <option value="">Seleccione banco...</option><option value="Banesco">Banesco</option><option value="Mercantil">Mercantil</option><option value="Venezuela">Venezuela</option><option value="Provincial">Provincial</option><option value="BNC">BNC</option><option value="Bancamiga">Bancamiga</option><option value="Tesoro">Tesoro</option><option value="Otro">Otro</option>
+                      </select>
                     </div>
-                  )}
-                </div>
-              )}
-
-              {method === "mixed" && (
-                <MixedPaymentInputs total={total} cashUsd={cashUsd} mobileBs={mobileBs} cashBs={cashBs} mobileBank={mobileBank} mobileRef={mobileRef} setCashUsd={setCashUsd} setMobileBs={setMobileBs} setCashBs={setCashBs} setMobileBank={setMobileBank} setMobileRef={setMobileRef} />
-              )}
-              
-              {showBill && cashTarget > 0 && (<div className="space-y-1 border border-border rounded-md p-3 bg-background/40"><Label className="text-xs">Billete recibido ($)</Label><Input type="number" step="0.01" value={billReceived} onChange={(e) => setBillReceived(e.target.value)} placeholder={cashTarget.toFixed(2)} />{billN > 0 && ( <p className={`text-sm ${rawChange < 1 ? "text-muted-foreground" : "text-accent"}`}> Vuelto a entregar: <span className="font-display">{changeDisplay}</span> </p> )}</div>)}
-              
-              {!isValidRef && <p className="text-xs text-destructive animate-pulse text-center font-bold mt-2">⚠️ REQUERIDO: Selecciona el Banco y escribe la Referencia</p>}
+                    <div>
+                      <Label className="text-[10px] uppercase font-bold text-primary block mb-1">Referencia (Últimos 4)*</Label>
+                      <Input type="text" maxLength={8} value={mobileRef} onChange={e => setMobileRef(e.target.value.replace(/\D/g, ''))} className="h-10 sm:h-11 text-sm sm:text-base font-display tracking-widest bg-background" placeholder="Ej: 1234" />
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={closePay}>Cancelar</Button>
-            <Button onClick={submit} disabled={(method === "mixed" && remaining > 0.01) || !isValidRef} className="bg-gradient-to-r from-primary to-accent"><ReceiptIcon className="h-4 w-4 mr-1" />Confirmar Pago</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <ReceiptDialog open={!!receipt} onClose={handleReceiptClose} data={receipt} />
+            
+            <DialogFooter className="mt-2 gap-2 flex-wrap sm:flex-nowrap">
+              <Button variant="outline" className="w-full sm:w-auto h-10" onClick={() => setPayOpen(null)}>Cancelar</Button>
+              <Button onClick={handlePay} disabled={!amount || (payMode==='mobile' && (!mobileBank || mobileRef.length < 4))} className="w-full sm:w-auto h-10 bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-500/20">
+                <CheckCircle className="h-4 w-4 mr-2" /> Procesar Pago
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

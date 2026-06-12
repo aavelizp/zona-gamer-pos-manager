@@ -1,120 +1,107 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useStore } from "@/lib/store";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Gift, Search, Trophy } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Search, Trophy, Gift, Star } from "lucide-react";
 
 export function MembersTab() {
-  const members = useStore((s) => s.members);
+  const members = useStore((s) => s.members || []);
   const redeemReward = useStore((s) => s.redeemReward);
+  const [query, setQuery] = useState("");
 
-  const [search, setSearch] = useState("");
-
-  // Filtramos por búsqueda y ordenamos a los jugadores con más horas de primero
-  const filtered = members
-    .filter((m) => m.name.toLowerCase().includes(search.toLowerCase()))
-    .sort((a, b) => b.totalMinutes - a.totalMinutes);
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    let list = [...members].sort((a, b) => (b.pendingRewards || 0) - (a.pendingRewards || 0));
+    if (!q) return list;
+    return list.filter((m) => m.name.toLowerCase().includes(q) || (m.phone || "").includes(q));
+  }, [members, query]);
 
   return (
-    <div className="space-y-4">
-      {/* Barra de Búsqueda */}
-      <div className="flex items-center gap-2 w-full max-w-md bg-secondary/20 rounded-md px-3 py-1.5 border border-border/40">
-        <Search className="h-4 w-4 text-muted-foreground" />
-        <input
-          type="text"
-          placeholder="Buscar gamer por nombre..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="bg-transparent border-0 text-sm focus:outline-none w-full text-foreground placeholder:text-muted-foreground"
-        />
-      </div>
+    <div className="space-y-6">
+      
+      {/* TARJETA SUPERIOR: Responsiva (Columna en móvil, fila en PC) */}
+      <Card className="p-4 sm:p-5 border-amber-500/30 bg-amber-500/5 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+        <div>
+          <h3 className="font-display text-lg text-amber-500 flex items-center gap-2">
+            <Trophy className="h-5 w-5" /> Club Gamer (Fidelidad)
+          </h3>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">Por cada 10 horas acumuladas, el cliente gana 1 hora gratis.</p>
+        </div>
+        <div className="relative w-full sm:w-72">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input 
+            value={query} 
+            onChange={(e) => setQuery(e.target.value)} 
+            placeholder="Buscar por nombre o celular..." 
+            className="pl-9 h-10 w-full bg-background/50 border-amber-500/30 focus-visible:ring-amber-500" 
+          />
+        </div>
+      </Card>
 
-      {/* Salón de la Fama / Club Gamer con Línea de Llenado Extensa */}
-      <div className="rounded-md border border-border bg-card overflow-hidden">
-        <table className="w-full text-sm text-left">
-          <thead className="bg-muted/50 text-muted-foreground uppercase text-xs font-display tracking-wider border-b border-border">
-            <tr>
-              <th className="p-3 whitespace-nowrap">Gamer</th>
-              {/* Le decimos a esta columna que ocupe TODO el ancho posible */}
-              <th className="p-3 w-full">Línea de Participación (Meta: 10h)</th>
-              <th className="p-3 text-right whitespace-nowrap">Premios</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border/60">
-            {filtered.length === 0 ? (
+      {/* TABLA: Deslizable en celular */}
+      <Card className="border-border/40 overflow-hidden">
+        <div className="overflow-x-auto">
+          {/* min-w-[700px] protege que las columnas no se compriman en el celular */}
+          <table className="w-full text-sm text-left min-w-[700px]">
+            <thead className="bg-secondary/50 text-muted-foreground uppercase text-xs tracking-wider">
               <tr>
-                <td colSpan={3} className="text-center p-8 text-muted-foreground">
-                  No se encontraron gamers con ese nombre.
-                </td>
+                <th className="p-3 sm:p-4">Cliente</th>
+                <th className="p-3 sm:p-4">Horas Totales</th>
+                <th className="p-3 sm:p-4 w-48">Progreso Próxima</th>
+                <th className="p-3 sm:p-4 text-center">Premios Disp.</th>
+                <th className="p-3 sm:p-4 text-center">Acciones</th>
               </tr>
-            ) : (
-              filtered.map((m) => {
-                // Calculamos el porcentaje de llenado (0 a 100%) basado en 600 min (10 horas)
-                const progressPercent = Math.min(100, (m.rewardMinutes / 600) * 100);
-
-                return (
-                  <tr key={m.id} className="hover:bg-muted/20 transition-colors">
-                    
-                    {/* Nombre del Jugador */}
-                    <td className="p-3 font-semibold text-foreground text-base whitespace-nowrap">
-                      {m.name}
-                    </td>
-
-                    {/* Línea de Llenado Expandida */}
-                    <td className="p-3 align-middle">
-                      <div className="w-full pr-4 md:pr-8">
-                        <div className="flex justify-between text-[11px] mb-1 font-medium">
-                          <span className="text-primary">
-                            {Math.floor(m.rewardMinutes / 60)}h {m.rewardMinutes % 60}m
+            </thead>
+            <tbody className="divide-y divide-border/50">
+              {filtered.length === 0 ? (
+                 <tr><td colSpan={5} className="p-6 text-center text-muted-foreground italic">No hay miembros en el club gamer.</td></tr>
+              ) : (
+                filtered.map(m => {
+                  const totalH = Math.floor((m.totalMinutes||0)/60);
+                  const totalM = (m.totalMinutes||0)%60;
+                  const progress = Math.min(100, Math.round(((m.rewardMinutes||0)/600)*100));
+                  return (
+                    <tr key={m.id} className="hover:bg-secondary/10 transition-colors">
+                      <td className="p-3 sm:p-4">
+                        <p className="font-bold text-sm sm:text-base">{m.name}</p>
+                        <p className="text-xs text-muted-foreground">{m.phone || "Sin teléfono"}</p>
+                      </td>
+                      <td className="p-3 sm:p-4 font-medium">{totalH}h {totalM}m</td>
+                      <td className="p-3 sm:p-4">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-2 sm:h-2.5 bg-secondary rounded-full overflow-hidden w-full">
+                            <div className="h-full bg-gradient-to-r from-amber-600 to-amber-400" style={{width: `${progress}%`}} />
+                          </div>
+                          <span className="text-xs text-muted-foreground font-bold">{progress}%</span>
+                        </div>
+                      </td>
+                      <td className="p-3 sm:p-4 text-center">
+                        {(m.pendingRewards||0) > 0 ? (
+                          <span className="inline-flex items-center justify-center gap-1 bg-amber-500/20 border border-amber-500/40 text-amber-500 px-2 py-1 rounded-md font-bold text-xs sm:text-sm">
+                            <Gift className="h-3 w-3 sm:h-4 sm:w-4" /> {(m.pendingRewards||0)}
                           </span>
-                          <span className="text-muted-foreground">10h</span>
-                        </div>
-                        
-                        <div className="h-2.5 w-full bg-secondary/60 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-gradient-to-r from-primary to-accent transition-all duration-500 ease-out"
-                            style={{ width: `${progressPercent}%` }}
-                          />
-                        </div>
-                        
-                        {m.pendingRewards === 0 && (
-                          <p className="text-[10px] text-muted-foreground mt-1.5">
-                            Faltan {600 - m.rewardMinutes} min para la hora gratis
-                          </p>
-                        )}
-                      </div>
-                    </td>
-
-                    {/* Botón de Canje o Estatus */}
-                    <td className="p-3 text-right whitespace-nowrap">
-                      {m.pendingRewards > 0 ? (
-                        <div className="flex flex-col items-end gap-2">
-                          <span className="inline-flex items-center gap-1 bg-yellow-500/20 text-yellow-500 font-display px-2 py-0.5 rounded text-xs border border-yellow-500/30 animate-pulse">
-                            <Trophy className="h-3 w-3" /> {m.pendingRewards} Disp.
-                          </span>
-                          <Button
-                            size="sm"
-                            className="bg-green-600 hover:bg-green-700 text-white shadow-md h-8"
-                            onClick={() => {
-                              if (confirm(`¿Canjear 1 hora de premio para ${m.name}?`)) {
-                                redeemReward(m.id);
-                              }
-                            }}
-                          >
-                            <Gift className="h-3.5 w-3.5 mr-1" /> Canjear
-                          </Button>
-                        </div>
-                      ) : (
-                        <span className="text-[11px] text-muted-foreground italic">Acumulando...</span>
-                      )}
-                    </td>
-                    
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+                        ) : <span className="text-muted-foreground text-xs font-semibold">0</span>}
+                      </td>
+                      <td className="p-3 sm:p-4 text-center">
+                        <Button 
+                          size="sm" 
+                          variant={(m.pendingRewards||0) > 0 ? "default" : "outline"} 
+                          className={`h-8 sm:h-9 ${((m.pendingRewards||0) > 0) ? "bg-amber-500 hover:bg-amber-600 text-black font-bold shadow-[0_0_10px_rgba(245,158,11,0.3)]" : ""}`}
+                          disabled={(m.pendingRewards||0) <= 0}
+                          onClick={() => { if(confirm(`¿Canjear 1 hora gratis para ${m.name}? El cliente podrá reclamar esta hora libre en cualquier consola.`)) redeemReward(m.id); }}
+                        >
+                          <Star className="h-4 w-4 mr-1" /> Canjear
+                        </Button>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
     </div>
-  );
+  )
 }
