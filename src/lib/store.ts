@@ -30,17 +30,16 @@ export interface Tournament { id: string; name: string; game: string; maxPlayers
 export interface TournamentParticipant { id: string; tournamentId: string; memberId?: string; memberName: string; paymentStatus: "paid" | "pending"; enrolledAt: number; enrollSaleId?: string; }
 export interface TournamentMatch { id: string; tournamentId: string; round: number; matchIndex: number; player1Id?: string; player2Id?: string; winnerId?: string; isDraw?: boolean; nextMatchId?: string; }
 
-// 👈 NUEVA BÓVEDA DE CIERRES
 export interface PastClosure { id: string; date: number; totalSales: number; totalExpenses: number; sales: SaleRecord[]; expenses: Expense[]; }
 
 interface State {
-  rate: number; soundOn: boolean; products: Product[]; combos: Combo[]; consoles: ConsoleState[]; sales: SaleRecord[]; credits: Credit[]; queue: QueueEntry[]; members: Member[]; maintenanceLogs: MaintenanceLog[]; sessionHistory: SessionHistoryEntry[]; expenses: Expense[]; tournaments: Tournament[]; participants: TournamentParticipant[]; matches: TournamentMatch[];
-  pastClosures: PastClosure[]; // 👈 Bóveda añadida al estado
+  rate: number; soundOn: boolean; products: Product[]; combos: Combo[]; consoles: ConsoleState[]; sales: SaleRecord[]; credits: Credit[]; queue: QueueEntry[]; members: Member[]; maintenanceLogs: MaintenanceLog[]; sessionHistory: SessionHistoryEntry[]; expenses: Expense[]; tournaments: Tournament[]; participants: TournamentParticipant[]; matches: TournamentMatch[]; pastClosures: PastClosure[];
 
   setRate: (n: number) => void; toggleSound: () => void;
   addProduct: (p: Omit<Product, "id">) => void; updateProduct: (id: string, p: Partial<Product>) => void; removeProduct: (id: string) => void;
   addCombo: (c: Omit<Combo, "id">) => void; removeCombo: (id: string) => void;
   startSession: (consoleId: string, minutes?: number, customerName?: string, isTournament?: boolean) => void; extendSession: (consoleId: string, addMinutes: number) => void; markAlerted: (consoleId: string) => void; markPreAlerted: (consoleId: string) => void; pauseSession: (consoleId: string) => void; resumeSession: (consoleId: string) => void; cancelSession: (consoleId: string) => void;
+  updateSessionCustomer: (consoleId: string, customerName: string) => void;
   addSnackToConsole: (consoleId: string, productId: string, qty: number) => void; applyComboToConsole: (consoleId: string, comboId: string) => void; addExtraController: (consoleId: string) => void; transferSession: (originId: string, destId: string) => void;
   finalizeConsole: (consoleId: string, payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; cashBs?: number; customer?: string; total: number; timeAmount: number; extrasAmount: number; minutes: number; customerInfo?: CustomerInfo }) => void;
   finalizeMultipleConsoles: (consoleIds: string[], payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; cashBs?: number; customer?: string; total: number; timeAmount: number; extrasAmount: number; totalMinutes: number; customerInfo?: CustomerInfo; items: { name: string; qty: number; price: number }[] }) => void;
@@ -86,34 +85,32 @@ export const useStore = create<State>()(
   persist(
     (set, get) => ({
       rate: 40, soundOn: true, products: [{ id: uid(), name: "Pepsi 355ml", price: 1, stock: 24 }, { id: uid(), name: "Doritos", price: 1.5, stock: 12 }, { id: uid(), name: "Agua 500ml", price: 0.75, stock: 30 }], combos: [], consoles: defaultConsoles, sales: [], credits: [], queue: [], members: [], maintenanceLogs: [], sessionHistory: [], expenses: [], tournaments: [], participants: [], matches: [], pastClosures: [],
+      
       setRate: (n) => set({ rate: Math.max(0, n) }), toggleSound: () => set((s) => ({ soundOn: !s.soundOn })),
       addProduct: (p) => set((s) => ({ products: [...(s.products||[]), { ...p, id: uid() }] })), updateProduct: (id, p) => set((s) => ({ products: (s.products||[]).map((x) => (x?.id === id ? { ...x, ...p } : x)) })), removeProduct: (id) => set((s) => ({ products: (s.products||[]).filter((p) => p?.id !== id) })),
       addCombo: (c) => set((s) => ({ combos: [...(s.combos||[]), { ...c, id: uid() }] })), removeCombo: (id) => set((s) => ({ combos: (s.combos||[]).filter((c) => c?.id !== id) })),
+      
       startSession: (consoleId, minutes, customerName, isTournament) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId ? { ...c, session: { mode: isTournament ? "tournament" : (minutes ? "fixed" : "free"), startedAt: Date.now(), endsAt: minutes ? Date.now() + minutes * 60_000 : undefined, customerName, isTournament } } : c ) })),
       extendSession: (consoleId, addMinutes) => set((s) => ({ consoles: (s.consoles||[]).map((c) => { if (c?.id !== consoleId || !c.session) return c; const base = c.session.endsAt && c.session.endsAt > Date.now() ? c.session.endsAt : Date.now(); return { ...c, session: { ...c.session, mode: "fixed", endsAt: base + addMinutes * 60_000, alerted: false } }; }) })),
-      markAlerted: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId && c.session ? { ...c, session: { ...c.session, alerted: true } } : c ) })), markPreAlerted: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId && c.session ? { ...c, session: { ...c.session, preAlerted: true } } : c ) })), pauseSession: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId && c.session && !c.session.pausedAt ? { ...c, session: { ...c.session, pausedAt: Date.now() } } : c ) })), resumeSession: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => { if (c?.id !== consoleId || !c.session || !c.session.pausedAt) return c; const delta = Date.now() - c.session.pausedAt; return { ...c, session: { ...c.session, startedAt: c.session.startedAt + delta, endsAt: c.session.endsAt ? c.session.endsAt + delta : undefined, pausedAt: undefined, alerted: false, preAlerted: false } }; }) })), cancelSession: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId ? { ...c, session: undefined, charges: [] } : c ) })),
+      markAlerted: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId && c.session ? { ...c, session: { ...c.session, alerted: true } } : c ) })), 
+      markPreAlerted: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId && c.session ? { ...c, session: { ...c.session, preAlerted: true } } : c ) })), 
+      pauseSession: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId && c.session && !c.session.pausedAt ? { ...c, session: { ...c.session, pausedAt: Date.now() } } : c ) })), 
+      resumeSession: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => { if (c?.id !== consoleId || !c.session || !c.session.pausedAt) return c; const delta = Date.now() - c.session.pausedAt; return { ...c, session: { ...c.session, startedAt: c.session.startedAt + delta, endsAt: c.session.endsAt ? c.session.endsAt + delta : undefined, pausedAt: undefined, alerted: false, preAlerted: false } }; }) })), 
+      cancelSession: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId ? { ...c, session: undefined, charges: [] } : c ) })),
+      updateSessionCustomer: (consoleId, customerName) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId && c.session ? { ...c, session: { ...c.session, customerName } } : c ) })),
+      
       addSnackToConsole: (consoleId, productId, qty) => set((s) => { const product = (s.products||[]).find((p) => p?.id === productId); if (!product || product.stock < qty) return s; return { products: (s.products||[]).map((p) => (p?.id === productId ? { ...p, stock: p.stock - qty } : p)), consoles: (s.consoles||[]).map((c) => c?.id === consoleId ? { ...c, charges: [ ...(c.charges || []), { label: `${product.name} x${qty}`, amount: product.price * qty, ts: Date.now(), productId, qty } ] } : c ), }; }),
       applyComboToConsole: (consoleId, comboId) => set((s) => { const combo = (s.combos||[]).find((c) => c?.id === comboId); if (!combo) return s; for (const it of combo.items || []) { const p = (s.products||[]).find((pp) => pp?.id === it.productId); if (!p || p.stock < it.qty) return s; } const consoleObj = (s.consoles||[]).find((c) => c?.id === consoleId); if (!consoleObj) return s; const newProducts = (s.products||[]).map((p) => { const it = (combo.items||[]).find((i) => i.productId === p?.id); return it ? { ...p, stock: p.stock - it.qty } : p; }); const addMs = combo.hours * 60 * 60_000; const newSession: ConsoleSession = consoleObj.session ? { ...consoleObj.session, mode: "fixed", endsAt: (consoleObj.session.endsAt && consoleObj.session.endsAt > Date.now() ? consoleObj.session.endsAt : Date.now()) + addMs, alerted: false } : { mode: "fixed", startedAt: Date.now(), endsAt: Date.now() + addMs }; return { products: newProducts, consoles: (s.consoles||[]).map((c) => c?.id === consoleId ? { ...c, session: combo.hours > 0 ? newSession : c.session, charges: [ ...(c.charges || []), { label: `Combo: ${combo.name}`, amount: combo.price, ts: Date.now() } ] } : c ) }; }),
       addExtraController: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId ? { ...c, charges: [ ...(c.charges || []), { label: "Control Adicional", amount: 1, ts: Date.now() } ] } : c ) })),
       transferSession: (originId, destId) => set((s) => { const origin = (s.consoles||[]).find(c => c?.id === originId); const dest = (s.consoles||[]).find(c => c?.id === destId); if (!origin || !origin.session || !dest || dest.session) return s; const nowMs = Date.now(); const ref = origin.session.pausedAt ?? nowMs; const elapsedMs = Math.max(0, ref - origin.session.startedAt); const minutes = Math.ceil(elapsedMs / 60_000); const amount = (minutes / 60) * origin.ratePerHour; const newCharges = [...(dest.charges || []), ...(origin.charges || [])]; if (!origin.session.prepaid && amount > 0.01) { newCharges.push({ label: `Tiempo ${origin.name} (${minutes} min)`, amount: +(amount.toFixed(2)), ts: nowMs }); } let newEndsAt = undefined; let newStartedAt = nowMs; let newPausedAt = origin.session.pausedAt ? nowMs : undefined; if (origin.session.mode === "fixed" && origin.session.endsAt) { const remainingMs = Math.max(0, origin.session.endsAt - ref); newEndsAt = nowMs + remainingMs; } const newSession: ConsoleSession = { ...origin.session, startedAt: newStartedAt, endsAt: newEndsAt, pausedAt: newPausedAt }; return { consoles: (s.consoles||[]).map(c => { if (c?.id === originId) return { ...c, session: undefined, charges: [], totalMinutes: (c.totalMinutes||0) + minutes, maintenanceMinutes: (c.maintenanceMinutes || 0) + minutes }; if (c?.id === destId) return { ...c, session: newSession, charges: newCharges }; return c; }) }; }),
+      
       finalizeConsole: (consoleId, payload) => set((s) => { const c = (s.consoles||[]).find((x) => x?.id === consoleId); if (!c) return s; const sale: SaleRecord = { id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, minutes: payload.minutes, timeAmount: payload.timeAmount, extrasAmount: payload.extrasAmount, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, cashBs: payload.cashBs || 0, rate: s.rate, method: payload.method, customer: payload.customerInfo?.name || payload.customer, concept: "Consola", items: [ ...(payload.timeAmount > 0 ? [{ name: `Tiempo ${c.name} (${payload.minutes} min)`, qty: 1, price: payload.timeAmount }] : []), ...(c.charges || []).map((ch) => ({ name: ch.label, qty: 1, price: ch.amount })) ] }; const newCredits = payload.method === "credit" ? [ ...(s.credits||[]), { id: uid(), customer: payload.customerInfo?.name || payload.customer || "Sin nombre", amount: payload.total, createdAt: Date.now(), note: c.name } ] : (s.credits||[]); let newMembers = s.members || []; const ci = payload.customerInfo; if (ci && ci.name?.trim() && ci.phone?.trim() && !c.session?.isTournament) { const key = ci.phone.trim(); const existing = newMembers.find((m) => m?.phone === key); if (existing) { const newReward = (existing.rewardMinutes||0) + payload.minutes; const earned = Math.floor(newReward / 600); newMembers = newMembers.map((m) => m?.id === existing.id ? { ...m, name: ci.name.trim(), idDoc: ci.idDoc?.trim() || m.idDoc, totalMinutes: (m.totalMinutes||0) + payload.minutes, rewardMinutes: newReward - earned * 600, pendingRewards: (m.pendingRewards||0) + earned, lastVisit: Date.now() } : m ); } else { const earned = Math.floor(payload.minutes / 600); newMembers = [ ...newMembers, { id: uid(), name: ci.name.trim(), idDoc: ci.idDoc?.trim(), phone: key, totalMinutes: payload.minutes, rewardMinutes: payload.minutes - earned * 600, pendingRewards: earned, createdAt: Date.now(), lastVisit: Date.now() } ]; } } const histEntry: SessionHistoryEntry = { id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, customer: payload.customerInfo?.name || payload.customer, minutes: payload.minutes, amount: payload.total, prepaid: false }; return { consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, session: undefined, charges: [], totalMinutes: (x.totalMinutes||0) + payload.minutes, maintenanceMinutes: (x.maintenanceMinutes || 0) + payload.minutes } : x ), sales: payload.method === "credit" ? (s.sales||[]) : [...(s.sales||[]), sale], credits: newCredits, members: newMembers, sessionHistory: [histEntry, ...(s.sessionHistory||[])] }; }),
       finalizeMultipleConsoles: (consoleIds, payload) => set((s) => { const involved = (s.consoles||[]).filter((c) => c && consoleIds.includes(c.id)); if (involved.length === 0) return s; const sale: SaleRecord = { id: uid(), ts: Date.now(), consoleName: involved.map(c => c.name).join(" + "), minutes: payload.totalMinutes, timeAmount: payload.timeAmount, extrasAmount: payload.extrasAmount, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, cashBs: payload.cashBs || 0, rate: s.rate, method: payload.method, customer: payload.customerInfo?.name || payload.customer, concept: "Cobro Múltiple", items: payload.items, }; const newCredits = payload.method === "credit" ? [ ...(s.credits||[]), { id: uid(), customer: payload.customerInfo?.name || payload.customer || "Sin nombre", amount: payload.total, createdAt: Date.now(), note: sale.consoleName } ] : (s.credits||[]); let clubMinutesToAdd = 0; involved.forEach(c => { if (!c.session?.isTournament) { const ref = c.session?.pausedAt ?? Date.now(); const elapsedMs = Math.max(0, ref - (c.session?.startedAt ?? ref)); clubMinutesToAdd += Math.ceil(elapsedMs / 60_000); } }); let newMembers = s.members || []; const ci = payload.customerInfo; if (ci && ci.name?.trim() && ci.phone?.trim() && clubMinutesToAdd > 0) { const key = ci.phone.trim(); const existing = newMembers.find((m) => m?.phone === key); if (existing) { const newReward = (existing.rewardMinutes||0) + clubMinutesToAdd; const earned = Math.floor(newReward / 600); newMembers = newMembers.map((m) => m?.id === existing.id ? { ...m, name: ci.name.trim(), idDoc: ci.idDoc?.trim() || m.idDoc, totalMinutes: (m.totalMinutes||0) + clubMinutesToAdd, rewardMinutes: newReward - earned * 600, pendingRewards: (m.pendingRewards||0) + earned, lastVisit: Date.now() } : m ); } else { const earned = Math.floor(clubMinutesToAdd / 600); newMembers = [ ...newMembers, { id: uid(), name: ci.name.trim(), idDoc: ci.idDoc?.trim(), phone: key, totalMinutes: clubMinutesToAdd, rewardMinutes: clubMinutesToAdd - earned * 600, pendingRewards: earned, createdAt: Date.now(), lastVisit: Date.now() } ]; } } const newHistEntries: SessionHistoryEntry[] = involved.map((c) => { const ref = c.session?.pausedAt ?? Date.now(); const elapsedMs = Math.max(0, ref - (c.session?.startedAt ?? ref)); const mins = Math.ceil(elapsedMs / 60_000); return { id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, customer: payload.customerInfo?.name || payload.customer, minutes: mins, amount: 0, prepaid: !!c.session?.prepaid }; }); return { consoles: (s.consoles||[]).map((c) => { if (c && consoleIds.includes(c.id)) { const ref = c.session?.pausedAt ?? Date.now(); const elapsedMs = Math.max(0, ref - (c.session?.startedAt ?? ref)); const mins = Math.ceil(elapsedMs / 60_000); return { ...c, session: undefined, charges: [], totalMinutes: (c.totalMinutes||0) + mins, maintenanceMinutes: (c.maintenanceMinutes || 0) + mins }; } return c; }), sales: payload.method === "credit" ? (s.sales||[]) : [...(s.sales||[]), sale], credits: newCredits, members: newMembers, sessionHistory: [...newHistEntries, ...(s.sessionHistory||[])] }; }),
       directSale: (payload) => set((s) => { let newProducts = s.products || []; for (const it of payload.items) { newProducts = newProducts.map((p) => p?.id === it.productId ? { ...p, stock: p.stock - it.qty } : p ); } const sale: SaleRecord = { id: uid(), ts: Date.now(), timeAmount: 0, extrasAmount: payload.total, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, cashBs: payload.cashBs || 0, rate: s.rate, method: payload.method, customer: payload.customer, concept: "Venta Directa", items: payload.items.map((it) => ({ name: it.name, qty: it.qty, price: it.price })) }; const newCredits = payload.method === "credit" ? [ ...(s.credits||[]), { id: uid(), customer: payload.customer || "Sin nombre", amount: payload.total, createdAt: Date.now(), note: "Venta Directa" } ] : (s.credits||[]); return { products: newProducts, sales: [...(s.sales||[]), sale], credits: newCredits }; }),
       payCredit: (creditId, payload) => set((s) => { const credit = (s.credits||[]).find((c) => c?.id === creditId); if (!credit) return s; const sale: SaleRecord = { id: uid(), ts: Date.now(), timeAmount: 0, extrasAmount: payload.amount, total: payload.amount, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, rate: s.rate, method: payload.method, customer: credit.customer, concept: "Deuda Cobrada", items: [{ name: `Deuda de ${credit.customer}`, qty: 1, price: payload.amount }] }; const remaining = credit.amount - payload.amount; return { sales: [...(s.sales||[]), sale], credits: remaining > 0.001 ? (s.credits||[]).map((c) => (c?.id === creditId ? { ...c, amount: remaining } : c)) : (s.credits||[]).filter((c) => c?.id !== creditId) }; }),
       enqueue: (e) => set((s) => ({ queue: [...(s.queue||[]), { ...e, id: uid(), ts: Date.now() }] })), dequeue: (id) => set((s) => ({ queue: (s.queue||[]).filter((q) => q?.id !== id) })), redeemReward: (memberId) => set((s) => ({ members: (s.members||[]).map((m) => m?.id === memberId && (m.pendingRewards||0) > 0 ? { ...m, pendingRewards: m.pendingRewards - 1, rewardMinutes: 0 } : m ) })), removeMember: (memberId) => set({ members: (get().members||[]).filter((m) => m?.id !== memberId) }),
       
-      // 👈 REPARACIÓN DEL CIERRE DE CAJA: Toma la foto antes de limpiar
-      closeDay: () => set((s) => { 
-        const totalSales = (s.sales || []).reduce((acc, x) => acc + (x?.total || 0), 0);
-        const totalExpenses = (s.expenses || []).reduce((acc, x) => acc + (x?.amount || 0), 0);
-        const snapshot: PastClosure = { id: uid(), date: Date.now(), totalSales, totalExpenses, sales: [...(s.sales || [])], expenses: [...(s.expenses || [])] };
-        return { 
-          pastClosures: [snapshot, ...(s.pastClosures || [])], 
-          sales: [], 
-          sessionHistory: [], 
-          consoles: (s.consoles||[]).map((c) => ({ ...c, session: undefined, charges: [] })) 
-        }; 
-      }),
+      closeDay: () => set((s) => { const totalSales = (s.sales || []).reduce((acc, x) => acc + (x?.total || 0), 0); const totalExpenses = (s.expenses || []).reduce((acc, x) => acc + (x?.amount || 0), 0); const snapshot: PastClosure = { id: uid(), date: Date.now(), totalSales, totalExpenses, sales: [...(s.sales || [])], expenses: [...(s.expenses || [])] }; return { pastClosures: [snapshot, ...(s.pastClosures || [])], sales: [], sessionHistory: [], consoles: (s.consoles||[]).map((c) => ({ ...c, session: undefined, charges: [] })) }; }),
       
       registerMaintenance: (consoleId, description, date) => set((s) => { const c = (s.consoles||[]).find((x) => x?.id === consoleId); if (!c) return s; const log: MaintenanceLog = { id: uid(), consoleId: c.id, consoleName: c.name, description, date, minutesAtService: c.maintenanceMinutes || 0 }; return { consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, maintenanceMinutes: 0 } : x ), maintenanceLogs: [log, ...(s.maintenanceLogs||[])] }; }),
       deleteMaintenanceLog: (logId) => set((s) => { const log = (s.maintenanceLogs||[]).find(l => l?.id === logId); if (!log) return s; const consoles = (s.consoles||[]).map(c => { if (c?.id === log.consoleId) { return { ...c, maintenanceMinutes: (c.maintenanceMinutes || 0) + log.minutesAtService }; } return c; }); return { maintenanceLogs: (s.maintenanceLogs||[]).filter(l => l?.id !== logId), consoles }; }),
@@ -141,7 +138,23 @@ export const useStore = create<State>()(
       name: "gamerzone-store-v1",
       storage: {
         getItem: async (name) => { try { const { data, error } = await supabase.from('app_state').select('state').eq('id', name).maybeSingle(); if (!error && data && data.state) { const safeData = vaccinateZustandPayload(data.state); localStorage.setItem(name, JSON.stringify(safeData)); return safeData; } } catch (err) {} const local = localStorage.getItem(name); if (local) { try { return vaccinateZustandPayload(JSON.parse(local)); } catch(e) {} } return null; },
-        setItem: async (name, value) => { localStorage.setItem(name, typeof value === 'string' ? value : JSON.stringify(value)); if ((window as any).isSincronizando || (window as any).bloquearSync) return; (window as any).estadoPendiente = value; if ((window as any).relojSubida) clearTimeout((window as any).relojSubida); (window as any).relojSubida = setTimeout(async () => { try { await supabase.from('app_state').upsert({ id: name, state: typeof (window as any).estadoPendiente === 'string' ? JSON.parse((window as any).estadoPendiente) : (window as any).estadoPendiente }); } catch (err) {} }, 800); },
+        setItem: async (name, value) => { 
+          localStorage.setItem(name, typeof value === 'string' ? value : JSON.stringify(value)); 
+          
+          // 👇 EL BLOQUEO MAESTRO: Si la app está descargando de la nube, ¡No rebotes la información!
+          if ((window as any).isSincronizando || (window as any).bloquearSync) return; 
+          
+          (window as any).estadoPendiente = value; 
+          if ((window as any).relojSubida) clearTimeout((window as any).relojSubida); 
+          
+          (window as any).relojSubida = setTimeout(async () => { 
+            try { 
+              (window as any).bloquearSync = true; // Aseguramos la puerta antes de subir
+              await supabase.from('app_state').upsert({ id: name, state: typeof (window as any).estadoPendiente === 'string' ? JSON.parse((window as any).estadoPendiente) : (window as any).estadoPendiente }); 
+              setTimeout(() => { (window as any).bloquearSync = false; }, 1000); // Soltamos la puerta
+            } catch (err) {} 
+          }, 800); 
+        },
         removeItem: async (name) => { localStorage.removeItem(name); try { await supabase.from('app_state').delete().eq('id', name); } catch (err) {} }
       }
     }
@@ -161,6 +174,7 @@ export const computeTimeAmount = (consoleObj: ConsoleState, nowMs: number): { mi
 };
 
 supabase.channel('escuchar-nube').on('postgres_changes', { event: '*', schema: 'public', table: 'app_state' }, (payload) => { 
+  if ((window as any).bloquearSync) return; // Si acabo de subir algo, ignoro el rebote
   let rawState = payload.new ? (payload.new as any).state : null; 
   if (typeof rawState === 'string') { try { rawState = JSON.parse(rawState); } catch(e) {} } 
   rawState = vaccinateZustandPayload(rawState); 
@@ -171,9 +185,31 @@ supabase.channel('escuchar-nube').on('postgres_changes', { event: '*', schema: '
       (window as any).isSincronizando = true; 
       useStore.setState(rawState.state); 
       localStorage.setItem("gamerzone-store-v1", JSON.stringify(rawState)); 
-      setTimeout(() => { (window as any).isSincronizando = false; }, 500); 
+      setTimeout(() => { (window as any).isSincronizando = false; }, 800); 
     } 
   } 
 }).subscribe();
 
-window.addEventListener('online', async () => { try { const localData = localStorage.getItem('gamerzone-store-v1'); if (localData) { await supabase.from('app_state').upsert({ id: 'gamerzone-store-v1', state: JSON.parse(localData) }); } } catch (err) {} });
+// 👇 EL CAMBIO CRÍTICO: Cuando el celular despierte, DESCÁRGATE de la nube, no subas nada viejo.
+const resyncFromCloud = async () => {
+  try {
+    const { data, error } = await supabase.from('app_state').select('state').eq('id', 'gamerzone-store-v1').maybeSingle();
+    if (!error && data && data.state) {
+      const safeData = vaccinateZustandPayload(data.state);
+      const estadoActual = JSON.stringify(useStore.getState());
+      if (safeData?.state && estadoActual !== JSON.stringify(safeData.state)) {
+         (window as any).isSincronizando = true;
+         useStore.setState(safeData.state);
+         localStorage.setItem("gamerzone-store-v1", JSON.stringify(safeData));
+         setTimeout(() => { (window as any).isSincronizando = false; }, 800);
+      }
+    }
+  } catch (e) {}
+};
+
+// Enganchamos la descarga automática a los eventos de despertar del navegador
+window.addEventListener('online', resyncFromCloud);
+window.addEventListener('focus', resyncFromCloud); 
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') resyncFromCloud();
+});

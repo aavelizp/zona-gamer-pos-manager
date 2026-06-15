@@ -17,7 +17,6 @@ export function CreditsTab() {
   const [amount, setAmount] = useState("");
   const [payMode, setPayMode] = useState<"cash" | "mobile" | "cash_bs">("cash");
   const [mobileBank, setMobileBank] = useState("");
-  const [mobileRef, setMobileRef] = useState("");
 
   const handlePay = () => {
     if (!payOpen) return;
@@ -29,13 +28,12 @@ export function CreditsTab() {
     if (payMode === "mobile") {
       payload.mobileBs = val * rate;
       payload.mobileBank = mobileBank;
-      payload.mobileRef = mobileRef;
     }
     if (payMode === "cash_bs") payload.cashBs = val * rate;
 
     payCredit(payOpen.id, payload);
     setPayOpen(null);
-    setAmount(""); setMobileBank(""); setMobileRef("");
+    setAmount(""); setMobileBank("");
   };
 
   const fDate = (ts: number) => new Date(ts).toLocaleDateString("es-VE", {day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit"});
@@ -54,7 +52,7 @@ export function CreditsTab() {
         </div>
       </Card>
 
-      {/* TABLA DE FIADOS: Deslizable en celular */}
+      {/* TABLA DE FIADOS */}
       <Card className="border-border/40 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left min-w-[700px]">
@@ -90,7 +88,7 @@ export function CreditsTab() {
         </div>
       </Card>
 
-      {/* MODAL DE PAGO: 100% Responsivo */}
+      {/* MODAL DE PAGO */}
       {payOpen && (
         <Dialog open={!!payOpen} onOpenChange={(o) => !o && setPayOpen(null)}>
           <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">
@@ -99,7 +97,6 @@ export function CreditsTab() {
             </DialogHeader>
             
             <div className="space-y-4">
-              {/* Info Deuda */}
               <div className="bg-secondary/30 p-3 sm:p-4 rounded-lg border border-border/50">
                 <p className="text-xs text-muted-foreground uppercase tracking-widest">Cliente</p>
                 <p className="font-bold text-sm sm:text-base mb-2">{payOpen.customer}</p>
@@ -107,13 +104,11 @@ export function CreditsTab() {
                 <p className="font-display text-xl sm:text-2xl text-yellow-500">{fmtUsd(payOpen.amount)}</p>
               </div>
 
-              {/* Monto a Pagar */}
               <div>
                 <Label className="text-xs mb-1 block uppercase tracking-widest font-semibold">¿Cuánto va a abonar? ($)</Label>
                 <Input type="number" step="0.01" max={payOpen.amount} value={amount} onChange={e => setAmount(e.target.value)} className="h-12 text-xl font-bold text-green-400 bg-background/50 border-green-500/30" />
               </div>
 
-              {/* Formas de Pago */}
               <div className="space-y-3 border border-border rounded-md p-3 sm:p-4 bg-background/40">
                 <Label className="text-xs uppercase tracking-wider text-accent font-semibold block mb-1">¿Cómo está pagando?</Label>
                 <RadioGroup value={payMode} onValueChange={(v:any) => setPayMode(v)} className="grid grid-cols-1 gap-2">
@@ -122,19 +117,12 @@ export function CreditsTab() {
                   <label className={`flex items-center gap-2 border rounded-md p-3 cursor-pointer transition-colors ${payMode === "cash_bs" ? "border-primary bg-primary/10" : "border-border hover:bg-secondary/20"}`}><RadioGroupItem value="cash_bs" /><span className="text-sm font-semibold">Efectivo Bs 💵</span></label>
                 </RadioGroup>
 
-                {/* Sub-formulario Pago Móvil (Apilado en celular) */}
                 {payMode === "mobile" && (
-                  <div className="grid grid-cols-1 gap-3 mt-4 p-3 sm:p-4 bg-primary/10 rounded-md border border-primary/20">
-                    <div>
-                      <Label className="text-[10px] uppercase font-bold text-primary block mb-1">Banco Emisor *</Label>
-                      <select className="w-full h-10 sm:h-11 rounded-md border border-input bg-background px-3 text-sm focus:ring-1 focus:ring-primary" value={mobileBank} onChange={(e) => setMobileBank(e.target.value)}>
-                        <option value="">Seleccione banco...</option><option value="Banesco">Banesco</option><option value="Mercantil">Mercantil</option><option value="Venezuela">Venezuela</option><option value="Provincial">Provincial</option><option value="BNC">BNC</option><option value="Bancamiga">Bancamiga</option><option value="Tesoro">Tesoro</option><option value="Otro">Otro</option>
-                      </select>
-                    </div>
-                    <div>
-                      <Label className="text-[10px] uppercase font-bold text-primary block mb-1">Referencia (Últimos 4)*</Label>
-                      <Input type="text" maxLength={8} value={mobileRef} onChange={e => setMobileRef(e.target.value.replace(/\D/g, ''))} className="h-10 sm:h-11 text-sm sm:text-base font-display tracking-widest bg-background" placeholder="Ej: 1234" />
-                    </div>
+                  <div className="mt-4 p-3 sm:p-4 bg-primary/10 rounded-md border border-primary/20">
+                    <Label className="text-[10px] uppercase font-bold text-primary block mb-1">Banco Emisor *</Label>
+                    <select className="w-full h-10 sm:h-11 rounded-md border border-input bg-background px-3 text-sm focus:ring-1 focus:ring-primary" value={mobileBank} onChange={(e) => setMobileBank(e.target.value)}>
+                      <option value="">Seleccione banco...</option><option value="Banesco">Banesco</option><option value="Mercantil">Mercantil</option><option value="Venezuela">Venezuela</option><option value="Provincial">Provincial</option><option value="BNC">BNC</option><option value="Bancamiga">Bancamiga</option><option value="Tesoro">Tesoro</option><option value="Otro">Otro</option>
+                    </select>
                   </div>
                 )}
               </div>
@@ -142,7 +130,7 @@ export function CreditsTab() {
             
             <DialogFooter className="mt-2 gap-2 flex-wrap sm:flex-nowrap">
               <Button variant="outline" className="w-full sm:w-auto h-10" onClick={() => setPayOpen(null)}>Cancelar</Button>
-              <Button onClick={handlePay} disabled={!amount || (payMode==='mobile' && (!mobileBank || mobileRef.length < 4))} className="w-full sm:w-auto h-10 bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-500/20">
+              <Button onClick={handlePay} disabled={!amount || (payMode==='mobile' && !mobileBank)} className="w-full sm:w-auto h-10 bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-500/20">
                 <CheckCircle className="h-4 w-4 mr-2" /> Procesar Pago
               </Button>
             </DialogFooter>

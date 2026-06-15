@@ -5,7 +5,7 @@ import { playAlert, playPreAlert } from "@/lib/sound";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Star, Gamepad2, Sparkles, Package, Coins, ShoppingBag, Receipt, Plus, Search, X, User, AlertTriangle, Pause, Play, Trash2, ArrowRightLeft, Trophy } from "lucide-react";
+import { Star, Gamepad2, Sparkles, Package, Coins, ShoppingBag, Receipt, Plus, Search, X, User, AlertTriangle, Pause, Play, Trash2, ArrowRightLeft, Trophy, Edit2 } from "lucide-react";
 import { ReceiptDialog, type ReceiptData } from "@/components/Receipt";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -41,14 +41,17 @@ function Checkout({ open, onClose, consoleObj, now }: any) {
   const rate = useStore((s) => s.rate); const finalize = useStore((s) => s.finalizeConsole); 
   const { minutes, amount: timeAmount } = useMemo(() => computeTimeAmount(consoleObj, now), [consoleObj, now]);
   const extrasAmount = (consoleObj?.charges || []).reduce((a: number, c: any) => a + (c?.amount||0), 0); const total = timeAmount + extrasAmount;
-  const [method, setMethod] = useState<"full" | "mixed" | "credit">("full"); const [fullPayMode, setFullPayMode] = useState<"cash" | "mobile" | "cash_bs">("cash"); const [cashUsd, setCashUsd] = useState(""); const [mobileBs, setMobileBs] = useState(""); const [cashBs, setCashBs] = useState(""); const [mobileBank, setMobileBank] = useState(""); const [mobileRef, setMobileRef] = useState(""); const [billReceived, setBillReceived] = useState(""); const [name, setName] = useState(""); const [idDoc, setIdDoc] = useState(""); const [phone, setPhone] = useState(""); const [receipt, setReceipt] = useState<ReceiptData | null>(null); const [pendingFinalize, setPendingFinalize] = useState(false);
-  useEffect(() => { if (open) { setMethod("full"); setFullPayMode("cash"); setCashUsd(""); setMobileBs(""); setCashBs(""); setMobileBank(""); setMobileRef(""); setBillReceived(""); setName(""); setIdDoc(""); setPhone(""); setReceipt(null); setPendingFinalize(false); } }, [open]);
+  const [method, setMethod] = useState<"full" | "mixed" | "credit">("full"); const [fullPayMode, setFullPayMode] = useState<"cash" | "mobile" | "cash_bs">("cash"); const [cashUsd, setCashUsd] = useState(""); const [mobileBs, setMobileBs] = useState(""); const [cashBs, setCashBs] = useState(""); const [mobileBank, setMobileBank] = useState(""); const [billReceived, setBillReceived] = useState(""); const [name, setName] = useState(""); const [idDoc, setIdDoc] = useState(""); const [phone, setPhone] = useState(""); const [receipt, setReceipt] = useState<ReceiptData | null>(null); const [pendingFinalize, setPendingFinalize] = useState(false);
+  useEffect(() => { if (open) { setMethod("full"); setFullPayMode("cash"); setCashUsd(""); setMobileBs(""); setCashBs(""); setMobileBank(""); setBillReceived(""); setName(consoleObj?.session?.customerName || ""); setIdDoc(""); setPhone(""); setReceipt(null); setPendingFinalize(false); } }, [open, consoleObj?.session?.customerName]);
   const cashUsdN = parseFloat(cashUsd) || 0; const mobileBsN = parseFloat(mobileBs) || 0; const cashBsN = parseFloat(cashBs) || 0; const mobileUsd = rate > 0 ? mobileBsN / rate : 0; const cashBsUsd = rate > 0 ? cashBsN / rate : 0; const paid = method === "full" ? total : method === "mixed" ? (cashUsdN + mobileUsd + cashBsUsd) : 0; const remaining = total - paid;
   const resolvedCashUsd = method === "full" ? (fullPayMode === "cash" ? total : 0) : method === "mixed" ? cashUsdN : 0; const resolvedMobileBs = method === "full" ? (fullPayMode === "mobile" ? total * rate : 0) : method === "mixed" ? mobileBsN : 0; const resolvedCashBs = method === "full" ? (fullPayMode === "cash_bs" ? total * rate : 0) : method === "mixed" ? cashBsN : 0; const finalMethod = method === "full" && fullPayMode === "cash_bs" ? "cash_bs" : method;
   const billN = parseFloat(billReceived) || 0; const cashTarget = method === "full" && fullPayMode === "cash" ? total : method === "mixed" ? cashUsdN : 0; const rawChange = billN - cashTarget; const showBill = (method === "full" && fullPayMode === "cash") || (method === "mixed" && cashTarget > 0); const changeDisplay = rawChange < 1 ? "$0" : fmtUsd(rawChange);
-  const needsRef = (method === "full" && fullPayMode === "mobile") || (method === "mixed" && mobileBsN > 0); const isValidRef = !needsRef || (mobileBank !== "" && mobileRef.length >= 4);
+  
+  const needsRef = (method === "full" && fullPayMode === "mobile") || (method === "mixed" && mobileBsN > 0); 
+  const isValidRef = !needsRef || mobileBank !== "";
+
   const buildReceipt = (): ReceiptData => ({ ts: Date.now(), rate, consoleName: consoleObj?.name || "Consola", minutes, timeAmount, items: [ ...(timeAmount > 0 ? [{ name: `Tiempo ${consoleObj?.name || "Consola"} (${minutes} min)`, qty: 1, price: timeAmount }] : []), ...(consoleObj?.charges || []).map((ch: any) => ({ name: ch.label, qty: 1, price: ch.amount })) ], total, method: finalMethod as any, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, cashBs: resolvedCashBs, customer: { name: name.trim() || "Consumidor Final", idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined } });
-  const doFinalize = () => { finalize(consoleObj.id, { method: finalMethod as any, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, cashBs: resolvedCashBs, mobileBank: needsRef ? mobileBank : undefined, mobileRef: needsRef ? mobileRef : undefined, customer: method === "credit" ? name.trim() : undefined, customerInfo: name.trim() ? { name: name.trim(), idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined } : undefined, total, timeAmount, extrasAmount, minutes }); };
+  const doFinalize = () => { finalize(consoleObj.id, { method: finalMethod as any, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, cashBs: resolvedCashBs, mobileBank: needsRef ? mobileBank : undefined, customer: method === "credit" ? name.trim() : undefined, customerInfo: name.trim() ? { name: name.trim(), idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined } : undefined, total, timeAmount, extrasAmount, minutes }); };
   const submit = () => { if (method === "credit" && !name.trim()) return; if (method === "mixed" && remaining > 0.01) return; if (!isValidRef) return; setReceipt(buildReceipt()); setPendingFinalize(true); };
   const handleReceiptClose = () => { setReceipt(null); if (pendingFinalize) { doFinalize(); setPendingFinalize(false); onClose(); } };
 
@@ -70,19 +73,19 @@ function Checkout({ open, onClose, consoleObj, now }: any) {
                   <Label className="text-xs uppercase tracking-wider text-accent font-semibold">¿Cómo pagó?</Label>
                   <RadioGroup value={fullPayMode} onValueChange={(v) => setFullPayMode(v as any)} className="grid grid-cols-1 gap-2"><label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "cash" ? "border-primary bg-primary/10" : "border-border"}`}><RadioGroupItem value="cash" /><div><p className="text-sm font-semibold">Efectivo $</p></div></label><label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "mobile" ? "border-primary bg-primary/10" : "border-border"}`}><RadioGroupItem value="mobile" /><div><p className="text-sm font-semibold">Pago Móvil Bs</p></div></label><label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "cash_bs" ? "border-primary bg-primary/10" : "border-border"}`}><RadioGroupItem value="cash_bs" /><div><p className="text-sm font-semibold">Efectivo Bs 💵</p></div></label></RadioGroup>
                   {fullPayMode === "mobile" && ( 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 p-4 bg-primary/10 rounded-md border border-primary/20">
-                      <div><Label className="text-[10px] uppercase font-bold text-primary tracking-wider block mb-1">Banco Emisor *</Label><select className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:ring-1 focus:ring-primary" value={mobileBank} onChange={(e) => setMobileBank(e.target.value)}><option value="">Seleccione banco...</option><option value="Banesco">Banesco</option><option value="Mercantil">Mercantil</option><option value="Venezuela">Venezuela</option><option value="Provincial">Provincial</option><option value="BNC">BNC</option><option value="Bancamiga">Bancamiga</option><option value="Tesoro">Tesoro</option><option value="Otro">Otro</option></select></div>
-                      <div><Label className="text-[10px] uppercase font-bold text-primary tracking-wider block mb-1">Referencia *</Label><Input type="text" maxLength={8} value={mobileRef} onChange={(e) => setMobileRef(e.target.value.replace(/\D/g, ''))} className="h-10 text-sm font-display tracking-widest bg-background" placeholder="Ej: 1234" /></div>
+                    <div className="mt-3 p-4 bg-primary/10 rounded-md border border-primary/20">
+                      <Label className="text-[10px] uppercase font-bold text-primary tracking-wider block mb-1">Banco Emisor *</Label>
+                      <select className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:ring-1 focus:ring-primary" value={mobileBank} onChange={(e) => setMobileBank(e.target.value)}><option value="">Seleccione banco...</option><option value="Banesco">Banesco</option><option value="Mercantil">Mercantil</option><option value="Venezuela">Venezuela</option><option value="Provincial">Provincial</option><option value="BNC">BNC</option><option value="Bancamiga">Bancamiga</option><option value="Tesoro">Tesoro</option><option value="Otro">Otro</option></select>
                     </div> 
                   )}
                 </div>
               )}
-              {method === "mixed" && ( <MixedPaymentInputs total={total} cashUsd={cashUsd} mobileBs={mobileBs} cashBs={cashBs} mobileBank={mobileBank} mobileRef={mobileRef} setCashUsd={setCashUsd} setMobileBs={setMobileBs} setCashBs={setCashBs} setMobileBank={setMobileBank} setMobileRef={setMobileRef} /> )}
+              {method === "mixed" && ( <MixedPaymentInputs total={total} cashUsd={cashUsd} mobileBs={mobileBs} cashBs={cashBs} mobileBank={mobileBank} setCashUsd={setCashUsd} setMobileBs={setMobileBs} setCashBs={setCashBs} setMobileBank={setMobileBank} /> )}
               {showBill && cashTarget > 0 && (<div className="space-y-1 border border-border rounded-md p-3 bg-background/40"><Label className="text-xs">Billete recibido ($)</Label><Input type="number" step="0.01" value={billReceived} onChange={(e) => setBillReceived(e.target.value)} placeholder={cashTarget.toFixed(2)} />{billN > 0 && ( <p className={`text-sm ${rawChange < 1 ? "text-muted-foreground" : "text-accent"}`}> Vuelto a entregar: <span className="font-display">{changeDisplay}</span> </p> )}</div>)}
             </>
           )}
           {method === "credit" && !name.trim() && <p className="text-xs text-destructive">Debes seleccionar un cliente para fiar.</p>}
-          {!isValidRef && total > 0 && <p className="text-xs text-destructive animate-pulse text-center font-bold mt-2">⚠️ REQUERIDO: Selecciona el Banco y escribe la Referencia</p>}
+          {!isValidRef && total > 0 && <p className="text-xs text-destructive animate-pulse text-center font-bold mt-2">⚠️ REQUERIDO: Selecciona el Banco</p>}
         </div>
         <DialogFooter className="flex-wrap gap-2"><Button variant="outline" onClick={onClose}>Cancelar</Button><Button onClick={submit} disabled={(total > 0 && method === "mixed" && remaining > 0.01) || (total > 0 && method === "credit" && !name.trim()) || (total > 0 && !isValidRef)} className="bg-gradient-to-r from-primary to-accent"><Receipt className="h-4 w-4 mr-1" />Confirmar Pago</Button></DialogFooter>
       </DialogContent>
@@ -94,14 +97,17 @@ function Checkout({ open, onClose, consoleObj, now }: any) {
 
 function PrepayCheckout({ open, onClose, consoleObj }: any) {
   const rate = useStore((s) => s.rate); const combos = useStore((s) => s.combos || []); const products = useStore((s) => s.products || []); const prepay = useStore((s) => s.prepaySession);
-  const [step, setStep] = useState<"type" | "time" | "combo" | "pay">("type"); const [chosenMinutes, setChosenMinutes] = useState<number>(60); const [chosenCombo, setChosenCombo] = useState<Combo | null>(null); const [method, setMethod] = useState<"full" | "mixed">("full"); const [fullPayMode, setFullPayMode] = useState<"cash" | "mobile" | "cash_bs">("cash"); const [cashUsd, setCashUsd] = useState(""); const [mobileBs, setMobileBs] = useState(""); const [cashBs, setCashBs] = useState(""); const [mobileBank, setMobileBank] = useState(""); const [mobileRef, setMobileRef] = useState(""); const [name, setName] = useState(""); const [idDoc, setIdDoc] = useState(""); const [phone, setPhone] = useState(""); const [receipt, setReceipt] = useState<ReceiptData | null>(null); const [pending, setPending] = useState(false);
-  useEffect(() => { if (open) { setStep("type"); setChosenMinutes(60); setChosenCombo(null); setMethod("full"); setFullPayMode("cash"); setCashUsd(""); setMobileBs(""); setCashBs(""); setMobileBank(""); setMobileRef(""); setName(""); setIdDoc(""); setPhone(""); setReceipt(null); setPending(false); } }, [open]);
+  const [step, setStep] = useState<"type" | "time" | "combo" | "pay">("type"); const [chosenMinutes, setChosenMinutes] = useState<number>(60); const [chosenCombo, setChosenCombo] = useState<Combo | null>(null); const [method, setMethod] = useState<"full" | "mixed">("full"); const [fullPayMode, setFullPayMode] = useState<"cash" | "mobile" | "cash_bs">("cash"); const [cashUsd, setCashUsd] = useState(""); const [mobileBs, setMobileBs] = useState(""); const [cashBs, setCashBs] = useState(""); const [mobileBank, setMobileBank] = useState(""); const [name, setName] = useState(""); const [idDoc, setIdDoc] = useState(""); const [phone, setPhone] = useState(""); const [receipt, setReceipt] = useState<ReceiptData | null>(null); const [pending, setPending] = useState(false);
+  useEffect(() => { if (open) { setStep("type"); setChosenMinutes(60); setChosenCombo(null); setMethod("full"); setFullPayMode("cash"); setCashUsd(""); setMobileBs(""); setCashBs(""); setMobileBank(""); setName(""); setIdDoc(""); setPhone(""); setReceipt(null); setPending(false); } }, [open]);
   const isCombo = !!chosenCombo; const minutes = isCombo ? Math.round((chosenCombo?.hours||0) * 60) : chosenMinutes; const total = isCombo ? (chosenCombo?.price||0) : +((consoleObj?.ratePerHour||0) * (chosenMinutes / 60)).toFixed(2);
   const cashUsdN = parseFloat(cashUsd) || 0; const mobileBsN = parseFloat(mobileBs) || 0; const cashBsN = parseFloat(cashBs) || 0; const mobileUsd = rate > 0 ? mobileBsN / rate : 0; const cashBsUsd = rate > 0 ? cashBsN / rate : 0; const paid = method === "full" ? total : cashUsdN + mobileUsd + cashBsUsd; const remaining = total - paid;
   const resolvedCashUsd = method === "full" ? (fullPayMode === "cash" ? total : 0) : cashUsdN; const resolvedMobileBs = method === "full" ? (fullPayMode === "mobile" ? total * rate : 0) : mobileBsN; const resolvedCashBs = method === "full" ? (fullPayMode === "cash_bs" ? total * rate : 0) : cashBsN; const finalMethod = method === "full" && fullPayMode === "cash_bs" ? "cash_bs" : method;
-  const needsRef = (method === "full" && fullPayMode === "mobile") || (method === "mixed" && mobileBsN > 0); const isValidRef = !needsRef || (mobileBank !== "" && mobileRef.length >= 4);
+  
+  const needsRef = (method === "full" && fullPayMode === "mobile") || (method === "mixed" && mobileBsN > 0); 
+  const isValidRef = !needsRef || mobileBank !== "";
+
   const buildReceipt = () => { const items = isCombo ? [ { name: `Combo: ${chosenCombo!.name}`, qty: 1, price: total }, ...(chosenCombo?.items||[]).map((it) => { const p = products.find((pp) => pp.id === it.productId); return { name: `  · ${p?.name || "Item"}`, qty: it.qty, price: 0 }; }) ] : [{ name: `Prepago ${consoleObj?.name || "Consola"} (${minutes} min)`, qty: 1, price: total }]; return { ts: Date.now(), rate, consoleName: consoleObj?.name || "Consola", minutes, timeAmount: total, items, total, method: finalMethod, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, cashBs: resolvedCashBs, customer: { name: name.trim() || "Consumidor Final", idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined } }; };
-  const doPrepay = () => { prepay(consoleObj.id, minutes, { method: finalMethod as any, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, cashBs: resolvedCashBs, mobileBank: needsRef ? mobileBank : undefined, mobileRef: needsRef ? mobileRef : undefined, total, customerInfo: name.trim() ? { name: name.trim(), idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined } : undefined, comboId: chosenCombo?.id }); };
+  const doPrepay = () => { prepay(consoleObj.id, minutes, { method: finalMethod as any, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, cashBs: resolvedCashBs, mobileBank: needsRef ? mobileBank : undefined, total, customerInfo: name.trim() ? { name: name.trim(), idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined } : undefined, comboId: chosenCombo?.id }); };
   const submit = () => { if (method === "mixed" && remaining > 0.01) return; if (!isValidRef) return; setReceipt(buildReceipt() as any); setPending(true); };
   const handleReceiptClose = () => { setReceipt(null); if (pending) { doPrepay(); setPending(false); onClose(); } };
   return (
@@ -119,14 +125,13 @@ function PrepayCheckout({ open, onClose, consoleObj }: any) {
               <div className="grid grid-cols-2 gap-2"><Button variant={method === "full" ? "default" : "outline"} onClick={() => setMethod("full")}>Completo</Button><Button variant={method === "mixed" ? "default" : "outline"} onClick={() => setMethod("mixed")}>Mixto</Button></div>
               {method === "full" && ( <> <div className="grid grid-cols-3 gap-2"><Button size="sm" variant={fullPayMode === "cash" ? "default" : "outline"} onClick={() => setFullPayMode("cash")}>Efectivo $</Button><Button size="sm" variant={fullPayMode === "mobile" ? "default" : "outline"} onClick={() => setFullPayMode("mobile")}>Pago Móvil</Button><Button size="sm" variant={fullPayMode === "cash_bs" ? "default" : "outline"} onClick={() => setFullPayMode("cash_bs")}>Efectivo Bs</Button></div> 
                 {fullPayMode === "mobile" && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 p-4 bg-primary/10 rounded-md border border-primary/20">
-                    <div><Label className="text-[10px] uppercase font-bold text-primary tracking-wider block mb-1">Banco Emisor *</Label><select className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:ring-1 focus:ring-primary" value={mobileBank} onChange={(e) => setMobileBank(e.target.value)}><option value="">Seleccione banco...</option><option value="Banesco">Banesco</option><option value="Mercantil">Mercantil</option><option value="Venezuela">Venezuela</option><option value="Provincial">Provincial</option><option value="BNC">BNC</option><option value="Bancamiga">Bancamiga</option><option value="Tesoro">Tesoro</option><option value="Otro">Otro</option></select></div>
-                    <div><Label className="text-[10px] uppercase font-bold text-primary tracking-wider block mb-1">Referencia *</Label><Input type="text" maxLength={8} value={mobileRef} onChange={(e) => setMobileRef(e.target.value.replace(/\D/g, ''))} className="h-10 text-sm font-display tracking-widest bg-background" placeholder="Ej: 1234" /></div>
+                  <div className="mt-3 p-4 bg-primary/10 rounded-md border border-primary/20">
+                    <Label className="text-[10px] uppercase font-bold text-primary tracking-wider block mb-1">Banco Emisor *</Label><select className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:ring-1 focus:ring-primary" value={mobileBank} onChange={(e) => setMobileBank(e.target.value)}><option value="">Seleccione banco...</option><option value="Banesco">Banesco</option><option value="Mercantil">Mercantil</option><option value="Venezuela">Venezuela</option><option value="Provincial">Provincial</option><option value="BNC">BNC</option><option value="Bancamiga">Bancamiga</option><option value="Tesoro">Tesoro</option><option value="Otro">Otro</option></select>
                   </div>
                 )} 
               </> )}
-              {method === "mixed" && (<MixedPaymentInputs total={total} cashUsd={cashUsd} mobileBs={mobileBs} cashBs={cashBs} mobileBank={mobileBank} mobileRef={mobileRef} setCashUsd={setCashUsd} setMobileBs={setMobileBs} setCashBs={setCashBs} setMobileBank={setMobileBank} setMobileRef={setMobileRef} />)}
-              {!isValidRef && <p className="text-xs text-destructive animate-pulse text-center font-bold mt-2">⚠️ REQUERIDO: Selecciona el Banco y escribe la Referencia</p>}
+              {method === "mixed" && (<MixedPaymentInputs total={total} cashUsd={cashUsd} mobileBs={mobileBs} cashBs={cashBs} mobileBank={mobileBank} setCashUsd={setCashUsd} setMobileBs={setMobileBs} setCashBs={setCashBs} setMobileBank={setMobileBank} />)}
+              {!isValidRef && <p className="text-xs text-destructive animate-pulse text-center font-bold mt-2">⚠️ REQUERIDO: Selecciona el Banco</p>}
               <DialogFooter><Button onClick={submit} disabled={method === "mixed" && remaining > 0.01 || !isValidRef} className="bg-gradient-to-r from-primary to-accent"><Receipt className="h-4 w-4 mr-1" /> Cobrar y arrancar</Button></DialogFooter>
             </div>
           )}
@@ -139,13 +144,16 @@ function PrepayCheckout({ open, onClose, consoleObj }: any) {
 
 function PayExtrasDialog({ open, onClose, consoleObj }: any) {
   const rate = useStore((s) => s.rate); const payExtras = useStore((s) => s.payExtras); const total = (consoleObj?.charges || []).reduce((a: number, c: any) => a + (c?.amount||0), 0);
-  const [method, setMethod] = useState<"full" | "mixed" | "credit">("full"); const [fullPayMode, setFullPayMode] = useState<"cash" | "mobile" | "cash_bs">("cash"); const [cashUsd, setCashUsd] = useState(""); const [mobileBs, setMobileBs] = useState(""); const [cashBs, setCashBs] = useState(""); const [mobileBank, setMobileBank] = useState(""); const [mobileRef, setMobileRef] = useState(""); const [name, setName] = useState(""); const [receipt, setReceipt] = useState<ReceiptData | null>(null); const [pending, setPending] = useState(false);
-  useEffect(() => { if (open) { setMethod("full"); setFullPayMode("cash"); setCashUsd(""); setMobileBs(""); setCashBs(""); setMobileBank(""); setMobileRef(""); setName(consoleObj?.session?.customerName || ""); setReceipt(null); setPending(false); } }, [open, consoleObj?.session?.customerName]);
+  const [method, setMethod] = useState<"full" | "mixed" | "credit">("full"); const [fullPayMode, setFullPayMode] = useState<"cash" | "mobile" | "cash_bs">("cash"); const [cashUsd, setCashUsd] = useState(""); const [mobileBs, setMobileBs] = useState(""); const [cashBs, setCashBs] = useState(""); const [mobileBank, setMobileBank] = useState(""); const [name, setName] = useState(""); const [receipt, setReceipt] = useState<ReceiptData | null>(null); const [pending, setPending] = useState(false);
+  useEffect(() => { if (open) { setMethod("full"); setFullPayMode("cash"); setCashUsd(""); setMobileBs(""); setCashBs(""); setMobileBank(""); setName(consoleObj?.session?.customerName || ""); setReceipt(null); setPending(false); } }, [open, consoleObj?.session?.customerName]);
   const cashUsdN = parseFloat(cashUsd) || 0; const mobileBsN = parseFloat(mobileBs) || 0; const cashBsN = parseFloat(cashBs) || 0; const mobileUsd = rate > 0 ? mobileBsN / rate : 0; const cashBsUsd = rate > 0 ? cashBsN / rate : 0; const paid = method === "full" ? total : method === "mixed" ? (cashUsdN + mobileUsd + cashBsUsd) : 0; const remaining = total - paid;
   const resolvedCashUsd = method === "full" ? (fullPayMode === "cash" ? total : 0) : method === "mixed" ? cashUsdN : 0; const resolvedMobileBs = method === "full" ? (fullPayMode === "mobile" ? total * rate : 0) : method === "mixed" ? mobileBsN : 0; const finalMethod = method === "full" && fullPayMode === "cash_bs" ? "cash_bs" : method;
-  const needsRef = (method === "full" && fullPayMode === "mobile") || (method === "mixed" && mobileBsN > 0); const isValidRef = !needsRef || (mobileBank !== "" && mobileRef.length >= 4);
+  
+  const needsRef = (method === "full" && fullPayMode === "mobile") || (method === "mixed" && mobileBsN > 0); 
+  const isValidRef = !needsRef || mobileBank !== "";
+
   const submit = () => { if (method === "mixed" && remaining > 0.01) return; if (method === "credit" && !name.trim()) return; if (!isValidRef) return; setReceipt({ ts: Date.now(), rate, consoleName: consoleObj?.name || "Consola", minutes: 0, timeAmount: 0, items: (consoleObj?.charges || []).map((ch: any) => ({ name: ch.label, qty: 1, price: ch.amount })), total, method: finalMethod as any, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, cashBs: 0, customer: { name: name.trim() || "Consumidor Final" } }); setPending(true); };
-  const handleReceiptClose = () => { setReceipt(null); if (pending) { payExtras(consoleObj.id, { method: finalMethod as any, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, mobileBank: needsRef ? mobileBank : undefined, mobileRef: needsRef ? mobileRef : undefined, total, customer: name.trim() || undefined }); setPending(false); onClose(); toast.success("Adicionales cobrados."); } };
+  const handleReceiptClose = () => { setReceipt(null); if (pending) { payExtras(consoleObj.id, { method: finalMethod as any, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, mobileBank: needsRef ? mobileBank : undefined, total, customer: name.trim() || undefined }); setPending(false); onClose(); toast.success("Adicionales cobrados."); } };
 
   return (
     <>
@@ -158,14 +166,13 @@ function PayExtrasDialog({ open, onClose, consoleObj }: any) {
             <div className="grid grid-cols-3 gap-2"> <Button variant={method === "full" ? "default" : "outline"} onClick={() => setMethod("full")}>Completo</Button> <Button variant={method === "mixed" ? "default" : "outline"} onClick={() => setMethod("mixed")}>Mixto</Button> <Button variant={method === "credit" ? "default" : "outline"} onClick={() => setMethod("credit")}>Fiado</Button> </div>
             {method === "full" && ( <> <div className="grid grid-cols-3 gap-2"><Button size="sm" variant={fullPayMode === "cash" ? "default" : "outline"} onClick={() => setFullPayMode("cash")}>Efectivo $</Button><Button size="sm" variant={fullPayMode === "mobile" ? "default" : "outline"} onClick={() => setFullPayMode("mobile")}>Pago Móvil</Button><Button size="sm" variant={fullPayMode === "cash_bs" ? "default" : "outline"} onClick={() => setFullPayMode("cash_bs")}>Efectivo Bs</Button></div> 
               {fullPayMode === "mobile" && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 p-4 bg-primary/10 rounded-md border border-primary/20">
-                  <div><Label className="text-[10px] uppercase font-bold text-primary tracking-wider block mb-1">Banco Emisor *</Label><select className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:ring-1 focus:ring-primary" value={mobileBank} onChange={(e) => setMobileBank(e.target.value)}><option value="">Seleccione banco...</option><option value="Banesco">Banesco</option><option value="Mercantil">Mercantil</option><option value="Venezuela">Venezuela</option><option value="Provincial">Provincial</option><option value="BNC">BNC</option><option value="Bancamiga">Bancamiga</option><option value="Tesoro">Tesoro</option><option value="Otro">Otro</option></select></div>
-                  <div><Label className="text-[10px] uppercase font-bold text-primary tracking-wider block mb-1">Referencia *</Label><Input type="text" maxLength={8} value={mobileRef} onChange={(e) => setMobileRef(e.target.value.replace(/\D/g, ''))} className="h-10 text-sm font-display tracking-widest bg-background" placeholder="Ej: 1234" /></div>
+                <div className="mt-3 p-4 bg-primary/10 rounded-md border border-primary/20">
+                  <Label className="text-[10px] uppercase font-bold text-primary tracking-wider block mb-1">Banco Emisor *</Label><select className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:ring-1 focus:ring-primary" value={mobileBank} onChange={(e) => setMobileBank(e.target.value)}><option value="">Seleccione banco...</option><option value="Banesco">Banesco</option><option value="Mercantil">Mercantil</option><option value="Venezuela">Venezuela</option><option value="Provincial">Provincial</option><option value="BNC">BNC</option><option value="Bancamiga">Bancamiga</option><option value="Tesoro">Tesoro</option><option value="Otro">Otro</option></select>
                 </div>
               )} 
             </> )}
-            {method === "mixed" && (<MixedPaymentInputs total={total} cashUsd={cashUsd} mobileBs={mobileBs} cashBs={cashBs} mobileBank={mobileBank} mobileRef={mobileRef} setCashUsd={setCashUsd} setMobileBs={setMobileBs} setCashBs={setCashBs} setMobileBank={setMobileBank} setMobileRef={setMobileRef} />)}
-            {!isValidRef && <p className="text-xs text-destructive animate-pulse text-center font-bold mt-2">⚠️ REQUERIDO: Selecciona el Banco y escribe la Referencia</p>}
+            {method === "mixed" && (<MixedPaymentInputs total={total} cashUsd={cashUsd} mobileBs={mobileBs} cashBs={cashBs} mobileBank={mobileBank} setCashUsd={setCashUsd} setMobileBs={setMobileBs} setCashBs={setCashBs} setMobileBank={setMobileBank} />)}
+            {!isValidRef && <p className="text-xs text-destructive animate-pulse text-center font-bold mt-2">⚠️ REQUERIDO: Selecciona el Banco</p>}
           </div>
           <DialogFooter><Button onClick={submit} disabled={(method === "mixed" && remaining > 0.01) || !isValidRef} className="bg-gradient-to-r from-primary to-accent"><Receipt className="h-4 w-4 mr-1" />Confirmar</Button></DialogFooter>
         </DialogContent>
@@ -195,7 +202,8 @@ export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleStat
   const cancelSession = useStore((s) => (s as any).cancelSession); 
   const addExtraController = useStore((s) => (s as any).addExtraController); 
   const releaseConsole = useStore((s) => s.releaseConsole);
-
+  const updateSessionCustomer = useStore((s) => s.updateSessionCustomer); 
+  
   const now = useNow();
 
   const isPS5 = consoleObj?.type === "PS5"; 
@@ -252,9 +260,25 @@ export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleStat
           <div className="flex flex-col items-end gap-1"><Badge className={`${statusDot} text-foreground text-[10px] px-1.5`}>{statusText}</Badge>{suggested && <Badge variant="outline" className="border-gold text-gold text-[10px] px-1.5"><Star className="h-3 w-3 mr-1 fill-current hidden sm:block" /> Sugerida</Badge>}</div>
         </div>
 
-        <div className={`flex items-center gap-2 rounded-md px-2 sm:px-3 py-1.5 sm:py-2 border ${occupied && customerName ? "bg-primary/15 border-primary/40" : "bg-secondary/30 border-border/40"}`}>
-          <User className={`h-3 w-3 sm:h-4 sm:w-4 shrink-0 ${occupied && customerName ? "text-primary" : "text-muted-foreground"}`} />
-          <span className={`text-xs sm:text-sm font-semibold truncate ${occupied && customerName ? "text-foreground" : "text-muted-foreground italic"}`}>{!occupied ? "Disponible" : customerName || "Cliente sin registrar"}</span>
+        <div 
+          className={`flex items-center justify-between gap-2 rounded-md px-2 sm:px-3 py-1.5 sm:py-2 border transition-all ${occupied ? "cursor-pointer hover:bg-primary/20" : ""} ${occupied && customerName ? "bg-primary/15 border-primary/40" : "bg-secondary/30 border-border/40"}`}
+          onClick={() => {
+            if (occupied) {
+              const newName = prompt("Asigna o cambia el nombre del cliente para esta consola:", customerName || "");
+              if (newName !== null && newName.trim() !== "") {
+                updateSessionCustomer(consoleObj.id, newName.trim());
+              }
+            }
+          }}
+          title={occupied ? "Toca para asignar el nombre del cliente" : ""}
+        >
+          <div className="flex items-center gap-2 overflow-hidden">
+            <User className={`h-3 w-3 sm:h-4 sm:w-4 shrink-0 ${occupied && customerName ? "text-primary" : "text-muted-foreground"}`} />
+            <span className={`text-xs sm:text-sm font-semibold truncate ${occupied && customerName ? "text-foreground" : "text-muted-foreground italic"}`}>
+              {!occupied ? "Disponible" : customerName || "Cliente sin registrar"}
+            </span>
+          </div>
+          {occupied && <Edit2 className="h-3 w-3 text-muted-foreground shrink-0" />}
         </div>
 
         <div className={`rounded-lg p-2 sm:p-3 text-center ${isTournament ? 'bg-purple-500/20 border border-purple-500/30' : 'bg-secondary/40'}`}>
@@ -268,7 +292,6 @@ export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleStat
 
         {!occupied ? (
           <div className="space-y-2 mt-auto">
-            {/* 👇 Botones Libres: Responsivos 👇 */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               <Button size="sm" variant="outline" className="col-span-2 sm:col-span-1 text-xs sm:text-sm h-8 sm:h-9" onClick={() => startSession(consoleObj.id)}>Libre</Button>
               <Button size="sm" className="text-xs sm:text-sm h-8 sm:h-9" onClick={() => startSession(consoleObj.id, 30)}>30 min</Button>
@@ -291,7 +314,6 @@ export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleStat
               {isPrepaid ? ( <><Button size="sm" variant="secondary" className="text-xs h-8 px-1" onClick={() => setExtendOpen(15)}>+15m (cobrar)</Button><Button size="sm" variant="secondary" className="text-xs h-8 px-1" onClick={() => setExtendOpen(30)}>+30m (cobrar)</Button></> ) : ( <><Button size="sm" variant="secondary" className="text-xs h-8" onClick={() => extendSession(consoleObj.id, 15)}>+15 min</Button><Button size="sm" variant="secondary" className="text-xs h-8" onClick={() => extendSession(consoleObj.id, 30)}>+30 min</Button></> )}
             </div>
             
-            {/* 👇 Botones de Acción: De 3 columnas apretadas a 2 columnas en móvil 👇 */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               <Button size="sm" variant="outline" className="text-xs h-8 px-1" onClick={() => setSnackOpen(true)}><ShoppingBag className="h-3 w-3 mr-1 shrink-0" />Snack</Button>
               <Button size="sm" variant="outline" className="text-xs h-8 px-1" onClick={() => setComboOpen(true)}><Package className="h-3 w-3 mr-1 shrink-0" />Combo</Button>
