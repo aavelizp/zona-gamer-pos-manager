@@ -45,7 +45,9 @@ interface State {
   finalizeMultipleConsoles: (consoleIds: string[], payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; cashBs?: number; customer?: string; total: number; timeAmount: number; extrasAmount: number; totalMinutes: number; customerInfo?: CustomerInfo; items: { name: string; qty: number; price: number }[] }) => void;
   directSale: (payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; cashBs?: number; total: number; customer?: string; items: { productId: string; qty: number; price: number; name: string }[] }) => void;
   payCredit: (creditId: string, payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; amount: number }) => void;
-  enqueue: (e: Omit<QueueEntry, "id" | "ts">) => void; dequeue: (id: string) => void; redeemReward: (memberId: string) => void; removeMember: (memberId: string) => void; addMember: (data: { name: string; idDoc?: string; phone?: string }) => void; updateMember: (memberId: string, data: Partial<Member>) => void;
+  enqueue: (e: Omit<QueueEntry, "id" | "ts">) => void; dequeue: (id: string) => void; redeemReward: (memberId: string) => void; removeMember: (memberId: string) => void; 
+  addMember: (data: { name: string; idDoc?: string; phone?: string }) => void; 
+  updateMember: (memberId: string, data: Partial<Member>) => void;
   closeDay: () => void; registerMaintenance: (consoleId: string, description: string, date: number) => void; deleteMaintenanceLog: (logId: string) => void;
   prepaySession: (consoleId: string, minutes: number, payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; cashBs?: number; total: number; customerInfo?: CustomerInfo; comboId?: string }) => void; releaseConsole: (consoleId: string) => boolean; payExtras: (consoleId: string, payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; total: number; customer?: string }) => void; extendPaidSession: (consoleId: string, addMinutes: number, payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; total: number; customer?: string }) => void;
   addExpense: (e: { description: string; amount: number; method: "cash" | "mobile"; amountBs?: number; category?: ExpenseCategory; ts?: number }) => void; setConsoleRate: (type: ConsoleType, ratePerHour: number) => void; deleteSale: (saleId: string) => void; resetConsoleStats: (consoleId: string) => void;
@@ -110,6 +112,10 @@ export const useStore = create<State>()(
       payCredit: (creditId, payload) => set((s) => { const credit = (s.credits||[]).find((c) => c?.id === creditId); if (!credit) return s; const sale: SaleRecord = { id: uid(), ts: Date.now(), timeAmount: 0, extrasAmount: payload.amount, total: payload.amount, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, rate: s.rate, method: payload.method, customer: credit.customer, concept: "Deuda Cobrada", items: [{ name: `Deuda de ${credit.customer}`, qty: 1, price: payload.amount }] }; const remaining = credit.amount - payload.amount; return { sales: [...(s.sales||[]), sale], credits: remaining > 0.001 ? (s.credits||[]).map((c) => (c?.id === creditId ? { ...c, amount: remaining } : c)) : (s.credits||[]).filter((c) => c?.id !== creditId) }; }),
       enqueue: (e) => set((s) => ({ queue: [...(s.queue||[]), { ...e, id: uid(), ts: Date.now() }] })), dequeue: (id) => set((s) => ({ queue: (s.queue||[]).filter((q) => q?.id !== id) })), redeemReward: (memberId) => set((s) => ({ members: (s.members||[]).map((m) => m?.id === memberId && (m.pendingRewards||0) > 0 ? { ...m, pendingRewards: m.pendingRewards - 1, rewardMinutes: 0 } : m ) })), removeMember: (memberId) => set({ members: (get().members||[]).filter((m) => m?.id !== memberId) }),
       
+      // 👇 LAS 2 FUNCIONES VITALES RESTAURADAS PARA CREAR Y EDITAR CLIENTES 👇
+      addMember: (data) => set((s) => ({ members: [...(s.members||[]), { id: uid(), name: data.name, idDoc: data.idDoc, phone: data.phone, totalMinutes: 0, rewardMinutes: 0, pendingRewards: 0, createdAt: Date.now(), lastVisit: Date.now() }] })),
+      updateMember: (memberId, data) => set((s) => ({ members: (s.members||[]).map((m) => m?.id === memberId ? { ...m, ...data } : m) })),
+      
       closeDay: () => set((s) => { const totalSales = (s.sales || []).reduce((acc, x) => acc + (x?.total || 0), 0); const totalExpenses = (s.expenses || []).reduce((acc, x) => acc + (x?.amount || 0), 0); const snapshot: PastClosure = { id: uid(), date: Date.now(), totalSales, totalExpenses, sales: [...(s.sales || [])], expenses: [...(s.expenses || [])] }; return { pastClosures: [snapshot, ...(s.pastClosures || [])], sales: [], sessionHistory: [], consoles: (s.consoles||[]).map((c) => ({ ...c, session: undefined, charges: [] })) }; }),
       
       registerMaintenance: (consoleId, description, date) => set((s) => { const c = (s.consoles||[]).find((x) => x?.id === consoleId); if (!c) return s; const log: MaintenanceLog = { id: uid(), consoleId: c.id, consoleName: c.name, description, date, minutesAtService: c.maintenanceMinutes || 0 }; return { consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, maintenanceMinutes: 0 } : x ), maintenanceLogs: [log, ...(s.maintenanceLogs||[])] }; }),
@@ -140,18 +146,14 @@ export const useStore = create<State>()(
         getItem: async (name) => { try { const { data, error } = await supabase.from('app_state').select('state').eq('id', name).maybeSingle(); if (!error && data && data.state) { const safeData = vaccinateZustandPayload(data.state); localStorage.setItem(name, JSON.stringify(safeData)); return safeData; } } catch (err) {} const local = localStorage.getItem(name); if (local) { try { return vaccinateZustandPayload(JSON.parse(local)); } catch(e) {} } return null; },
         setItem: async (name, value) => { 
           localStorage.setItem(name, typeof value === 'string' ? value : JSON.stringify(value)); 
-          
-          // 👇 EL BLOQUEO MAESTRO: Si la app está descargando de la nube, ¡No rebotes la información!
           if ((window as any).isSincronizando || (window as any).bloquearSync) return; 
-          
           (window as any).estadoPendiente = value; 
           if ((window as any).relojSubida) clearTimeout((window as any).relojSubida); 
-          
           (window as any).relojSubida = setTimeout(async () => { 
             try { 
-              (window as any).bloquearSync = true; // Aseguramos la puerta antes de subir
+              (window as any).bloquearSync = true; 
               await supabase.from('app_state').upsert({ id: name, state: typeof (window as any).estadoPendiente === 'string' ? JSON.parse((window as any).estadoPendiente) : (window as any).estadoPendiente }); 
-              setTimeout(() => { (window as any).bloquearSync = false; }, 1000); // Soltamos la puerta
+              setTimeout(() => { (window as any).bloquearSync = false; }, 1000); 
             } catch (err) {} 
           }, 800); 
         },
@@ -174,7 +176,7 @@ export const computeTimeAmount = (consoleObj: ConsoleState, nowMs: number): { mi
 };
 
 supabase.channel('escuchar-nube').on('postgres_changes', { event: '*', schema: 'public', table: 'app_state' }, (payload) => { 
-  if ((window as any).bloquearSync) return; // Si acabo de subir algo, ignoro el rebote
+  if ((window as any).bloquearSync) return; 
   let rawState = payload.new ? (payload.new as any).state : null; 
   if (typeof rawState === 'string') { try { rawState = JSON.parse(rawState); } catch(e) {} } 
   rawState = vaccinateZustandPayload(rawState); 
@@ -190,7 +192,6 @@ supabase.channel('escuchar-nube').on('postgres_changes', { event: '*', schema: '
   } 
 }).subscribe();
 
-// 👇 EL CAMBIO CRÍTICO: Cuando el celular despierte, DESCÁRGATE de la nube, no subas nada viejo.
 const resyncFromCloud = async () => {
   try {
     const { data, error } = await supabase.from('app_state').select('state').eq('id', 'gamerzone-store-v1').maybeSingle();
@@ -207,7 +208,6 @@ const resyncFromCloud = async () => {
   } catch (e) {}
 };
 
-// Enganchamos la descarga automática a los eventos de despertar del navegador
 window.addEventListener('online', resyncFromCloud);
 window.addEventListener('focus', resyncFromCloud); 
 document.addEventListener('visibilitychange', () => {
