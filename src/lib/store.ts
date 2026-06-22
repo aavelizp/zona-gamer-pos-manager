@@ -146,21 +146,22 @@ export const useStore = create<State>()(
         setItem: async (name, value) => { 
           localStorage.setItem(name, typeof value === 'string' ? value : JSON.stringify(value)); 
           
-          // 🛑 FRENO DE EMERGENCIA: Si estamos descargando, se prohíbe subir.
           if ((window as any).pausarSubida) return; 
+
+          // 👇 EL ESCUDO ANTI-PARPADEO: Bloqueamos cualquier descarga por 3.5 segundos para asegurar que este cambio local sobreviva
+          (window as any).pausarDescarga = true; 
+          if ((window as any).relojBloqueo) clearTimeout((window as any).relojBloqueo);
+          (window as any).relojBloqueo = setTimeout(() => { (window as any).pausarDescarga = false; }, 3500);
 
           (window as any).estadoPendiente = value; 
           if ((window as any).relojSubida) clearTimeout((window as any).relojSubida); 
           
-          // Esperamos 1.5 segundos para asegurar que no sea un falso positivo al despertar el cel
           (window as any).relojSubida = setTimeout(async () => { 
-            if ((window as any).pausarSubida) return; // Doble chequeo antes de disparar
+            if ((window as any).pausarSubida) return; 
             try { 
-              (window as any).pausarDescarga = true; // Avisamos que estamos subiendo
               await supabase.from('app_state').upsert({ id: name, state: typeof (window as any).estadoPendiente === 'string' ? JSON.parse((window as any).estadoPendiente) : (window as any).estadoPendiente }); 
-              setTimeout(() => { (window as any).pausarDescarga = false; }, 1000); 
             } catch (err) {} 
-          }, 1500); 
+          }, 800); // 800ms para que sea bastante rápido y le gane a cualquier otro evento
         },
         removeItem: async (name) => { localStorage.removeItem(name); try { await supabase.from('app_state').delete().eq('id', name); } catch (err) {} }
       }
@@ -182,15 +183,17 @@ export const computeTimeAmount = (consoleObj: ConsoleState, nowMs: number): { mi
 
 // 🛑 FUNCIÓN DE DESCARGA BLINDADA
 const resyncFromCloud = async () => {
-  // Si acabo de subir un cambio a la nube yo mismo, no descargo mi propio rebote
+  // 1er chequeo: Si hicimos un click/cambio local reciente, ni siquiera intentamos descargar
   if ((window as any).pausarDescarga) return; 
-
-  // 1. FRENO DE MANO: Matamos cualquier intento de subir datos viejos
-  if ((window as any).relojSubida) clearTimeout((window as any).relojSubida);
+  
   (window as any).pausarSubida = true;
 
   try {
     const { data, error } = await supabase.from('app_state').select('state').eq('id', 'gamerzone-store-v1').maybeSingle();
+    
+    // 2do chequeo (CRÍTICO): Si mientras la nube respondía, el usuario le dio a "Aceptar" en una alerta, cancelamos la descarga para no aplastar su click.
+    if ((window as any).pausarDescarga) return; 
+
     if (!error && data && data.state) {
       const safeData = vaccinateZustandPayload(data.state);
       const estadoActual = JSON.stringify(useStore.getState());
@@ -201,7 +204,7 @@ const resyncFromCloud = async () => {
     }
   } catch (e) {
   } finally {
-    // 2. Soltamos el freno de mano medio segundo después de que la app se haya puesto al día
+    // Soltamos el candado
     setTimeout(() => { (window as any).pausarSubida = false; }, 500);
   }
 };
@@ -218,16 +221,12 @@ channel.on('postgres_changes', { event: '*', schema: 'public', table: 'app_state
 window.addEventListener('online', resyncFromCloud);
 window.addEventListener('focus', resyncFromCloud); 
 
-// Freno de mano INMEDIATO en cuanto el celular enciende la pantalla
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
-    if ((window as any).relojSubida) clearTimeout((window as any).relojSubida);
-    (window as any).pausarSubida = true;
     resyncFromCloud();
   }
 });
 
-// Latido de seguridad
 setInterval(() => {
    if (document.visibilityState === 'visible') resyncFromCloud();
 }, 15000);
