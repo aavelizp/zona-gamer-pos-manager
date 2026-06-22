@@ -117,7 +117,33 @@ function PrepayCheckout({ open, onClose, consoleObj }: any) {
           <DialogHeader><DialogTitle className="font-display">Prepago · {consoleObj?.name || "Consola"}</DialogTitle></DialogHeader>
           {step === "type" && (<div className="space-y-3"><div className="grid grid-cols-1 gap-2"><Button variant="outline" className="h-auto py-4 flex-col items-start" onClick={() => { setChosenCombo(null); setStep("time"); }}><span className="font-semibold">Tiempo Libre / Manual</span></Button><Button variant="outline" className="h-auto py-4 flex-col items-start" onClick={() => setStep("combo")} disabled={combos.length === 0}><span className="font-semibold">Seleccionar un Combo</span></Button></div></div>)}
           {step === "combo" && (<div className="space-y-2"><div className="space-y-2 max-h-96 overflow-auto">{combos.map((c) => { const ok = (c.items||[]).every((it) => (products.find((p) => p.id === it.productId)?.stock ?? 0) >= it.qty); return (<Card key={c.id} className="p-3 flex justify-between"><div><p className="font-semibold">{c.name}</p><p className="text-sm">{fmtUsd(c.price)}</p></div><Button size="sm" disabled={!ok} onClick={() => { setChosenCombo(c); setStep("pay"); }}>{ok ? "Elegir" : "Sin stock"}</Button></Card>); })}</div></div>)}
-          {step === "time" && (<div className="space-y-3"><div className="grid grid-cols-2 gap-2">{[30, 60, 90, 120].map((m) => ( <Button key={m} variant={chosenMinutes === m ? "default" : "outline"} onClick={() => setChosenMinutes(m)}>{m >= 60 ? `${m / 60}h` : `${m} min`} · {fmtUsd(+((consoleObj?.ratePerHour||0) * (m / 60)).toFixed(2))}</Button> ))}</div><div><Label>Otro (minutos)</Label><Input type="number" min={5} step={5} value={chosenMinutes} onChange={(e) => setChosenMinutes(Math.max(5, parseInt(e.target.value) || 0))} /></div><Button className="w-full" onClick={() => setStep("pay")} disabled={chosenMinutes < 5}>Continuar al pago</Button></div>)}
+          
+          {step === "time" && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 sm:grid-cols-2 gap-2">
+                {[60, 120].map((m) => ( 
+                  <Button key={m} variant={chosenMinutes === m ? "default" : "outline"} className="px-1 text-xs" onClick={() => setChosenMinutes(m)}>
+                    {m >= 60 ? `${m / 60}h` : `${m} min`} · {fmtUsd(+((consoleObj?.ratePerHour||0) * (m / 60)).toFixed(2))}
+                  </Button> 
+                ))}
+              </div>
+              <div className="bg-secondary/40 p-3 rounded-md border border-border/50">
+                <Label className="text-xs uppercase tracking-wider mb-2 block font-semibold text-primary">Personalizado (Horas)</Label>
+                <Input 
+                  type="number" 
+                  min={0.5} 
+                  step={0.5} 
+                  placeholder="Ej: 4.5"
+                  value={chosenMinutes / 60} 
+                  onChange={(e) => setChosenMinutes(Math.max(0.5, parseFloat(e.target.value.replace(',', '.')) || 0) * 60)} 
+                  className="h-10 text-base font-bold"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">Escribe las horas (Ej: 1.5 es una hora y media).</p>
+              </div>
+              <Button className="w-full bg-gradient-to-r from-accent to-primary shadow-md" onClick={() => setStep("pay")} disabled={chosenMinutes < 5}>Continuar al pago</Button>
+            </div>
+          )}
+
           {step === "pay" && (
             <div className="space-y-3">
               <Card className="p-3 bg-secondary/40"><div className="flex justify-between font-display text-lg"><span>TOTAL</span><span>{fmtUsd(total)}</span></div></Card>
@@ -292,11 +318,20 @@ export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleStat
 
         {!occupied ? (
           <div className="space-y-2 mt-auto">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              <Button size="sm" variant="outline" className="col-span-2 sm:col-span-1 text-xs sm:text-sm h-8 sm:h-9" onClick={() => startSession(consoleObj.id)}>Libre</Button>
-              <Button size="sm" className="text-xs sm:text-sm h-8 sm:h-9" onClick={() => startSession(consoleObj.id, 30)}>30 min</Button>
-              <Button size="sm" className="text-xs sm:text-sm h-8 sm:h-9" onClick={() => startSession(consoleObj.id, 60)}>1 hora</Button>
+            {/* 👇 Botones Libres: Responsivos y Simplificados (Libre, 1h, 2h, Otra) 👇 */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <Button size="sm" variant="outline" className="text-[10px] sm:text-xs h-8 sm:h-9 px-1" onClick={() => startSession(consoleObj.id)}>Libre</Button>
+              <Button size="sm" className="text-[10px] sm:text-xs h-8 sm:h-9 px-1" onClick={() => startSession(consoleObj.id, 60)}>1 hora</Button>
+              <Button size="sm" className="text-[10px] sm:text-xs h-8 sm:h-9 px-1" onClick={() => startSession(consoleObj.id, 120)}>2 horas</Button>
+              <Button size="sm" variant="secondary" className="text-[10px] sm:text-xs h-8 sm:h-9 px-1 bg-secondary/50 border border-border/50" onClick={() => { 
+                const val = prompt("¿Cuántas horas jugará? (Ej: 1.5, 4, 5)"); 
+                if (val) { 
+                  const hrs = parseFloat(val.replace(',', '.')); 
+                  if (!isNaN(hrs) && hrs > 0) startSession(consoleObj.id, Math.round(hrs * 60)); 
+                } 
+              }}>Otra...</Button>
             </div>
+
             <div className="grid grid-cols-2 gap-2">
               <Button size="sm" className="bg-gradient-to-r from-accent to-primary text-xs sm:text-sm h-8 sm:h-9 px-1" onClick={() => setPrepayOpen(true)}><Coins className="h-3 w-3 sm:h-4 sm:w-4 mr-1 shrink-0" /> Prepago</Button>
               <Button size="sm" variant="outline" className="border-purple-500/50 text-purple-400 hover:bg-purple-500/10 text-xs sm:text-sm h-8 sm:h-9 px-1" onClick={() => { 
@@ -310,8 +345,33 @@ export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleStat
           </div>
         ) : (
           <div className="space-y-2 mt-auto">
-            <div className="grid grid-cols-2 gap-2">
-              {isPrepaid ? ( <><Button size="sm" variant="secondary" className="text-xs h-8 px-1" onClick={() => setExtendOpen(15)}>+15m (cobrar)</Button><Button size="sm" variant="secondary" className="text-xs h-8 px-1" onClick={() => setExtendOpen(30)}>+30m (cobrar)</Button></> ) : ( <><Button size="sm" variant="secondary" className="text-xs h-8" onClick={() => extendSession(consoleObj.id, 15)}>+15 min</Button><Button size="sm" variant="secondary" className="text-xs h-8" onClick={() => extendSession(consoleObj.id, 30)}>+30 min</Button></> )}
+            {/* 👇 Botones de Extensión Simplificados 👇 */}
+            <div className="grid grid-cols-3 gap-2">
+              {isPrepaid ? ( 
+                <>
+                  <Button size="sm" variant="secondary" className="text-[10px] sm:text-xs h-8 px-1" onClick={() => setExtendOpen(60)}>+1h (cobrar)</Button>
+                  <Button size="sm" variant="secondary" className="text-[10px] sm:text-xs h-8 px-1" onClick={() => setExtendOpen(120)}>+2h (cobrar)</Button>
+                  <Button size="sm" variant="secondary" className="text-[10px] sm:text-xs h-8 px-1" onClick={() => {
+                    const val = prompt("¿Cuántas horas adicionales desea pagar? (Ej: 1.5, 2)");
+                    if (val) {
+                      const hrs = parseFloat(val.replace(',', '.'));
+                      if (!isNaN(hrs) && hrs > 0) setExtendOpen(Math.round(hrs * 60));
+                    }
+                  }}>+Otra...</Button>
+                </> 
+              ) : ( 
+                <>
+                  <Button size="sm" variant="secondary" className="text-[10px] sm:text-xs h-8 px-1" onClick={() => extendSession(consoleObj.id, 60)}>+1 hora</Button>
+                  <Button size="sm" variant="secondary" className="text-[10px] sm:text-xs h-8 px-1" onClick={() => extendSession(consoleObj.id, 120)}>+2 horas</Button>
+                  <Button size="sm" variant="secondary" className="text-[10px] sm:text-xs h-8 px-1" onClick={() => {
+                    const val = prompt("¿Cuántas horas adicionales jugará? (Ej: 1.5, 2)");
+                    if (val) {
+                      const hrs = parseFloat(val.replace(',', '.'));
+                      if (!isNaN(hrs) && hrs > 0) extendSession(consoleObj.id, Math.round(hrs * 60));
+                    }
+                  }}>+Otra...</Button>
+                </> 
+              )}
             </div>
             
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
