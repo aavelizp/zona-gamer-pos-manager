@@ -1,47 +1,89 @@
-import { useState } from "react";
-import { useStore, fmtUsd } from "@/lib/store";
+import { useState, useEffect } from "react";
+import { useStore, fmtUsd, fmtBs } from "@/lib/store";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { ReceiptDialog, type ReceiptData } from "@/components/Receipt";
+import { MixedPaymentInputs } from "@/components/MixedPaymentInputs";
 import { FileText, Receipt, CheckCircle } from "lucide-react";
+import { toast } from "sonner";
 
 export function CreditsTab() {
   const credits = useStore((s) => s.credits || []);
   const payCredit = useStore((s) => s.payCredit);
   const rate = useStore((s) => s.rate);
+  const members = useStore((s) => s.members || []);
   
   const [payOpen, setPayOpen] = useState<any>(null);
   const [amount, setAmount] = useState("");
   const [payMode, setPayMode] = useState<"cash" | "mobile" | "cash_bs">("cash");
   const [mobileBank, setMobileBank] = useState("");
+  
+  // Estado para disparar el comprobante
+  const [receipt, setReceipt] = useState<ReceiptData | null>(null);
 
-  const handlePay = () => {
+  useEffect(() => {
+    if (payOpen) {
+      setAmount(payOpen.amount.toString());
+      setPayMode("cash");
+      setMobileBank("");
+    }
+  }, [payOpen]);
+
+  const handlePaySubmit = () => {
     if (!payOpen) return;
     const val = parseFloat(amount) || 0;
-    if (val <= 0 || val > payOpen.amount) return;
-    
-    let payload: any = { amount: val, method: payMode === "cash_bs" ? "cash_bs" : "full", cashUsd: 0, mobileBs: 0 };
-    if (payMode === "cash") payload.cashUsd = val;
-    if (payMode === "mobile") {
-      payload.mobileBs = val * rate;
-      payload.mobileBank = mobileBank;
+    if (val <= 0 || val > payOpen.amount) {
+      toast.error("Monto inválido");
+      return;
     }
-    if (payMode === "cash_bs") payload.cashBs = val * rate;
+    
+    const cashUsdN = payMode === "cash" ? val : 0;
+    const mobileBsN = payMode === "mobile" ? val * rate : 0;
+    const cashBsN = payMode === "cash_bs" ? val * rate : 0;
+    const finalMethod = payMode === "cash_bs" ? "cash_bs" : payMode;
 
+    // Intentamos rastrear si este deudor de fiado tiene teléfono en el club gamer
+    const matchedMember = members.find(m => m.name.toLowerCase() === payOpen.customer.toLowerCase() || m.phone === payOpen.phone);
+
+    const payload: any = {
+      amount: val,
+      method: finalMethod,
+      cashUsd: cashUsdN,
+      mobileBs: mobileBsN,
+      cashBs: cashBsN,
+      mobileBank: payMode === "mobile" ? mobileBank : undefined,
+      customerInfo: matchedMember ? { name: matchedMember.name, phone: matchedMember.phone, idDoc: matchedMember.idDoc } : { name: payOpen.customer }
+    };
+
+    // 1. Armamos el recibo visual antes de limpiar la deuda de la grilla
+    setReceipt({
+      ts: Date.now(),
+      rate,
+      consoleName: `Cobro Fiado: ${payOpen.note || "General"}`,
+      minutes: 0,
+      timeAmount: 0,
+      items: [{ name: `Abono de Deuda - ${payOpen.customer}`, qty: 1, price: val }],
+      total: val,
+      method: payMode as any,
+      cashUsd: cashUsdN,
+      mobileBs: mobileBsN,
+      cashBs: cashBsN,
+      customer: { name: payOpen.customer, phone: payOpen.phone || undefined }
+    });
+
+    // 2. Ejecutamos la orden en el store
     payCredit(payOpen.id, payload);
     setPayOpen(null);
-    setAmount(""); setMobileBank("");
   };
 
   const fDate = (ts: number) => new Date(ts).toLocaleDateString("es-VE", {day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit"});
 
   return (
     <div className="space-y-6">
-      
-      {/* TARJETA SUPERIOR */}
       <Card className="p-4 sm:p-5 border-border/40 bg-secondary/10 flex flex-col sm:flex-row items-start sm:items-center gap-3">
         <div className="h-10 w-10 bg-yellow-500/20 rounded-full flex items-center justify-center shrink-0">
           <FileText className="h-5 w-5 text-yellow-500" />
@@ -52,7 +94,6 @@ export function CreditsTab() {
         </div>
       </Card>
 
-      {/* TABLA DE FIADOS */}
       <Card className="border-border/40 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left min-w-[700px]">
@@ -67,16 +108,16 @@ export function CreditsTab() {
             </thead>
             <tbody className="divide-y divide-border/50">
               {credits.length === 0 ? (
-                <tr><td colSpan={5} className="p-8 text-center text-muted-foreground italic">No hay cuentas por cobrar. ¡Todo está al día! 🎉</td></tr>
+                <tr><td colSpan={5} className="p-8 text-center text-muted-foreground italic">No hay cuentas por cobrar. 🎉</td></tr>
               ) : (
                 credits.map(c => (
                   <tr key={c.id} className="hover:bg-secondary/10 transition-colors">
                     <td className="p-3 sm:p-4 text-xs text-muted-foreground">{fDate(c.createdAt)}</td>
-                    <td className="p-3 sm:p-4 font-semibold text-sm sm:text-base">{c.customer}</td>
+                    <td className="p-3 sm:p-4 font-semibold text-sm sm:text-base">{c.customer} {c.phone && <span className="text-[11px] text-muted-foreground block">📱 {c.phone}</span>}</td>
                     <td className="p-3 sm:p-4 text-muted-foreground text-xs">{c.note || "---"}</td>
                     <td className="p-3 sm:p-4 font-display text-lg text-yellow-500">{fmtUsd(c.amount)}</td>
                     <td className="p-3 sm:p-4 text-center">
-                      <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white h-8 sm:h-9" onClick={() => { setPayOpen(c); setAmount(c.amount.toString()); }}>
+                      <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white h-8 sm:h-9" onClick={() => setPayOpen(c)}>
                         <Receipt className="h-4 w-4 mr-1" /> Cobrar Deuda
                       </Button>
                     </td>
@@ -88,14 +129,10 @@ export function CreditsTab() {
         </div>
       </Card>
 
-      {/* MODAL DE PAGO */}
       {payOpen && (
         <Dialog open={!!payOpen} onOpenChange={(o) => !o && setPayOpen(null)}>
-          <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="font-display">Registrar Cobro de Deuda</DialogTitle>
-            </DialogHeader>
-            
+          <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+            <DialogHeader><DialogTitle className="font-display">Registrar Cobro de Deuda</DialogTitle></DialogHeader>
             <div className="space-y-4">
               <div className="bg-secondary/30 p-3 sm:p-4 rounded-lg border border-border/50">
                 <p className="text-xs text-muted-foreground uppercase tracking-widest">Cliente</p>
@@ -127,16 +164,18 @@ export function CreditsTab() {
                 )}
               </div>
             </div>
-            
-            <DialogFooter className="mt-2 gap-2 flex-wrap sm:flex-nowrap">
-              <Button variant="outline" className="w-full sm:w-auto h-10" onClick={() => setPayOpen(null)}>Cancelar</Button>
-              <Button onClick={handlePay} disabled={!amount || (payMode==='mobile' && !mobileBank)} className="w-full sm:w-auto h-10 bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-500/20">
+            <DialogFooter className="mt-2 gap-2">
+              <Button variant="outline" onClick={() => setPayOpen(null)}>Cancelar</Button>
+              <Button onClick={handlePaySubmit} disabled={!amount || (payMode==='mobile' && !mobileBank)} className="bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-500/20">
                 <CheckCircle className="h-4 w-4 mr-2" /> Procesar Pago
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       )}
+
+      {/* 👇 MODAL INTERECTADO DEL RECIBO FLOTANTE 👇 */}
+      <ReceiptDialog open={!!receipt} onClose={() => setReceipt(null)} data={receipt} />
     </div>
   );
 }
