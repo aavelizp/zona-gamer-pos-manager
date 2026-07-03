@@ -4,9 +4,10 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge"; // 👈 Importación restaurada
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { MixedPaymentInputs } from "@/components/MixedPaymentInputs";
+import { MixedPaymentInputs } from "@/components/MixedPaymentInputs"; // 👈 CORREGIDO: Importación agregada
 import { ReceiptDialog, type ReceiptData } from "@/components/Receipt";
 import { Trophy, Users, CheckCircle, Receipt, Swords, ArrowLeft, Trash2, Plus, Play, UserPlus, Gift, FileText } from "lucide-react";
 import { toast } from "sonner";
@@ -16,7 +17,7 @@ export function TournamentTab() {
   const tournaments = useStore((s) => s.tournaments || []);
   const participants = useStore((s) => s.participants || []);
   const matches = useStore((s) => s.matches || []);
-  const sales = useStore((s) => s.sales || []); // Para buscar recibos viejos
+  const sales = useStore((s) => s.sales || []); 
   
   const createTournament = useStore((s) => s.createTournament);
   const deleteTournament = useStore((s) => s.deleteTournament);
@@ -31,11 +32,8 @@ export function TournamentTab() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   
-  // Estados para Inscripción/Pago
   const [enrollOpen, setEnrollOpen] = useState<Tournament | null>(null);
   const [payOpen, setPayOpen] = useState<TournamentParticipant | null>(null);
-  
-  // Estado del Recibo
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
   
   const [playerName, setPlayerName] = useState("");
@@ -50,7 +48,6 @@ export function TournamentTab() {
   const activeParts = useMemo(() => participants.filter(p => p.tournamentId === activeId), [participants, activeId]);
   const activeMatches = useMemo(() => matches.filter(m => m.tournamentId === activeId), [matches, activeId]);
 
-  // Manejo de Creación de Torneo
   const [tName, setTName] = useState("");
   const [tGame, setTGame] = useState("");
   const [tMax, setTMax] = useState("16");
@@ -68,13 +65,11 @@ export function TournamentTab() {
     toast.success("Torneo creado exitosamente");
   };
 
-  // Reset de formularios de pago
   const resetPayForm = () => {
     setPlayerName(""); setMethod("full"); setFullPayMode("cash"); 
     setCashUsd(""); setMobileBs(""); setCashBs(""); setMobileBank("");
   };
 
-  // Función genérica para procesar pagos (sirve para Enroll y Pay)
   const processPayment = (totalAmount: number) => {
     const cashUsdN = parseFloat(cashUsd) || 0;
     const mobileBsN = parseFloat(mobileBs) || 0;
@@ -99,7 +94,6 @@ export function TournamentTab() {
       const payload = processPayment(totalAmount);
       enrollParticipant(enrollOpen.id, playerName.trim(), true, payload);
       
-      // Mostrar el recibo inmediatamente
       setReceipt({
         ts: Date.now(),
         rate,
@@ -128,7 +122,6 @@ export function TournamentTab() {
     const payload = processPayment(t.entryFee);
     payEnrollment(payOpen.id, payload);
     
-    // Mostrar el recibo inmediatamente
     setReceipt({
       ts: Date.now(),
       rate,
@@ -147,7 +140,6 @@ export function TournamentTab() {
     setPayOpen(null); resetPayForm(); toast.success("Inscripción cobrada");
   };
 
-  // Buscar un recibo viejo en la memoria
   const showPastReceipt = (enrollSaleId: string | undefined) => {
     if (!enrollSaleId) return;
     const sale = sales.find(s => s.id === enrollSaleId);
@@ -177,7 +169,7 @@ export function TournamentTab() {
     const paid = method === "full" ? totalAmount : cashUsdN + mobileUsd + cashBsUsd;
     const remaining = totalAmount - paid;
     const needsRef = (method === "full" && fullPayMode === "mobile") || (method === "mixed" && mobileBsN > 0);
-    const isValidRef = !needsRef || mobileBank !== ""; // SÓLO EXIGIMOS EL BANCO
+    const isValidRef = !needsRef || mobileBank !== ""; 
 
     return (
       <div className="space-y-4">
@@ -211,8 +203,8 @@ export function TournamentTab() {
         {!isValidRef && <p className="text-xs text-destructive animate-pulse text-center font-bold mt-2">⚠️ REQUERIDO: Selecciona el Banco</p>}
         
         <div className="flex justify-end gap-2 mt-4">
-          <Button variant="outline" onClick={() => { setEnrollOpen(null); setPayOpen(null); resetPayForm(); }}>Cancelar</Button>
-          <Button onClick={payOpen ? handlePay : () => handleEnroll(true)} disabled={(method === "mixed" && remaining > 0.01) || !isValidRef} className="bg-gradient-to-r from-primary to-accent">
+          <Button type="button" variant="outline" onClick={() => { setEnrollOpen(null); setPayOpen(null); resetPayForm(); }}>Cancelar</Button>
+          <Button type="button" onClick={payOpen ? handlePay : () => handleEnroll(true)} disabled={(method === "mixed" && remaining > 0.01) || !isValidRef} className="bg-gradient-to-r from-primary to-accent">
             <Receipt className="h-4 w-4 mr-1" /> Procesar Pago
           </Button>
         </div>
@@ -220,7 +212,6 @@ export function TournamentTab() {
     );
   };
 
-  // VISTA 1: Lista de Torneos
   if (!activeId) {
     return (
       <div className="space-y-6">
@@ -261,7 +252,6 @@ export function TournamentTab() {
           </div>
         )}
 
-        {/* Modal Crear Torneo */}
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogContent className="max-w-md">
             <DialogHeader><DialogTitle className="font-display flex items-center gap-2"><Trophy className="h-5 w-5 text-purple-400" /> Nuevo Torneo</DialogTitle></DialogHeader>
@@ -285,7 +275,6 @@ export function TournamentTab() {
     );
   }
 
-  // VISTA 2: Detalle de un Torneo Específico
   if (!activeTourney) return null;
   const totalPrizePool = activeParts.length * (activeTourney.entryFee * (activeTourney.prizePercentage / 100));
 
@@ -344,7 +333,6 @@ export function TournamentTab() {
                             <Receipt className="h-3 w-3 mr-1" /> Cobrar
                           </Button> 
                         ) : (
-                          // 👇 Botón nuevo para ver el recibo de alguien que ya pagó 👇
                           <Button size="sm" variant="outline" className="border-blue-500/40 text-blue-400 hover:bg-blue-500/10 h-8" onClick={() => showPastReceipt(p.enrollSaleId)}>
                             <FileText className="h-3 w-3 mr-1" /> Recibo
                           </Button>
@@ -371,7 +359,6 @@ export function TournamentTab() {
         </Card>
       ) : (
         <Card className="p-6 border-border/40 overflow-x-auto">
-           {/* Vista de Bracket */}
            <div className="min-w-[800px] flex gap-8">
              {Array.from(new Set(activeMatches.map(m => m.round))).sort().map(round => {
                 const rMatches = activeMatches.filter(m => m.round === round).sort((a,b) => a.matchIndex - b.matchIndex);
@@ -403,7 +390,6 @@ export function TournamentTab() {
         </Card>
       )}
 
-      {/* Modal Inscripción y Cobro */}
       <Dialog open={!!enrollOpen} onOpenChange={(o) => !o && setEnrollOpen(null)}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle className="font-display flex items-center gap-2"><UserPlus className="h-5 w-5 text-accent" /> Inscribir Jugador</DialogTitle></DialogHeader>
@@ -436,7 +422,6 @@ export function TournamentTab() {
         </DialogContent>
       </Dialog>
 
-      {/* 👇 MODAL DEL RECIBO (Se mostrará en vivo al pagar o al consultar uno pasado) 👇 */}
       <ReceiptDialog open={!!receipt} onClose={() => setReceipt(null)} data={receipt} />
     </div>
   );

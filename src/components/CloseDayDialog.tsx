@@ -1,6 +1,6 @@
-import { useRef, useMemo } from "react";
+import { useRef, useMemo, useState, useEffect } from "react";
 import { useStore, fmtUsd } from "@/lib/store";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Gamepad2, ShoppingBag, Banknote, Smartphone, Handshake, FileText, AlertTriangle, Camera, FileSpreadsheet } from "lucide-react";
 import { toast } from "sonner";
@@ -16,6 +16,14 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   
   const printRef = useRef<HTMLDivElement>(null);
 
+  // 👇 ESTADO REACTIVO PARA LA FECHA: Se actualiza en el milisegundo que abres la ventana 👇
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    if (open) {
+      setNow(new Date());
+    }
+  }, [open]);
+
   // Calcula el inicio del turno (Corte a las 6:00 AM)
   const shiftStart = useMemo(() => {
     const d = new Date();
@@ -24,7 +32,7 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     return d;
   }, [open]);
 
-  // 👇 MATEMÁTICA CORREGIDA 👇
+  // Matemática del Cierre
   const stats = useMemo(() => {
     const tSales = sales.filter(s => s.ts >= shiftStart.getTime());
 
@@ -41,7 +49,6 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
       if (s.concept === "Deuda Cobrada") {
         deudasRecuperadasUsd += (s.total || 0);
         cashUsd += (s.cashUsd || 0);
-        // Suma directa, sin multiplicar por la tasa
         mobileBs += (s.mobileBs || 0); 
       } else {
         totalFacturadoUsd += (s.total || 0);
@@ -52,7 +59,6 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           fiadoUsd += (s.total || 0);
         } else {
           cashUsd += (s.cashUsd || 0);
-          // Suma directa, sin multiplicar por la tasa
           mobileBs += (s.mobileBs || 0); 
         }
       }
@@ -64,11 +70,11 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     };
   }, [sales, shiftStart]);
 
-  const now = new Date();
-
+  // 👇 FUNCIÓN DE FOTO BLINDADA PARA CELULARES Y PC 👇
   const downloadImage = async () => {
     if (!printRef.current) return;
-    toast("Generando imagen...", { icon: "📸" });
+    toast("Procesando imagen...", { icon: "📸" });
+    
     try {
       const canvas = await html2canvas(printRef.current, { 
         backgroundColor: "#ffffff",
@@ -76,14 +82,48 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
         useCORS: true,
         logging: false
       });
-      const url = canvas.toDataURL("image/png");
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `Diario_${now.toLocaleDateString('es-VE').replace(/\//g,'-')}.png`;
-      a.click();
-      toast.success("¡Imagen descargada con éxito!");
+      
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          toast.error("Error al generar la imagen.");
+          return;
+        }
+
+        const fileName = `Diario_${now.toLocaleDateString('es-VE').replace(/\//g,'-')}.png`;
+        const file = new File([blob], fileName, { type: "image/png" });
+
+        // 1. Detectar si estamos en un Celular para abrir el menú de WhatsApp/Compartir
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        
+        if (isMobile && navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({
+              files: [file],
+              title: 'Cierre de Caja',
+              text: 'Reporte de cierre de turno adjunto.'
+            });
+            toast.success("¡Menú abierto con éxito!");
+            return; // Si el menú nativo se abrió, terminamos aquí.
+          } catch (error) {
+            console.log("El usuario canceló el menú de compartir o falló, intentando descarga local...");
+          }
+        }
+
+        // 2. Descarga normal (Para Computadoras o si el celular rechaza el menú de compartir)
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast.success("¡Imagen guardada en descargas!");
+
+      }, 'image/png');
+
     } catch (error) {
-      toast.error("Hubo un error al generar la imagen.");
+      toast.error("Hubo un error al capturar la pantalla.");
     }
   };
 
@@ -168,7 +208,7 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           <div className="flex gap-2">
             <Button variant="outline" className="flex-1 border-slate-300 text-slate-700 bg-white hover:bg-slate-100" onClick={() => onOpenChange(false)}>Cancelar</Button>
             <Button className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white" onClick={downloadImage}>
-              <Camera className="h-4 w-4 mr-2" /> Imagen
+              <Camera className="h-4 w-4 mr-2" /> Compartir
             </Button>
             <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => exportData({ sales, products, credits, rate })}>
               <FileSpreadsheet className="h-4 w-4 mr-2" /> Excel
