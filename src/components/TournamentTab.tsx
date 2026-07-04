@@ -4,12 +4,12 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge"; // 👈 Importación restaurada
+import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { MixedPaymentInputs } from "@/components/MixedPaymentInputs"; // 👈 CORREGIDO: Importación agregada
+import { MixedPaymentInputs } from "@/components/MixedPaymentInputs";
 import { ReceiptDialog, type ReceiptData } from "@/components/Receipt";
-import { Trophy, Users, CheckCircle, Receipt, Swords, ArrowLeft, Trash2, Plus, Play, UserPlus, Gift, FileText } from "lucide-react";
+import { Trophy, Users, CheckCircle, Receipt, Swords, ArrowLeft, Trash2, Plus, Play, UserPlus, Gift, FileText, Settings, Edit2, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 
 export function TournamentTab() {
@@ -20,8 +20,10 @@ export function TournamentTab() {
   const sales = useStore((s) => s.sales || []); 
   
   const createTournament = useStore((s) => s.createTournament);
+  const updateTournament = useStore((s) => s.updateTournament);
   const deleteTournament = useStore((s) => s.deleteTournament);
   const enrollParticipant = useStore((s) => s.enrollParticipant);
+  const updateParticipant = useStore((s) => s.updateParticipant);
   const removeParticipant = useStore((s) => s.removeParticipant);
   const payEnrollment = useStore((s) => s.payEnrollment);
   const generateBracket = useStore((s) => s.generateBracket);
@@ -36,7 +38,18 @@ export function TournamentTab() {
   const [payOpen, setPayOpen] = useState<TournamentParticipant | null>(null);
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
   
+  // 👉 Estados para Edición de Torneo
+  const [editTourneyOpen, setEditTourneyOpen] = useState(false);
+  const [editTFee, setEditTFee] = useState("");
+  const [editTPrize, setEditTPrize] = useState("");
+
+  // 👉 Estados para Edición de Participante
+  const [editPartOpen, setEditPartOpen] = useState<TournamentParticipant | null>(null);
+  const [editPName, setEditPName] = useState("");
+  const [editPPhone, setEditPPhone] = useState("");
+  
   const [playerName, setPlayerName] = useState("");
+  const [playerPhone, setPlayerPhone] = useState(""); // Teléfono al Inscribir
   const [method, setMethod] = useState<"full" | "mixed">("full");
   const [fullPayMode, setFullPayMode] = useState<"cash" | "mobile" | "cash_bs">("cash");
   const [cashUsd, setCashUsd] = useState("");
@@ -65,8 +78,28 @@ export function TournamentTab() {
     toast.success("Torneo creado exitosamente");
   };
 
+  const handleEditTourneySubmit = () => {
+    if (!activeId) return;
+    updateTournament(activeId, {
+      entryFee: parseFloat(editTFee) || 0,
+      prizePercentage: parseFloat(editTPrize) || 0
+    });
+    setEditTourneyOpen(false);
+    toast.success("Torneo actualizado");
+  };
+
+  const handleEditPartSubmit = () => {
+    if (!editPartOpen || !editPName.trim()) return;
+    updateParticipant(editPartOpen.id, {
+      memberName: editPName.trim(),
+      phone: editPPhone.trim() || undefined
+    });
+    setEditPartOpen(null);
+    toast.success("Participante actualizado");
+  };
+
   const resetPayForm = () => {
-    setPlayerName(""); setMethod("full"); setFullPayMode("cash"); 
+    setPlayerName(""); setPlayerPhone(""); setMethod("full"); setFullPayMode("cash"); 
     setCashUsd(""); setMobileBs(""); setCashBs(""); setMobileBank("");
   };
 
@@ -89,27 +122,20 @@ export function TournamentTab() {
   const handleEnroll = (isPaid: boolean) => {
     if (!enrollOpen || !playerName.trim()) return;
     const totalAmount = enrollOpen.entryFee;
+    const finalPhone = playerPhone.trim() || undefined;
     
     if (isPaid && totalAmount > 0) {
       const payload = processPayment(totalAmount);
-      enrollParticipant(enrollOpen.id, playerName.trim(), true, payload);
+      enrollParticipant(enrollOpen.id, playerName.trim(), finalPhone, true, payload);
       
       setReceipt({
-        ts: Date.now(),
-        rate,
-        consoleName: `Torneo: ${enrollOpen.name}`,
-        minutes: 0,
-        timeAmount: 0,
-        items: [{ name: `Inscripción: ${enrollOpen.name}`, qty: 1, price: totalAmount }],
-        total: totalAmount,
-        method: payload.method as any,
-        cashUsd: payload.cashUsd,
-        mobileBs: payload.mobileBs,
-        cashBs: payload.cashBs,
-        customer: { name: playerName.trim() }
+        ts: Date.now(), rate, consoleName: `Torneo: ${enrollOpen.name}`, minutes: 0, timeAmount: 0,
+        items: [{ name: `Inscripción: ${enrollOpen.name}`, qty: 1, price: totalAmount }], total: totalAmount,
+        method: payload.method as any, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, cashBs: payload.cashBs,
+        customer: { name: playerName.trim(), phone: finalPhone }
       });
     } else {
-      enrollParticipant(enrollOpen.id, playerName.trim(), false);
+      enrollParticipant(enrollOpen.id, playerName.trim(), finalPhone, false);
     }
     setEnrollOpen(null); resetPayForm(); toast.success("Participante inscrito");
   };
@@ -123,43 +149,27 @@ export function TournamentTab() {
     payEnrollment(payOpen.id, payload);
     
     setReceipt({
-      ts: Date.now(),
-      rate,
-      consoleName: `Torneo: ${t.name}`,
-      minutes: 0,
-      timeAmount: 0,
-      items: [{ name: `Inscripción: ${payOpen.memberName}`, qty: 1, price: t.entryFee }],
-      total: t.entryFee,
-      method: payload.method as any,
-      cashUsd: payload.cashUsd,
-      mobileBs: payload.mobileBs,
-      cashBs: payload.cashBs,
-      customer: { name: payOpen.memberName }
+      ts: Date.now(), rate, consoleName: `Torneo: ${t.name}`, minutes: 0, timeAmount: 0,
+      items: [{ name: `Inscripción: ${payOpen.memberName}`, qty: 1, price: t.entryFee }], total: t.entryFee,
+      method: payload.method as any, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, cashBs: payload.cashBs,
+      customer: { name: payOpen.memberName, phone: payOpen.phone }
     });
     
     setPayOpen(null); resetPayForm(); toast.success("Inscripción cobrada");
   };
 
-  const showPastReceipt = (enrollSaleId: string | undefined) => {
-    if (!enrollSaleId) return;
-    const sale = sales.find(s => s.id === enrollSaleId);
+  const showPastReceipt = (p: TournamentParticipant) => {
+    if (!p.enrollSaleId) return;
+    const sale = sales.find(s => s.id === p.enrollSaleId);
     if (!sale) {
        toast.error("El recibo original ya no se encuentra en el registro de hoy.");
        return;
     }
     setReceipt({
-      ts: sale.ts,
-      rate: sale.rate,
-      consoleName: sale.concept,
-      minutes: 0,
-      timeAmount: 0,
-      items: sale.items,
-      total: sale.total,
-      method: sale.method,
-      cashUsd: sale.cashUsd,
-      mobileBs: sale.mobileBs,
-      cashBs: sale.cashBs || 0,
-      customer: { name: sale.customer || "Participante" }
+      ts: sale.ts, rate: sale.rate, consoleName: sale.concept, minutes: 0, timeAmount: 0,
+      items: sale.items, total: sale.total, method: sale.method,
+      cashUsd: sale.cashUsd, mobileBs: sale.mobileBs, cashBs: sale.cashBs || 0,
+      customer: { name: sale.customer || "Participante", phone: p.phone }
     });
   };
 
@@ -289,6 +299,10 @@ export function TournamentTab() {
           </div>
         </div>
         <div className="flex gap-2">
+          {/* 👇 BOTÓN PARA EDITAR REGLAS DEL TORNEO 👇 */}
+          <Button onClick={() => { setEditTFee(activeTourney.entryFee.toString()); setEditTPrize(activeTourney.prizePercentage.toString()); setEditTourneyOpen(true); }} variant="outline" className="border-blue-500/50 text-blue-400 hover:bg-blue-500/10 h-9">
+            <Settings className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">Ajustes</span>
+          </Button>
           {activeTourney.status === "registering" && (
             <Button onClick={() => { if(confirm("¿Eliminar torneo por completo?")) { deleteTournament(activeId); setActiveId(null); } }} variant="outline" className="border-red-500/50 text-red-400 hover:bg-red-500/10 h-9">
               <Trash2 className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">Eliminar</span>
@@ -312,7 +326,7 @@ export function TournamentTab() {
         <Card className="border-border/40 overflow-hidden">
           <div className="bg-secondary/30 p-3 sm:p-4 border-b border-border/50 flex justify-between items-center">
             <h3 className="font-display text-sm sm:text-base tracking-wider flex items-center gap-2"><Users className="h-4 w-4 text-accent" /> Lista de Participantes</h3>
-            <Button size="sm" onClick={() => { setPlayerName(""); setEnrollOpen(activeTourney); }} disabled={activeParts.length >= activeTourney.maxPlayers} className="bg-purple-600 hover:bg-purple-700 text-white h-8"><UserPlus className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">Inscribir</span></Button>
+            <Button size="sm" onClick={() => { setPlayerName(""); setPlayerPhone(""); setEnrollOpen(activeTourney); }} disabled={activeParts.length >= activeTourney.maxPlayers} className="bg-purple-600 hover:bg-purple-700 text-white h-8"><UserPlus className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">Inscribir</span></Button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left min-w-[600px]">
@@ -323,7 +337,17 @@ export function TournamentTab() {
                 {activeParts.length === 0 ? ( <tr><td colSpan={3} className="p-6 text-center text-muted-foreground italic">Nadie inscrito todavía.</td></tr> ) : (
                   activeParts.map(p => (
                     <tr key={p.id} className="hover:bg-secondary/10">
-                      <td className="p-3 sm:p-4 font-bold">{p.memberName}</td>
+                      <td className="p-3 sm:p-4 font-bold">
+                        {p.memberName}
+                        {p.phone && (
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[11px] text-muted-foreground font-normal">📱 {p.phone}</span>
+                            <a href={`https://wa.me/${p.phone.replace(/\D/g,'')}`} target="_blank" rel="noreferrer" className="text-green-500 hover:text-green-400 flex items-center gap-1 text-[10px] border border-green-500/30 px-1.5 py-0.5 rounded-full bg-green-500/10">
+                              <MessageCircle className="h-3 w-3" /> WhatsApp
+                            </a>
+                          </div>
+                        )}
+                      </td>
                       <td className="p-3 sm:p-4">
                         {p.paymentStatus === "paid" ? <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Pagado</Badge> : <Badge className="bg-yellow-500/20 text-yellow-500 border-yellow-500/30">Pendiente</Badge>}
                       </td>
@@ -333,10 +357,12 @@ export function TournamentTab() {
                             <Receipt className="h-3 w-3 mr-1" /> Cobrar
                           </Button> 
                         ) : (
-                          <Button size="sm" variant="outline" className="border-blue-500/40 text-blue-400 hover:bg-blue-500/10 h-8" onClick={() => showPastReceipt(p.enrollSaleId)}>
+                          <Button size="sm" variant="outline" className="border-blue-500/40 text-blue-400 hover:bg-blue-500/10 h-8" onClick={() => showPastReceipt(p)}>
                             <FileText className="h-3 w-3 mr-1" /> Recibo
                           </Button>
                         )}
+                        {/* 👇 Botón Editar Jugador 👇 */}
+                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/20 text-primary" onClick={() => { setEditPName(p.memberName); setEditPPhone(p.phone || ""); setEditPartOpen(p); }}><Edit2 className="h-4 w-4" /></Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:bg-red-500/10" onClick={() => { if(confirm(`¿Remover a ${p.memberName}?`)) removeParticipant(p.id); }}><Trash2 className="h-4 w-4" /></Button>
                       </td>
                     </tr>
@@ -390,11 +416,42 @@ export function TournamentTab() {
         </Card>
       )}
 
+      {/* Modal Editar Reglas Torneo */}
+      <Dialog open={editTourneyOpen} onOpenChange={setEditTourneyOpen}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader><DialogTitle className="font-display flex items-center gap-2"><Settings className="h-5 w-5 text-blue-400" /> Ajustar Torneo</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div><Label>Precio de Inscripción ($)</Label><Input type="number" min="0" step="0.5" value={editTFee} onChange={e => setEditTFee(e.target.value)} /></div>
+            <div>
+              <Label className="flex justify-between"><span>Porcentaje para el Pozo</span><span className="text-accent">{editTPrize}%</span></Label>
+              <input type="range" min="0" max="100" step="5" value={editTPrize} onChange={e => setEditTPrize(e.target.value)} className="w-full mt-2 accent-blue-500" />
+            </div>
+            <p className="text-[10px] text-muted-foreground text-center">El pozo y los ingresos se recalcularán automáticamente.</p>
+          </div>
+          <DialogFooter><Button onClick={handleEditTourneySubmit} className="w-full bg-blue-600 hover:bg-blue-700 text-white">Guardar Cambios</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Editar Participante */}
+      <Dialog open={!!editPartOpen} onOpenChange={(o) => !o && setEditPartOpen(null)}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader><DialogTitle className="font-display flex items-center gap-2"><Edit2 className="h-5 w-5 text-primary" /> Editar Jugador</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div><Label>Nombre / Gamertag</Label><Input value={editPName} onChange={e => setEditPName(e.target.value)} /></div>
+            <div><Label>Teléfono / WhatsApp</Label><Input value={editPPhone} onChange={e => setEditPPhone(e.target.value)} placeholder="Ej: 0414..." /></div>
+          </div>
+          <DialogFooter><Button onClick={handleEditPartSubmit} className="w-full mt-2">Guardar Datos</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!enrollOpen} onOpenChange={(o) => !o && setEnrollOpen(null)}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle className="font-display flex items-center gap-2"><UserPlus className="h-5 w-5 text-accent" /> Inscribir Jugador</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
-            <div><Label>Nombre / Gamertag del Jugador *</Label><Input value={playerName} onChange={e => setPlayerName(e.target.value)} placeholder="Ej: Faker99" className="mt-1" autoFocus /></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div><Label>Gamertag / Nombre *</Label><Input value={playerName} onChange={e => setPlayerName(e.target.value)} placeholder="Ej: Faker99" autoFocus /></div>
+              <div><Label>Celular (WhatsApp)</Label><Input value={playerPhone} onChange={e => setPlayerPhone(e.target.value)} placeholder="Opcional" /></div>
+            </div>
             {enrollOpen && enrollOpen.entryFee > 0 && (
               <div className="bg-secondary/20 p-4 rounded-lg border border-border/40">
                 <Label className="text-xs uppercase tracking-widest text-muted-foreground font-bold mb-3 block">¿Pagará la inscripción ahora mismo?</Label>
