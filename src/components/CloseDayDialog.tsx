@@ -1,8 +1,8 @@
 import { useRef, useMemo, useState, useEffect } from "react";
 import { useStore, fmtUsd } from "@/lib/store";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Gamepad2, ShoppingBag, Banknote, Smartphone, Handshake, FileText, AlertTriangle, Image as ImageIcon, FileSpreadsheet, Download, RefreshCcw } from "lucide-react";
+import { Gamepad2, ShoppingBag, Banknote, Smartphone, Handshake, FileText, AlertTriangle, Image as ImageIcon, FileSpreadsheet, Download, RefreshCcw, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import html2canvas from "html2canvas";
 import { exportData } from "@/lib/excel";
@@ -17,7 +17,6 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   const printRef = useRef<HTMLDivElement>(null);
   const [now, setNow] = useState(new Date());
   
-  // 👉 ESTADO MÁGICO: Aquí guardamos la foto procesada
   const [finalImage, setFinalImage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -54,7 +53,7 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     return { totalFacturadoUsd, horasUsd, snacksUsd, cashUsd, mobileBs, fiadoUsd, deudasRecuperadasUsd };
   }, [sales, shiftStart]);
 
-  // 👇 PROCESAMOS LA IMAGEN PERO NO LA DESCARGAMOS AÚN 👇
+  // 👉 PASO 1: Generar la imagen y mostrarla en pantalla
   const prepareImage = async () => {
     if (!printRef.current) return;
     setIsProcessing(true);
@@ -65,19 +64,64 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
         backgroundColor: "#ffffff",
         scale: 2, 
         useCORS: true,
-        logging: false,
-        windowWidth: printRef.current.scrollWidth, // Evita cortes por scroll
-        windowHeight: printRef.current.scrollHeight
+        allowTaint: true,
+        logging: false
       });
       
       const dataUrl = canvas.toDataURL("image/png");
-      setFinalImage(dataUrl); // La mostramos en pantalla
-      toast.success("Ticket listo para descargar.");
+      setFinalImage(dataUrl); 
+      toast.success("¡Foto lista!");
     } catch (error) {
       console.error(error);
       toast.error("Error al generar la imagen.");
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  // 👉 PASO 2A: Botón de Compartir Nativo (Abre WhatsApp)
+  const handleShare = async () => {
+    if (!finalImage) return;
+    try {
+      const response = await fetch(finalImage);
+      const blob = await response.blob();
+      const file = new File([blob], `Cierre_Caja_${now.toLocaleDateString('es-VE').replace(/\//g,'-')}.png`, { type: 'image/png' });
+      
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'Cierre de Caja',
+          text: 'Reporte de cierre de caja adjunto.'
+        });
+      } else {
+        toast.error("Tu teléfono no soporta compartir la imagen directamente. Usa el botón Descargar.");
+      }
+    } catch (error) {
+      console.log("Error al compartir o usuario canceló:", error);
+    }
+  };
+
+  // 👉 PASO 2B: Botón de Descarga Blindada (Blob)
+  const handleDownload = async () => {
+    if (!finalImage) return;
+    try {
+      const response = await fetch(finalImage);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      
+      const a = document.createElement("a");
+      a.style.display = "none";
+      a.href = url;
+      a.download = `Cierre_Caja_${now.toLocaleDateString('es-VE').replace(/\//g,'-')}.png`;
+      document.body.appendChild(a);
+      a.click();
+      
+      setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      }, 100);
+    } catch (error) {
+      toast.error("Error al forzar la descarga.");
     }
   };
 
@@ -173,30 +217,34 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
         )}
 
         {/* ========================================== */}
-        {/* VISTA 2: LA FOTO LISTA PARA DESCARGA REAL  */}
+        {/* VISTA 2: LA FOTO LISTA CON EL TRIPLE ESCUDO */}
         {/* ========================================== */}
         {finalImage && (
           <div className="bg-slate-100 flex flex-col h-full rounded-lg overflow-hidden animate-in fade-in slide-in-from-bottom-4">
             
             <div className="p-4 bg-white border-b border-slate-200 text-center">
               <h2 className="font-display text-xl text-slate-900">¡Foto Lista!</h2>
-              <p className="text-xs text-slate-500">Toca descargar o mantén presionada la imagen.</p>
             </div>
 
-            <div className="p-4 flex-1 overflow-auto flex justify-center items-start bg-slate-200/50 shadow-inner">
-              <img src={finalImage} alt="Ticket Cierre" className="w-full max-w-[320px] rounded shadow-xl border border-slate-300" />
+            <div className="p-4 flex-1 overflow-auto flex flex-col items-center bg-slate-200/50 shadow-inner">
+              <div className="bg-amber-100 text-amber-800 p-2 rounded-md text-xs text-center border border-amber-200 mb-3 w-full max-w-[320px]">
+                ☝️ Si los botones fallan, <strong>mantén presionada</strong> la imagen para guardarla.
+              </div>
+              <img src={finalImage} alt="Ticket Cierre" className="w-full max-w-[320px] rounded shadow-xl border border-slate-300 pointer-events-auto" />
             </div>
 
-            <div className="p-4 bg-white border-t border-slate-200 space-y-2">
-              {/* 👇 ESTE ES UN ENLACE HTML REAL Y SÍNCRONO. JAMÁS FALLA. 👇 */}
-              <a 
-                href={finalImage} 
-                download={`Cierre_Caja_${now.toLocaleDateString('es-VE').replace(/\//g,'-')}.png`}
-                className="flex items-center justify-center w-full bg-indigo-600 hover:bg-indigo-700 text-white h-12 rounded-md font-bold tracking-widest transition-colors"
-              >
-                <Download className="h-5 w-5 mr-2" />
-                DESCARGAR AHORA
-              </a>
+            <div className="p-4 bg-white border-t border-slate-200 space-y-3">
+              <div className="flex gap-2">
+                {/* Botón 1: WhatsApp / Compartir Nativo */}
+                <Button className="flex-1 bg-green-600 hover:bg-green-700 text-white" onClick={handleShare}>
+                  <Share2 className="h-4 w-4 mr-2" /> Compartir
+                </Button>
+                
+                {/* Botón 2: Descargar Seguro (Blob) */}
+                <Button className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white" onClick={handleDownload}>
+                  <Download className="h-4 w-4 mr-2" /> Descargar
+                </Button>
+              </div>
 
               <Button variant="outline" className="w-full text-slate-500" onClick={() => setFinalImage(null)}>
                 Volver atrás
