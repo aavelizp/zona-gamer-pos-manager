@@ -27,8 +27,8 @@ export interface Expense { id: string; ts: number; createdAt?: number; descripti
 
 export type TournamentFormat = "single_elimination" | "league";
 export interface Tournament { id: string; name: string; game: string; maxPlayers: number; entryFee: number; prizePercentage: number; format: TournamentFormat; dateRange: string; status: "registering" | "active" | "completed"; createdAt: number; } 
-// 👇 Añadido campo 'phone' a los participantes 👇
 export interface TournamentParticipant { id: string; tournamentId: string; memberId?: string; memberName: string; phone?: string; paymentStatus: "paid" | "pending"; enrolledAt: number; enrollSaleId?: string; }
+// 👇 Se aseguró el soporte de isDraw 👇
 export interface TournamentMatch { id: string; tournamentId: string; round: number; matchIndex: number; player1Id?: string; player2Id?: string; winnerId?: string; isDraw?: boolean; nextMatchId?: string; }
 
 export interface PastClosure { id: string; date: number; totalSales: number; totalExpenses: number; sales: SaleRecord[]; expenses: Expense[]; }
@@ -54,14 +54,15 @@ interface State {
   addExpense: (e: { description: string; amount: number; method: "cash" | "mobile"; amountBs?: number; category?: ExpenseCategory; ts?: number }) => void; setConsoleRate: (type: ConsoleType, ratePerHour: number) => void; deleteSale: (saleId: string) => void; resetConsoleStats: (consoleId: string) => void;
   
   createTournament: (t: Omit<Tournament, "id" | "createdAt" | "status">) => void; 
-  updateTournament: (id: string, data: Partial<Tournament>) => void; // 👈 Añadido para editar torneo
+  updateTournament: (id: string, data: Partial<Tournament>) => void;
   deleteTournament: (id: string) => void; 
-  enrollParticipant: (tournamentId: string, memberName: string, phone: string | undefined, isPaid: boolean, payload?: any) => void; // 👈 Ahora acepta phone
-  updateParticipant: (id: string, data: Partial<TournamentParticipant>) => void; // 👈 Añadido para editar participante
+  enrollParticipant: (tournamentId: string, memberName: string, phone: string | undefined, isPaid: boolean, payload?: any) => void;
+  updateParticipant: (id: string, data: Partial<TournamentParticipant>) => void;
   removeParticipant: (participantId: string) => void; 
   payEnrollment: (participantId: string, payload: any) => void; 
   generateBracket: (tournamentId: string) => void; 
   setMatchWinner: (matchId: string, winnerId: string) => void; 
+  setMatchDraw: (matchId: string) => void; // 👈 NUEVO: Empates
   revertMatchWinner: (matchId: string) => void; 
   revertTournamentToRegistering: (tournamentId: string) => void;
 }
@@ -136,8 +137,7 @@ export const useStore = create<State>()(
       setConsoleRate: (type, ratePerHour) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.type === type ? { ...c, ratePerHour: Math.max(0, ratePerHour) } : c ) })),
       deleteSale: (id) => set((s) => ({ sales: (s.sales||[]).filter((x) => x?.id !== id) })),
       resetConsoleStats: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId ? { ...c, totalMinutes: 0, maintenanceMinutes: 0 } : c), sessionHistory: (s.sessionHistory||[]).filter((h) => h?.consoleId !== consoleId) })),
-
-      // 👇 FUNCIONES ACTUALIZADAS DE TORNEOS 👇
+      
       createTournament: (t) => set((s) => ({ tournaments: [...(s.tournaments||[]), { ...t, id: uid(), createdAt: Date.now(), status: "registering" as "registering" }] })),
       updateTournament: (id, data) => set((s) => ({ tournaments: (s.tournaments||[]).map(t => t?.id === id ? { ...t, ...data } : t) })),
       deleteTournament: (id) => set((s) => { const parts = (s.participants||[]).filter(p => p?.tournamentId === id); const saleIds = parts.map(p => p?.enrollSaleId).filter(Boolean); return { tournaments: (s.tournaments||[]).filter(t => t?.id !== id), participants: (s.participants||[]).filter(p => p?.tournamentId !== id), matches: (s.matches||[]).filter(m => m?.tournamentId !== id), sales: (s.sales||[]).filter(sale => !saleIds.includes(sale?.id)) }; }),
@@ -145,9 +145,57 @@ export const useStore = create<State>()(
       updateParticipant: (id, data) => set((s) => ({ participants: (s.participants||[]).map(p => p?.id === id ? { ...p, ...data } : p) })),
       removeParticipant: (participantId) => set((s) => { const p = (s.participants||[]).find(x => x?.id === participantId); if (!p) return s; return { participants: (s.participants||[]).filter(x => x?.id !== participantId), sales: p.enrollSaleId ? (s.sales||[]).filter(sale => sale?.id !== p.enrollSaleId) : (s.sales||[]) }; }),
       payEnrollment: (participantId, payload) => set((s) => { const p = (s.participants||[]).find(x => x?.id === participantId); if (!p) return s; const t = (s.tournaments||[]).find(x => x?.id === p.tournamentId); const enrollSaleId = uid(); const sale: SaleRecord = { id: enrollSaleId, ts: Date.now(), timeAmount: 0, extrasAmount: payload.total, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, cashBs: payload.cashBs || 0, rate: s.rate, method: payload.method, customer: p.memberName, concept: `Pago de Inscripción: ${t?.name || 'Torneo'}`, items: [{ name: `Pago Inscripción: ${p.memberName}`, qty: 1, price: payload.total }] }; return { participants: (s.participants||[]).map(x => x?.id === participantId ? { ...x, paymentStatus: "paid" as "paid", enrollSaleId } : x), sales: [...(s.sales||[]), sale] }; }),
-      generateBracket: (tournamentId) => set((s) => { const t = (s.tournaments||[]).find(x => x?.id === tournamentId); const parts = (s.participants||[]).filter(p => p?.tournamentId === tournamentId); if (!t || parts.length < 2) return s; const shuffled = [...parts].sort(() => Math.random() - 0.5); let n = 2; while (n < shuffled.length) n *= 2; const matches: TournamentMatch[] = []; let totalRounds = Math.log2(n); const matchNodes: { [key: string]: string } = {}; for(let r = 1; r <= totalRounds; r++) { let matchesInRound = n / Math.pow(2, r); for(let i = 0; i < matchesInRound; i++) { matchNodes[`${r}_${i}`] = uid(); } } for(let r = 1; r <= totalRounds; r++) { let matchesInRound = n / Math.pow(2, r); for(let i = 0; i < matchesInRound; i++) { const matchId = matchNodes[`${r}_${i}`]; const nextRoundMatchId = r < totalRounds ? matchNodes[`${r+1}_${Math.floor(i/2)}`] : undefined; matches.push({ id: matchId, tournamentId, round: r, matchIndex: i, player1Id: undefined, player2Id: undefined, winnerId: undefined, nextMatchId: nextRoundMatchId }); } } let pIndex = 0; let r1Matches = matches.filter(m => m.round === 1); r1Matches.forEach(m => { if(pIndex < shuffled.length) m.player1Id = shuffled[pIndex++].id; if(pIndex < shuffled.length) m.player2Id = shuffled[pIndex++].id; }); r1Matches.forEach(m => { if (m.player1Id && !m.player2Id) { m.winnerId = m.player1Id; if (m.nextMatchId) { const nextM = matches.find(x => x?.id === m.nextMatchId); if (nextM) { if (!nextM.player1Id) nextM.player1Id = m.winnerId; else nextM.player2Id = m.winnerId; } } } }); return { tournaments: (s.tournaments||[]).map(x => x?.id === tournamentId ? { ...x, status: "active" as "active" } : x), matches: [...(s.matches||[]), ...matches] }; }),
-      setMatchWinner: (matchId, winnerId) => set((s) => { const m = (s.matches||[]).find(x => x?.id === matchId); if (!m || !winnerId) return s; let newMatches = (s.matches||[]).map(x => x?.id === matchId ? { ...x, winnerId } : x); if (m.nextMatchId) { newMatches = newMatches.map(x => { if (x?.id === m.nextMatchId) { if (m.matchIndex % 2 === 0) return { ...x, player1Id: winnerId }; else return { ...x, player2Id: winnerId }; } return x; }); } let newTournaments = s.tournaments || []; if (!m.nextMatchId) newTournaments = newTournaments.map(t => t?.id === m.tournamentId ? { ...t, status: "completed" as "completed" } : t); return { matches: newMatches, tournaments: newTournaments }; }),
-      revertMatchWinner: (matchId) => set((s) => { const m = (s.matches||[]).find(x => x?.id === matchId); if (!m || !m.winnerId) return s; const oldWinnerId = m.winnerId; let newMatches = (s.matches||[]).map(x => x?.id === matchId ? { ...x, winnerId: undefined } : x); if (m.nextMatchId) { newMatches = newMatches.map(x => { if (x?.id === m.nextMatchId) { if (x.player1Id === oldWinnerId) return { ...x, player1Id: undefined }; if (x.player2Id === oldWinnerId) return { ...x, player2Id: undefined }; } return x; }); } let newTournaments = (s.tournaments||[]).map(t => t?.id === m.tournamentId ? { ...t, status: "active" as "active" } : t); return { matches: newMatches, tournaments: newTournaments }; }),
+      
+      // 👇 ALGORITMO PARA GENERAR LA LIGA (Todos contra todos) 👇
+      generateBracket: (tournamentId) => set((s) => { 
+        const t = (s.tournaments||[]).find(x => x?.id === tournamentId); 
+        const parts = (s.participants||[]).filter(p => p?.tournamentId === tournamentId); 
+        if (!t || parts.length < 2) return s; 
+        
+        const matches: TournamentMatch[] = []; 
+
+        if (t.format === "league") {
+          const players = [...parts];
+          if (players.length % 2 !== 0) {
+            players.push({ id: "bye", memberName: "BYE" } as any); // Comodín si son impares
+          }
+          const numRounds = players.length - 1;
+          const half = players.length / 2;
+          let matchIndex = 0;
+
+          for (let r = 0; r < numRounds; r++) {
+            for (let i = 0; i < half; i++) {
+              const p1 = players[i];
+              const p2 = players[players.length - 1 - i];
+              if (p1.id !== "bye" && p2.id !== "bye") {
+                matches.push({ id: uid(), tournamentId, round: r + 1, matchIndex: matchIndex++, player1Id: p1.id, player2Id: p2.id, winnerId: undefined, isDraw: false });
+              }
+            }
+            players.splice(1, 0, players.pop()!);
+          }
+          return { tournaments: (s.tournaments||[]).map(x => x?.id === tournamentId ? { ...x, status: "active" as "active" } : x), matches: [...(s.matches||[]), ...matches] };
+        }
+
+        // Eliminatoria Clásica
+        const shuffled = [...parts].sort(() => Math.random() - 0.5); let n = 2; while (n < shuffled.length) n *= 2; const matchNodes: { [key: string]: string } = {}; let totalRounds = Math.log2(n); for(let r = 1; r <= totalRounds; r++) { let matchesInRound = n / Math.pow(2, r); for(let i = 0; i < matchesInRound; i++) { matchNodes[`${r}_${i}`] = uid(); } } for(let r = 1; r <= totalRounds; r++) { let matchesInRound = n / Math.pow(2, r); for(let i = 0; i < matchesInRound; i++) { const matchId = matchNodes[`${r}_${i}`]; const nextRoundMatchId = r < totalRounds ? matchNodes[`${r+1}_${Math.floor(i/2)}`] : undefined; matches.push({ id: matchId, tournamentId, round: r, matchIndex: i, player1Id: undefined, player2Id: undefined, winnerId: undefined, nextMatchId: nextRoundMatchId }); } } let pIndex = 0; let r1Matches = matches.filter(m => m.round === 1); r1Matches.forEach(m => { if(pIndex < shuffled.length) m.player1Id = shuffled[pIndex++].id; if(pIndex < shuffled.length) m.player2Id = shuffled[pIndex++].id; }); r1Matches.forEach(m => { if (m.player1Id && !m.player2Id) { m.winnerId = m.player1Id; if (m.nextMatchId) { const nextM = matches.find(x => x?.id === m.nextMatchId); if (nextM) { if (!nextM.player1Id) nextM.player1Id = m.winnerId; else nextM.player2Id = m.winnerId; } } } }); return { tournaments: (s.tournaments||[]).map(x => x?.id === tournamentId ? { ...x, status: "active" as "active" } : x), matches: [...(s.matches||[]), ...matches] }; 
+      }),
+      
+      // 👇 SOPORTE PARA EMPATES EN LIGA 👇
+      setMatchDraw: (matchId) => set((s) => { 
+        const m = (s.matches||[]).find(x => x?.id === matchId); 
+        if (!m) return s; 
+        let newMatches = (s.matches||[]).map(x => x?.id === matchId ? { ...x, isDraw: true, winnerId: undefined } : x); 
+        let newTournaments = s.tournaments || []; 
+        const t = newTournaments.find(x => x?.id === m.tournamentId); 
+        if (t && t.format === "league") { 
+          const allDone = newMatches.filter(x => x.tournamentId === m.tournamentId).every(x => x.winnerId || x.isDraw); 
+          if (allDone) newTournaments = newTournaments.map(x => x?.id === m.tournamentId ? { ...x, status: "completed" as "completed" } : x); 
+        } 
+        return { matches: newMatches, tournaments: newTournaments }; 
+      }),
+
+      setMatchWinner: (matchId, winnerId) => set((s) => { const m = (s.matches||[]).find(x => x?.id === matchId); if (!m || !winnerId) return s; let newMatches = (s.matches||[]).map(x => x?.id === matchId ? { ...x, winnerId, isDraw: false } : x); if (m.nextMatchId) { newMatches = newMatches.map(x => { if (x?.id === m.nextMatchId) { if (m.matchIndex % 2 === 0) return { ...x, player1Id: winnerId }; else return { ...x, player2Id: winnerId }; } return x; }); } let newTournaments = s.tournaments || []; if (!m.nextMatchId) { const t = newTournaments.find(x => x?.id === m.tournamentId); if (t && t.format === "league") { const allDone = newMatches.filter(x => x.tournamentId === m.tournamentId).every(x => x.winnerId || x.isDraw); if (allDone) newTournaments = newTournaments.map(x => x?.id === m.tournamentId ? { ...x, status: "completed" as "completed" } : x); } else if (t) { newTournaments = newTournaments.map(x => x?.id === m.tournamentId ? { ...x, status: "completed" as "completed" } : x); } } return { matches: newMatches, tournaments: newTournaments }; }),
+      revertMatchWinner: (matchId) => set((s) => { const m = (s.matches||[]).find(x => x?.id === matchId); if (!m || (!m.winnerId && !m.isDraw)) return s; const oldWinnerId = m.winnerId; let newMatches = (s.matches||[]).map(x => x?.id === matchId ? { ...x, winnerId: undefined, isDraw: false } : x); if (m.nextMatchId && oldWinnerId) { newMatches = newMatches.map(x => { if (x?.id === m.nextMatchId) { if (x.player1Id === oldWinnerId) return { ...x, player1Id: undefined }; if (x.player2Id === oldWinnerId) return { ...x, player2Id: undefined }; } return x; }); } let newTournaments = (s.tournaments||[]).map(t => t?.id === m.tournamentId ? { ...t, status: "active" as "active" } : t); return { matches: newMatches, tournaments: newTournaments }; }),
       revertTournamentToRegistering: (tournamentId) => set((s) => { return { tournaments: (s.tournaments||[]).map(t => t?.id === tournamentId ? { ...t, status: "registering" as "registering" } : t), matches: (s.matches||[]).filter(m => m?.tournamentId !== tournamentId) }; })
     }),
     {
@@ -156,21 +204,15 @@ export const useStore = create<State>()(
         getItem: async (name) => { try { const { data, error } = await supabase.from('app_state').select('state').eq('id', name).maybeSingle(); if (!error && data && data.state) { const safeData = vaccinateZustandPayload(data.state); localStorage.setItem(name, JSON.stringify(safeData)); return safeData; } } catch (err) {} const local = localStorage.getItem(name); if (local) { try { return vaccinateZustandPayload(JSON.parse(local)); } catch(e) {} } return null; },
         setItem: async (name, value) => { 
           localStorage.setItem(name, typeof value === 'string' ? value : JSON.stringify(value)); 
-          
           if ((window as any).pausarSubida) return; 
-
           (window as any).pausarDescarga = true; 
           if ((window as any).relojBloqueo) clearTimeout((window as any).relojBloqueo);
           (window as any).relojBloqueo = setTimeout(() => { (window as any).pausarDescarga = false; }, 3500);
-
           (window as any).estadoPendiente = value; 
           if ((window as any).relojSubida) clearTimeout((window as any).relojSubida); 
-          
           (window as any).relojSubida = setTimeout(async () => { 
             if ((window as any).pausarSubida) return; 
-            try { 
-              await supabase.from('app_state').upsert({ id: name, state: typeof (window as any).estadoPendiente === 'string' ? JSON.parse((window as any).estadoPendiente) : (window as any).estadoPendiente }); 
-            } catch (err) {} 
+            try { await supabase.from('app_state').upsert({ id: name, state: typeof (window as any).estadoPendiente === 'string' ? JSON.parse((window as any).estadoPendiente) : (window as any).estadoPendiente }); } catch (err) {} 
           }, 800); 
         },
         removeItem: async (name) => { localStorage.removeItem(name); try { await supabase.from('app_state').delete().eq('id', name); } catch (err) {} }
@@ -181,55 +223,7 @@ export const useStore = create<State>()(
 
 export const fmtUsd = (n: number) => { if (isNaN(n)) return "$0.00"; return `$${(n || 0).toFixed(2)}`; };
 export const fmtBs = (usd: number, rate: number) => { if (isNaN(usd) || isNaN(rate)) return "Bs 0.00"; return `Bs ${((usd || 0) * rate).toLocaleString("es-VE", { maximumFractionDigits: 2 })}`; };
-
-export const computeTimeAmount = (consoleObj: ConsoleState, nowMs: number): { minutes: number; amount: number } => { 
-  if (!consoleObj || !consoleObj.session) return { minutes: 0, amount: 0 }; 
-  const ref = consoleObj.session.pausedAt ?? nowMs; 
-  const elapsedMs = Math.max(0, ref - (consoleObj.session.startedAt || ref)); 
-  const minutes = Math.ceil(elapsedMs / 60_000); 
-  if (consoleObj.session.isTournament) return { minutes, amount: 0 }; 
-  return { minutes, amount: (minutes / 60) * (consoleObj.ratePerHour || 0) }; 
-};
-
-// 🛑 FUNCIÓN DE DESCARGA BLINDADA
-const resyncFromCloud = async () => {
-  if ((window as any).pausarDescarga) return; 
-  (window as any).pausarSubida = true;
-  try {
-    const { data, error } = await supabase.from('app_state').select('state').eq('id', 'gamerzone-store-v1').maybeSingle();
-    if ((window as any).pausarDescarga) return; 
-    if (!error && data && data.state) {
-      const safeData = vaccinateZustandPayload(data.state);
-      const estadoActual = JSON.stringify(useStore.getState());
-      if (safeData?.state && estadoActual !== JSON.stringify(safeData.state)) {
-         useStore.setState(safeData.state);
-         localStorage.setItem("gamerzone-store-v1", JSON.stringify(safeData));
-      }
-    }
-  } catch (e) {
-  } finally {
-    setTimeout(() => { (window as any).pausarSubida = false; }, 500);
-  }
-};
-
-const channel = supabase.channel('escuchar-nube');
-channel.on('postgres_changes', { event: '*', schema: 'public', table: 'app_state' }, () => { 
-  resyncFromCloud(); 
-}).subscribe((status) => {
-  if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-    setTimeout(() => supabase.channel('escuchar-nube').subscribe(), 5000);
-  }
-});
-
-window.addEventListener('online', resyncFromCloud);
-window.addEventListener('focus', resyncFromCloud); 
-
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') {
-    resyncFromCloud();
-  }
-});
-
-setInterval(() => {
-   if (document.visibilityState === 'visible') resyncFromCloud();
-}, 15000);
+export const computeTimeAmount = (consoleObj: ConsoleState, nowMs: number): { minutes: number; amount: number } => { if (!consoleObj || !consoleObj.session) return { minutes: 0, amount: 0 }; const ref = consoleObj.session.pausedAt ?? nowMs; const elapsedMs = Math.max(0, ref - (consoleObj.session.startedAt || ref)); const minutes = Math.ceil(elapsedMs / 60_000); if (consoleObj.session.isTournament) return { minutes, amount: 0 }; return { minutes, amount: (minutes / 60) * (consoleObj.ratePerHour || 0) }; };
+const resyncFromCloud = async () => { if ((window as any).pausarDescarga) return; (window as any).pausarSubida = true; try { const { data, error } = await supabase.from('app_state').select('state').eq('id', 'gamerzone-store-v1').maybeSingle(); if ((window as any).pausarDescarga) return; if (!error && data && data.state) { const safeData = vaccinateZustandPayload(data.state); const estadoActual = JSON.stringify(useStore.getState()); if (safeData?.state && estadoActual !== JSON.stringify(safeData.state)) { useStore.setState(safeData.state); localStorage.setItem("gamerzone-store-v1", JSON.stringify(safeData)); } } } catch (e) { } finally { setTimeout(() => { (window as any).pausarSubida = false; }, 500); } };
+const channel = supabase.channel('escuchar-nube'); channel.on('postgres_changes', { event: '*', schema: 'public', table: 'app_state' }, () => { resyncFromCloud(); }).subscribe((status) => { if (status === 'CLOSED' || status === 'CHANNEL_ERROR') { setTimeout(() => supabase.channel('escuchar-nube').subscribe(), 5000); } });
+window.addEventListener('online', resyncFromCloud); window.addEventListener('focus', resyncFromCloud); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { resyncFromCloud(); } }); setInterval(() => { if (document.visibilityState === 'visible') resyncFromCloud(); }, 15000);
