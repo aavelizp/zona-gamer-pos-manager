@@ -20,7 +20,6 @@ export function MembersTab() {
   const [editPhone, setEditPhone] = useState("");
   const [editDoc, setEditDoc] = useState("");
 
-  // Ranking de mayor a menor según sus horas
   const sortedMembers = useMemo(() => {
     let filtered = members;
     
@@ -63,17 +62,16 @@ export function MembersTab() {
             <thead className="bg-secondary/50 text-muted-foreground uppercase text-xs tracking-wider">
               <tr>
                 <th className="p-3 sm:p-4 text-center w-16">Rank</th>
-                <th className="p-3 sm:p-4 w-48">Cliente</th>
-                {/* 👇 COLUMNA DE PROGRESO RESTAURADA A SU LUGAR ORIGINAL 👇 */}
-                <th className="p-3 sm:p-4 min-w-[150px]">Progreso (10h)</th>
-                <th className="p-3 sm:p-4 text-center">Horas Totales</th>
+                <th className="p-3 sm:p-4 w-64">Cliente</th>
+                {/* 👇 LA BARRA AHORA TIENE MÁS ESPACIO LIBRE 👇 */}
+                <th className="p-3 sm:p-4">Progreso (10h)</th>
                 <th className="p-3 sm:p-4 text-center">Recompensas Gratis</th>
                 <th className="p-3 sm:p-4 text-center">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
               {sortedMembers.length === 0 ? (
-                <tr><td colSpan={6} className="p-8 text-center text-muted-foreground italic">No hay clientes registrados o que coincidan con la búsqueda.</td></tr>
+                <tr><td colSpan={5} className="p-8 text-center text-muted-foreground italic">No hay clientes registrados o que coincidan con la búsqueda.</td></tr>
               ) : (
                 sortedMembers.map((m, idx) => {
                   const progressPct = Math.min(100, ((m.rewardMinutes || 0) / 600) * 100);
@@ -89,8 +87,7 @@ export function MembersTab() {
                         <p className="text-[11px] text-muted-foreground">{m.phone ? `📱 ${m.phone}` : "Sin teléfono registrado"} {m.idDoc ? `· 💳 ${m.idDoc}` : ""}</p>
                       </td>
                       
-                      {/* 👇 BARRA DE LLENADO SEPARADA EN SU PROPIA COLUMNA 👇 */}
-                      <td className="p-3 sm:p-4 align-middle w-48">
+                      <td className="p-3 sm:p-4 align-middle pr-8">
                         <div className="w-full bg-secondary h-2.5 rounded-full overflow-hidden border border-border/30">
                           <div 
                             className="bg-gradient-to-r from-primary to-accent h-full rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(139,92,246,0.5)]"
@@ -103,9 +100,6 @@ export function MembersTab() {
                         </div>
                       </td>
 
-                      <td className="p-3 sm:p-4 text-center font-display text-2xl text-primary align-middle">
-                        {Math.floor((m.totalMinutes || 0) / 60)}<span className="text-sm">h</span>
-                      </td>
                       <td className="p-3 sm:p-4 text-center align-middle">
                         {m.pendingRewards > 0 ? (
                           <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white h-8 animation-pulse shadow-md shadow-green-500/10" onClick={() => { if(confirm(`¿Deseas canjear 1 hora gratis para ${m.name}?`)) { redeemReward(m.id); toast.success("Hora gratis canjeada"); }}}>
