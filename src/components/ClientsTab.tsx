@@ -25,7 +25,7 @@ export function ClientsTab() {
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [editDoc, setEditDoc] = useState("");
-  const [editHours, setEditHours] = useState(""); // 👇 Campo de horas restaurado
+  const [editHours, setEditHours] = useState("");
 
   const sortedAndFilteredClients = useMemo(() => {
     let result = Array.isArray(members) ? [...members] : [];
@@ -62,18 +62,39 @@ export function ClientsTab() {
   const handleEditSubmit = () => {
     if (!editOpen || !editName.trim()) return;
     
-    // 👇 Modificación reactiva de horas restaurada 👇
-    const hoursInMinutes = Math.max(0, parseFloat(editHours) || 0) * 60;
+    // 👇 MATEMÁTICA CORREGIDA PARA LA BARRA DE PROGRESO 👇
+    const newTotalMinutes = Math.max(0, parseFloat(editHours) || 0) * 60;
+    const oldTotalMinutes = editOpen.totalMinutes || 0;
+    
+    // Calculamos la diferencia (cuánto le sumaste o restaste)
+    const diff = newTotalMinutes - oldTotalMinutes;
+
+    let newRewardMinutes = (editOpen.rewardMinutes || 0) + diff;
+    let newPending = editOpen.pendingRewards || 0;
+
+    // Si le sumamos horas y pasa de 600 min (10h), calculamos cuántas horas gratis se ganó
+    if (newRewardMinutes >= 600) {
+      const earned = Math.floor(newRewardMinutes / 600);
+      newPending += earned;
+      newRewardMinutes = newRewardMinutes % 600;
+    } 
+    // Si le restaste horas manualmente, le descontamos de la barra
+    else while (newRewardMinutes < 0) {
+      newPending = Math.max(0, newPending - 1);
+      newRewardMinutes += 600;
+    }
 
     updateMember(editOpen.id, {
       name: editName.trim(),
       phone: editPhone.trim() || undefined,
       idDoc: editDoc.trim() || undefined,
-      totalMinutes: hoursInMinutes // Guarda las horas modificadas en minutos
+      totalMinutes: newTotalMinutes,
+      rewardMinutes: newRewardMinutes, // Guardamos el llenado correcto de la barra
+      pendingRewards: newPending       // Guardamos las horas gratis pendientes
     });
 
     setEditOpen(null);
-    toast.success("Datos del cliente actualizados");
+    toast.success("Datos y horas del cliente actualizados");
   };
 
   return (
@@ -106,7 +127,6 @@ export function ClientsTab() {
                 <th className="p-3 sm:p-4">Nombre y Apellido</th>
                 <th className="p-3 sm:p-4">Teléfono</th>
                 <th className="p-3 sm:p-4">Cédula / RIF</th>
-                {/* 👇 COLUMNA RESTAURADA DE HORAS 👇 */}
                 <th className="p-3 sm:p-4 text-center">Horas de Juego</th>
                 <th className="p-3 sm:p-4 text-center">Acciones</th>
               </tr>
@@ -120,7 +140,6 @@ export function ClientsTab() {
                     <td className="p-3 sm:p-4 font-bold text-sm sm:text-base text-foreground">{c.name}</td>
                     <td className="p-3 sm:p-4 text-muted-foreground font-mono">{c.phone || "---"}</td>
                     <td className="p-3 sm:p-4 text-muted-foreground">{c.idDoc || "---"}</td>
-                    {/* 👇 CELDA RESTAURADA DE HORAS CONSUMIDAS 👇 */}
                     <td className="p-3 sm:p-4 text-center font-bold text-slate-700">{Math.floor((c.totalMinutes || 0) / 60)}h</td>
                     <td className="p-3 sm:p-4 flex justify-center gap-2">
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:bg-primary/20" onClick={() => { setEditName(c.name); setEditPhone(c.phone || ""); setEditDoc(c.idDoc || ""); setEditHours(((c.totalMinutes || 0) / 60).toString()); setEditOpen(c); }}><Edit2 className="h-4 w-4" /></Button>
@@ -155,7 +174,6 @@ export function ClientsTab() {
             <div><Label>Nombre y Apellido *</Label><Input value={editName} onChange={e => setEditName(e.target.value)} /></div>
             <div><Label>Teléfono / WhatsApp</Label><Input value={editPhone} onChange={e => setEditPhone(e.target.value)} /></div>
             <div><Label>Cédula o Identificación</Label><Input value={editDoc} onChange={e => setEditDoc(e.target.value)} /></div>
-            {/* 👇 INPUT RESTAURADO PARA AJUSTAR LAS HORAS MANUALMENTE 👇 */}
             <div><Label className="text-primary font-bold">Horas de Juego Acumuladas</Label><Input type="number" step="0.1" value={editHours} onChange={e => setEditHours(e.target.value)} /></div>
           </div>
           <DialogFooter><Button onClick={handleEditSubmit} disabled={!editName.trim()} className="w-full mt-2">Actualizar Datos</Button></DialogFooter>
