@@ -20,17 +20,15 @@ export function MembersTab() {
   const [editPhone, setEditPhone] = useState("");
   const [editDoc, setEditDoc] = useState("");
 
-  // 👇 AQUÍ HACEMOS EL RANKING DE MAYOR A MENOR SEGÚN SUS HORAS 👇
+  // Ranking de mayor a menor según sus horas
   const sortedMembers = useMemo(() => {
     let filtered = members;
     
-    // Si el usuario escribe algo en el buscador, filtramos primero
     if (query.trim()) {
       const q = query.toLowerCase();
-      filtered = filtered.filter(m => (m.name||"").toLowerCase().includes(q) || (m.phone||"").includes(q) || (m.idDoc||"").toLowerCase().includes(q));
+      filtered = filtered.filter(m => (m.name|| "").toLowerCase().includes(q) || (m.phone|| "").includes(q) || (m.idDoc|| "").toLowerCase().includes(q));
     }
     
-    // Finalmente ordenamos a todos de mayor cantidad de horas a menor cantidad
     return [...filtered].sort((a, b) => (b.totalMinutes || 0) - (a.totalMinutes || 0));
   }, [members, query]);
 
@@ -61,48 +59,69 @@ export function MembersTab() {
 
       <Card className="border-border/40 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left min-w-[700px]">
+          <table className="w-full text-sm text-left min-w-[800px]">
             <thead className="bg-secondary/50 text-muted-foreground uppercase text-xs tracking-wider">
               <tr>
                 <th className="p-3 sm:p-4 text-center w-16">Rank</th>
-                <th className="p-3 sm:p-4">Cliente</th>
-                <th className="p-3 sm:p-4 text-center">Horas Acumuladas</th>
+                <th className="p-3 sm:p-4 w-48">Cliente</th>
+                {/* 👇 COLUMNA DE PROGRESO RESTAURADA A SU LUGAR ORIGINAL 👇 */}
+                <th className="p-3 sm:p-4 min-w-[150px]">Progreso (10h)</th>
+                <th className="p-3 sm:p-4 text-center">Horas Totales</th>
                 <th className="p-3 sm:p-4 text-center">Recompensas Gratis</th>
                 <th className="p-3 sm:p-4 text-center">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
               {sortedMembers.length === 0 ? (
-                <tr><td colSpan={5} className="p-8 text-center text-muted-foreground italic">No hay clientes registrados o que coincidan con la búsqueda.</td></tr>
+                <tr><td colSpan={6} className="p-8 text-center text-muted-foreground italic">No hay clientes registrados o que coincidan con la búsqueda.</td></tr>
               ) : (
-                sortedMembers.map((m, idx) => (
-                  <tr key={m.id} className="hover:bg-secondary/10 transition-colors">
-                    <td className="p-3 sm:p-4 text-center font-display text-lg text-muted-foreground">
-                      {/* Le ponemos un trofeo doradito al Top 1, plata al Top 2, bronce al Top 3 */}
-                      {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `#${idx + 1}`}
-                    </td>
-                    <td className="p-3 sm:p-4">
-                      <p className="font-bold text-base">{m.name}</p>
-                      <p className="text-[11px] text-muted-foreground">{m.phone ? `📱 ${m.phone}` : "Sin teléfono registrado"} {m.idDoc ? `· 💳 ${m.idDoc}` : ""}</p>
-                    </td>
-                    <td className="p-3 sm:p-4 text-center font-display text-2xl text-primary">
-                      {Math.floor((m.totalMinutes || 0) / 60)}<span className="text-sm">h</span>
-                    </td>
-                    <td className="p-3 sm:p-4 text-center">
-                      {m.pendingRewards > 0 ? (
-                        <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white h-8" onClick={() => { if(confirm(`¿Deseas canjear 1 hora gratis para ${m.name}?`)) { redeemReward(m.id); toast.success("Hora gratis canjeada"); }}}>
-                          <Gift className="h-4 w-4 mr-1" /> Canjear ({m.pendingRewards})
-                        </Button>
-                      ) : (
-                        <span className="text-xs text-muted-foreground flex items-center justify-center gap-1"><CheckCircle className="h-3 w-3" /> Jugando para ganar</span>
-                      )}
-                    </td>
-                    <td className="p-3 sm:p-4 flex justify-center gap-2">
-                      <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/20 text-primary" onClick={() => { setEditName(m.name); setEditPhone(m.phone || ""); setEditDoc(m.idDoc || ""); setEditOpen(m); }}><Edit2 className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:bg-red-500/10" onClick={() => { if(confirm(`⚠️ ¿Estás seguro de eliminar a ${m.name}? Perderá todas sus horas.`)) removeMember(m.id); }}><Trash2 className="h-4 w-4" /></Button>
-                    </td>
-                  </tr>
-                ))
+                sortedMembers.map((m, idx) => {
+                  const progressPct = Math.min(100, ((m.rewardMinutes || 0) / 600) * 100);
+                  const progressHours = ((m.rewardMinutes || 0) / 60).toFixed(1);
+
+                  return (
+                    <tr key={m.id} className="hover:bg-secondary/10 transition-colors">
+                      <td className="p-3 sm:p-4 text-center font-display text-lg text-muted-foreground align-middle">
+                        {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `#${idx + 1}`}
+                      </td>
+                      <td className="p-3 sm:p-4 align-middle">
+                        <p className="font-bold text-base">{m.name}</p>
+                        <p className="text-[11px] text-muted-foreground">{m.phone ? `📱 ${m.phone}` : "Sin teléfono registrado"} {m.idDoc ? `· 💳 ${m.idDoc}` : ""}</p>
+                      </td>
+                      
+                      {/* 👇 BARRA DE LLENADO SEPARADA EN SU PROPIA COLUMNA 👇 */}
+                      <td className="p-3 sm:p-4 align-middle w-48">
+                        <div className="w-full bg-secondary h-2.5 rounded-full overflow-hidden border border-border/30">
+                          <div 
+                            className="bg-gradient-to-r from-primary to-accent h-full rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(139,92,246,0.5)]"
+                            style={{ width: `${progressPct}%` }}
+                          />
+                        </div>
+                        <div className="flex justify-between text-[10px] text-muted-foreground mt-1 px-0.5">
+                          <span>{progressHours}h / 10h</span>
+                          <span className="font-bold text-accent">{Math.round(progressPct)}%</span>
+                        </div>
+                      </td>
+
+                      <td className="p-3 sm:p-4 text-center font-display text-2xl text-primary align-middle">
+                        {Math.floor((m.totalMinutes || 0) / 60)}<span className="text-sm">h</span>
+                      </td>
+                      <td className="p-3 sm:p-4 text-center align-middle">
+                        {m.pendingRewards > 0 ? (
+                          <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white h-8 animation-pulse shadow-md shadow-green-500/10" onClick={() => { if(confirm(`¿Deseas canjear 1 hora gratis para ${m.name}?`)) { redeemReward(m.id); toast.success("Hora gratis canjeada"); }}}>
+                            <Gift className="h-4 w-4 mr-1" /> Canjear ({m.pendingRewards})
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground flex items-center justify-center gap-1"><CheckCircle className="h-3 w-3 text-muted-foreground/70" /> Acumulando</span>
+                        )}
+                      </td>
+                      <td className="p-3 sm:p-4 flex justify-center gap-2 align-middle">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/20 text-primary" onClick={() => { setEditName(m.name); setEditPhone(m.phone || ""); setEditDoc(m.idDoc || ""); setEditOpen(m); }}><Edit2 className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:bg-red-500/10" onClick={() => { if(confirm(`⚠️ ¿Estás seguro de eliminar a ${m.name}? Perderá todas sus horas.`)) removeMember(m.id); }}><Trash2 className="h-4 w-4" /></Button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
