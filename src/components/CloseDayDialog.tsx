@@ -2,7 +2,7 @@ import { useRef, useMemo, useState, useEffect } from "react";
 import { useStore, fmtUsd } from "@/lib/store";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Gamepad2, ShoppingBag, Banknote, Smartphone, Handshake, FileText, AlertTriangle, Camera, FileSpreadsheet } from "lucide-react";
+import { Gamepad2, ShoppingBag, Banknote, Smartphone, Handshake, FileText, AlertTriangle, Download, FileSpreadsheet } from "lucide-react";
 import { toast } from "sonner";
 import html2canvas from "html2canvas";
 import { exportData } from "@/lib/excel";
@@ -16,7 +16,6 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   
   const printRef = useRef<HTMLDivElement>(null);
 
-  // 👇 ESTADO REACTIVO PARA LA FECHA: Se actualiza en el milisegundo que abres la ventana 👇
   const [now, setNow] = useState(new Date());
   useEffect(() => {
     if (open) {
@@ -24,7 +23,6 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     }
   }, [open]);
 
-  // Calcula el inicio del turno (Corte a las 6:00 AM)
   const shiftStart = useMemo(() => {
     const d = new Date();
     if (d.getHours() < 6) d.setDate(d.getDate() - 1);
@@ -32,7 +30,6 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     return d;
   }, [open]);
 
-  // Matemática del Cierre
   const stats = useMemo(() => {
     const tSales = sales.filter(s => s.ts >= shiftStart.getTime());
 
@@ -70,7 +67,7 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     };
   }, [sales, shiftStart]);
 
-  // 👇 FUNCIÓN DE FOTO BLINDADA PARA CELULARES Y PC 👇
+  // 👇 DESCARGA FORZADA: Cero menús nativos, directo al teléfono 👇
   const downloadImage = async () => {
     if (!printRef.current) return;
     toast("Procesando imagen...", { icon: "📸" });
@@ -83,46 +80,22 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
         logging: false
       });
       
-      canvas.toBlob(async (blob) => {
-        if (!blob) {
-          toast.error("Error al generar la imagen.");
-          return;
-        }
+      // Convertimos el canvas a imagen Base64 (método más seguro)
+      const dataUrl = canvas.toDataURL("image/png");
+      const fileName = `Cierre_Caja_${now.toLocaleDateString('es-VE').replace(/\//g,'-')}.png`;
 
-        const fileName = `Diario_${now.toLocaleDateString('es-VE').replace(/\//g,'-')}.png`;
-        const file = new File([blob], fileName, { type: "image/png" });
+      // Creamos un link fantasma, lo forzamos a descargar y lo borramos
+      const link = document.createElement("a");
+      link.href = dataUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
 
-        // 1. Detectar si estamos en un Celular para abrir el menú de WhatsApp/Compartir
-        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-        
-        if (isMobile && navigator.canShare && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({
-              files: [file],
-              title: 'Cierre de Caja',
-              text: 'Reporte de cierre de turno adjunto.'
-            });
-            toast.success("¡Menú abierto con éxito!");
-            return; // Si el menú nativo se abrió, terminamos aquí.
-          } catch (error) {
-            console.log("El usuario canceló el menú de compartir o falló, intentando descarga local...");
-          }
-        }
-
-        // 2. Descarga normal (Para Computadoras o si el celular rechaza el menú de compartir)
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        toast.success("¡Imagen guardada en descargas!");
-
-      }, 'image/png');
+      toast.success("¡Imagen guardada en descargas/galería!");
 
     } catch (error) {
+      console.error(error);
       toast.error("Hubo un error al capturar la pantalla.");
     }
   };
@@ -141,25 +114,23 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto p-0 bg-white">
         
-        {/* 👇 Contenedor del Ticket (Diseño Blanco) 👇 */}
         <div ref={printRef} className="p-6 bg-white text-slate-800 font-sans">
           
           <div className="text-center border-b-2 border-slate-800 pb-4 mb-6">
-            <h2 className="font-display text-3xl text-slate-900 tracking-widest uppercase">DIARIO</h2>
+            {/* 👇 TÍTULO MODIFICADO AQUÍ 👇 */}
+            <h2 className="font-display text-3xl text-slate-900 tracking-widest uppercase">CIERRE DE CAJA</h2>
             <p className="text-xs text-slate-500 mt-1">
               {now.toLocaleDateString("es-VE")} {now.toLocaleTimeString("es-VE")} · Tasa: Bs {rate.toLocaleString('es-VE')}/$
             </p>
           </div>
 
           <div className="space-y-4">
-            {/* TOTAL FACTURADO */}
             <div className="bg-blue-50 border border-blue-100 rounded-2xl p-5">
               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total Facturado Hoy</p>
               <p className="font-display text-5xl text-blue-600 leading-none">{fmtUsd(stats.totalFacturadoUsd)}</p>
               <p className="text-teal-600 font-bold mt-2 text-sm">Bs {(stats.totalFacturadoUsd * rate).toLocaleString('es-VE', {minimumFractionDigits: 2})}</p>
             </div>
 
-            {/* HORAS Y SNACKS */}
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
                 <p className="text-xs text-slate-500 flex items-center gap-1.5 mb-2"><Gamepad2 className="h-4 w-4" /> Horas de Juego</p>
@@ -173,7 +144,6 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
 
             <h3 className="font-display text-sm text-slate-900 uppercase tracking-widest pt-2">Arqueo por método de pago</h3>
 
-            {/* METODOS DE PAGO */}
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-4">
                 <p className="text-[10px] sm:text-xs text-slate-600 flex items-center gap-1 mb-1"><Banknote className="h-3 w-3 text-emerald-600" /> Efectivo en Caja ($)</p>
@@ -198,7 +168,6 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           </div>
         </div>
 
-        {/* ACCIONES (No salen en la foto) */}
         <div className="p-4 bg-slate-50 border-t border-slate-200 space-y-3 rounded-b-lg">
           <div className="flex items-start gap-2 bg-amber-100/50 text-amber-800 p-3 rounded-lg border border-amber-200 text-xs">
             <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
@@ -207,8 +176,9 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           
           <div className="flex gap-2">
             <Button variant="outline" className="flex-1 border-slate-300 text-slate-700 bg-white hover:bg-slate-100" onClick={() => onOpenChange(false)}>Cancelar</Button>
+            {/* 👇 BOTÓN ACTUALIZADO 👇 */}
             <Button className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white" onClick={downloadImage}>
-              <Camera className="h-4 w-4 mr-2" /> Compartir
+              <Download className="h-4 w-4 mr-2" /> Descargar
             </Button>
             <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => exportData({ sales, products, credits, rate })}>
               <FileSpreadsheet className="h-4 w-4 mr-2" /> Excel
