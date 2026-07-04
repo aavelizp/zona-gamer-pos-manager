@@ -18,9 +18,13 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
 
   const [now, setNow] = useState(new Date());
   
+  // 👉 Plan B: Mostrar la imagen generada en pantalla
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+
   useEffect(() => {
     if (open) {
       setNow(new Date());
+      setPreviewImage(null); // Limpiamos la imagen al abrir
     }
   }, [open]);
 
@@ -68,47 +72,37 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     };
   }, [sales, shiftStart]);
 
-  // 👇 DESCARGA BLINDADA USANDO ARCHIVOS BLOB 👇
+  // 👇 DESCARGA BLINDADA A PRUEBA DE VENTANAS MODALES 👇
   const downloadImage = async () => {
     if (!printRef.current) return;
-    toast("Generando archivo...", { icon: "⏳" });
+    toast("Generando imagen...", { icon: "⏳" });
     
     try {
       const canvas = await html2canvas(printRef.current, { 
         backgroundColor: "#ffffff",
-        scale: 2, // Alta resolución
+        scale: 2, 
         useCORS: true,
-        allowTaint: true, // Permite procesar la imagen sin bloqueos estrictos
+        logging: false
       });
       
-      // Convertimos el Canvas en un archivo físico (Blob)
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          toast.error("Error al compilar la imagen.");
-          return;
-        }
+      const dataUrl = canvas.toDataURL("image/png");
+      const fileName = `Cierre_Caja_${now.toLocaleDateString('es-VE').replace(/\//g,'-')}.png`;
 
-        // Creamos una URL temporal para este archivo físico
-        const url = window.URL.createObjectURL(blob);
-        const fileName = `Cierre_Caja_${now.toLocaleDateString('es-VE').replace(/\//g,'-')}.png`;
+      // 1. EL SECRETO: Creamos el enlace DENTRO de la ventana (printRef) 
+      // para que el sistema de ventanas no bloquee la descarga.
+      const a = document.createElement("a");
+      a.style.display = "none";
+      a.href = dataUrl;
+      a.download = fileName;
+      
+      printRef.current.appendChild(a);
+      a.click();
+      printRef.current.removeChild(a);
 
-        // Forzamos la descarga nativa
-        const a = document.createElement("a");
-        a.style.display = "none";
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        
-        a.click(); // Disparamos el clic
+      // 2. Activamos el Plan B para celulares estrictos (iOS / Safari)
+      setPreviewImage(dataUrl);
 
-        // Limpiamos la memoria después de un instante para no dejar basura
-        setTimeout(() => {
-          document.body.removeChild(a);
-          window.URL.revokeObjectURL(url);
-        }, 200);
-
-        toast.success("¡Imagen descargada exitosamente!");
-      }, "image/png", 1.0);
+      toast.success("¡Descarga iniciada!");
 
     } catch (error) {
       console.error("Error capturando pantalla:", error);
@@ -201,6 +195,19 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           <Button onClick={handleCloseDay} className="w-full bg-slate-900 hover:bg-black text-white h-12 font-bold tracking-widest">
             CONFIRMAR CIERRE
           </Button>
+
+          {/* 👇 PLAN B INFALIBLE PARA CELULARES ESTRICTOS 👇 */}
+          {previewImage && (
+            <div className="mt-4 p-4 border border-indigo-200 rounded-xl bg-indigo-50 text-center animate-in fade-in slide-in-from-top-4">
+              <p className="text-sm font-bold text-indigo-800 mb-1">
+                ¿Tu celular bloqueó la descarga?
+              </p>
+              <p className="text-xs text-indigo-600 mb-3">
+                Mantén presionada la imagen aquí abajo y selecciona <strong>"Guardar en Fotos"</strong> o <strong>"Compartir"</strong>.
+              </p>
+              <img src={previewImage} alt="Ticket Cierre" className="max-w-full rounded shadow-md border border-slate-300 mx-auto" />
+            </div>
+          )}
         </div>
 
       </DialogContent>
