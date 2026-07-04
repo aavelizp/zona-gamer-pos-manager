@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { MixedPaymentInputs } from "@/components/MixedPaymentInputs";
 import { ReceiptDialog, type ReceiptData } from "@/components/Receipt";
-import { Trophy, Users, CheckCircle, Receipt, Swords, ArrowLeft, Trash2, Plus, Play, UserPlus, Gift, FileText, Settings, Edit2, MessageCircle, X, Search, Table2 } from "lucide-react";
+import { Trophy, Users, CheckCircle, Receipt, Swords, ArrowLeft, Trash2, Plus, Play, UserPlus, Gift, FileText, Settings, Edit2, MessageCircle, X, Search, Table2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
 function CustomerSearch({ name, idDoc, phone, setName, setIdDoc, setPhone }: any) {
@@ -100,7 +100,7 @@ export function TournamentTab() {
   const payEnrollment = useStore((s) => s.payEnrollment);
   const generateBracket = useStore((s) => s.generateBracket);
   const setMatchWinner = useStore((s) => s.setMatchWinner);
-  const setMatchDraw = useStore((s) => s.setMatchDraw); // 👈 Nuevo: Empate
+  const setMatchDraw = useStore((s) => s.setMatchDraw); 
   const revertMatchWinner = useStore((s) => s.revertMatchWinner);
   const revertTournamentToRegistering = useStore((s) => s.revertTournamentToRegistering);
 
@@ -136,8 +136,8 @@ export function TournamentTab() {
 
   const [tName, setTName] = useState("");
   const [tGame, setTGame] = useState("");
-  const [tFormat, setTFormat] = useState<"single_elimination" | "league">("league"); // 👈 Nuevo Formato
-  const [tMax, setTMax] = useState("999"); // 👈 999 = Sin Límite
+  const [tFormat, setTFormat] = useState<"single_elimination" | "league">("league"); 
+  const [tMax, setTMax] = useState("999"); 
   const [tFee, setTFee] = useState("5");
   const [tPrize, setTPrize] = useState("50");
 
@@ -230,7 +230,6 @@ export function TournamentTab() {
     );
   };
 
-  // 👇 CÁLCULO DE LA TABLA DE LIDERAZGO DE LA LIGA 👇
   const leaderboard = useMemo(() => {
     if (activeTourney?.format !== "league") return [];
     const stats: Record<string, any> = {};
@@ -277,7 +276,6 @@ export function TournamentTab() {
           </div>
         )}
 
-        {/* 👇 MODAL DE CREACIÓN DE TORNEOS CON LIGA 👇 */}
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogContent className="max-w-md">
             <DialogHeader><DialogTitle className="font-display flex items-center gap-2"><Trophy className="h-5 w-5 text-purple-400" /> Nuevo Torneo</DialogTitle></DialogHeader>
@@ -342,53 +340,11 @@ export function TournamentTab() {
         <Card className="p-4 bg-purple-500/10 border-purple-500/30"><p className="text-xs uppercase tracking-widest text-purple-300 mb-1 flex items-center gap-1"><Gift className="h-3 w-3" /> Pozo Ganador ({activeTourney.prizePercentage}%)</p><p className="font-display text-2xl text-purple-400">{fmtUsd(totalPrizePool)}</p></Card>
       </div>
 
-      {activeTourney.status === "registering" ? (
-        <Card className="border-border/40 overflow-hidden">
-          <div className="bg-secondary/30 p-3 sm:p-4 border-b border-border/50 flex justify-between items-center">
-            <h3 className="font-display text-sm sm:text-base tracking-wider flex items-center gap-2"><Users className="h-4 w-4 text-accent" /> Lista de Participantes</h3>
-            <Button size="sm" onClick={() => { setPlayerName(""); setPlayerPhone(""); setPlayerIdDoc(""); setEnrollOpen(activeTourney); }} disabled={activeParts.length >= activeTourney.maxPlayers} className="bg-purple-600 hover:bg-purple-700 text-white h-8"><UserPlus className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">Inscribir</span></Button>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left min-w-[600px]">
-              <thead className="bg-secondary/50 text-muted-foreground uppercase text-xs tracking-wider">
-                <tr><th className="p-3 sm:p-4">Jugador</th><th className="p-3 sm:p-4">Estado de Pago</th><th className="p-3 sm:p-4 text-center">Acciones</th></tr>
-              </thead>
-              <tbody className="divide-y divide-border/50">
-                {activeParts.length === 0 ? ( <tr><td colSpan={3} className="p-6 text-center text-muted-foreground italic">Nadie inscrito todavía.</td></tr> ) : (
-                  activeParts.map(p => (
-                    <tr key={p.id} className="hover:bg-secondary/10">
-                      <td className="p-3 sm:p-4 font-bold">
-                        {p.memberName}
-                        {p.phone && (
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-[11px] text-muted-foreground font-normal">📱 {p.phone}</span>
-                            <a href={`https://wa.me/${p.phone.replace(/\D/g,'')}`} target="_blank" rel="noreferrer" className="text-green-500 hover:text-green-400 flex items-center gap-1 text-[10px] border border-green-500/30 px-1.5 py-0.5 rounded-full bg-green-500/10"><MessageCircle className="h-3 w-3" /> WhatsApp</a>
-                          </div>
-                        )}
-                      </td>
-                      <td className="p-3 sm:p-4">{p.paymentStatus === "paid" ? <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Pagado</Badge> : <Badge className="bg-yellow-500/20 text-yellow-500 border-yellow-500/30">Pendiente</Badge>}</td>
-                      <td className="p-3 sm:p-4 flex justify-center gap-2">
-                        {p.paymentStatus === "pending" ? ( <Button size="sm" variant="outline" className="border-green-500/40 text-green-400 hover:bg-green-500/10 h-8" onClick={() => setPayOpen(p)}><Receipt className="h-3 w-3 mr-1" /> Cobrar</Button> ) : ( <Button size="sm" variant="outline" className="border-blue-500/40 text-blue-400 hover:bg-blue-500/10 h-8" onClick={() => showPastReceipt(p)}><FileText className="h-3 w-3 mr-1" /> Recibo</Button> )}
-                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/20 text-primary" onClick={() => { setEditPName(p.memberName); setEditPPhone(p.phone || ""); setEditPartOpen(p); }}><Edit2 className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:bg-red-500/10" onClick={() => { if(confirm(`¿Remover a ${p.memberName}?`)) removeParticipant(p.id); }}><Trash2 className="h-4 w-4" /></Button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-          {activeParts.length >= 2 && (
-            <div className="p-4 bg-secondary/30 border-t border-border/50 text-center">
-              <Button onClick={() => { const unpaids = activeParts.filter(x => x.paymentStatus === "pending").length; if (unpaids > 0 && !confirm(`Hay ${unpaids} participantes sin pagar. ¿Arrancar de todas formas?`)) return; generateBracket(activeId); toast.success("¡El Torneo ha comenzado!"); }} className="w-full sm:w-auto bg-gradient-to-r from-accent to-primary shadow-lg text-lg h-12 px-8"><Play className="h-5 w-5 mr-2" /> GENERAR FIXTURE Y COMENZAR</Button>
-            </div>
-          )}
-        </Card>
-      ) : (
-        /* 👇 VISTA DEL TORNEO ACTIVO (LIGA O ELIMINATORIA) 👇 */
+      {/* 👇 VISTA DEL TORNEO ACTIVO O COMPLETADO 👇 */}
+      {activeTourney.status !== "registering" && (
         <div className={activeTourney.format === "league" ? "grid grid-cols-1 lg:grid-cols-2 gap-6" : ""}>
           
-          {/* TABLA DE POSICIONES (SOLO PARA LIGA) */}
+          {/* TABLA DE POSICIONES (LIGA) */}
           {activeTourney.format === "league" && (
             <Card className="border-border/40 overflow-hidden h-fit">
               <div className="bg-primary/20 p-3 sm:p-4 border-b border-primary/30 flex justify-between items-center">
@@ -426,7 +382,7 @@ export function TournamentTab() {
                         {activeTourney.format === "league" ? `Jornada ${round}` : `Ronda ${round}`}
                       </h4>
                       {activeTourney.format === "league" ? (
-                        /* VISTA DE TARJETAS PARA LIGA (CON EMPATES) */
+                        /* VISTA DE LIGA */
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {rMatches.map(m => {
                             const p1 = activeParts.find(x => x.id === m.player1Id); const p2 = activeParts.find(x => x.id === m.player2Id);
@@ -435,15 +391,16 @@ export function TournamentTab() {
                               <div key={m.id} className="border border-border/60 bg-background rounded-md p-3">
                                 <div className="flex justify-between items-center text-sm mb-3"><span className={`font-bold ${m.winnerId === p1.id ? 'text-green-400' : ''}`}>{p1.memberName}</span><span className="text-[10px] text-muted-foreground mx-2">vs</span><span className={`font-bold ${m.winnerId === p2.id ? 'text-green-400' : ''}`}>{p2.memberName}</span></div>
                                 {m.winnerId || m.isDraw ? (
-                                  <div className="flex justify-between items-center bg-secondary/40 p-2 rounded text-xs">
+                                  <div className="flex justify-between items-center bg-secondary/40 p-2 rounded text-xs border border-border/50">
                                     <span className="font-bold text-primary">{m.isDraw ? "Empate" : `Ganó ${m.winnerId === p1.id ? p1.memberName : p2.memberName}`}</span>
-                                    <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => revertMatchWinner(m.id)}>Deshacer</Button>
+                                    {/* 👇 BOTÓN DESHACER LIGA 👇 */}
+                                    <Button size="icon" variant="ghost" className="h-6 w-6 text-muted-foreground hover:text-red-400" onClick={() => revertMatchWinner(m.id)} title="Corregir Resultado"><RotateCcw className="h-3 w-3" /></Button>
                                   </div>
                                 ) : (
                                   <div className="grid grid-cols-3 gap-1">
-                                    <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => setMatchWinner(m.id, p1.id)}>Gana Local</Button>
+                                    <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => setMatchWinner(m.id, p1.id)}>Gana L</Button>
                                     <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => setMatchDraw(m.id)}>Empate</Button>
-                                    <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => setMatchWinner(m.id, p2.id)}>Gana Visitante</Button>
+                                    <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => setMatchWinner(m.id, p2.id)}>Gana V</Button>
                                   </div>
                                 )}
                               </div>
@@ -451,7 +408,7 @@ export function TournamentTab() {
                           })}
                         </div>
                       ) : (
-                        /* VISTA DE BRACKET ELIMINATORIO CLÁSICO */
+                        /* VISTA DE BRACKET ELIMINATORIO */
                         rMatches.map(m => {
                           const p1 = m.player1Id ? activeParts.find(x => x.id === m.player1Id)?.memberName : "---";
                           const p2 = m.player2Id ? activeParts.find(x => x.id === m.player2Id)?.memberName : "---";
@@ -460,7 +417,13 @@ export function TournamentTab() {
                               <div className={`text-sm p-1 rounded cursor-pointer ${m.winnerId === m.player1Id ? 'bg-green-500/20 text-green-400 font-bold' : 'hover:bg-secondary/40'}`} onClick={() => { if(!m.winnerId && m.player1Id && m.player2Id) setMatchWinner(m.id, m.player1Id!); }}>{p1}</div>
                               <div className="border-t border-border/40" />
                               <div className={`text-sm p-1 rounded cursor-pointer ${m.winnerId === m.player2Id ? 'bg-green-500/20 text-green-400 font-bold' : 'hover:bg-secondary/40'}`} onClick={() => { if(!m.winnerId && m.player1Id && m.player2Id) setMatchWinner(m.id, m.player2Id!); }}>{p2}</div>
-                              {m.winnerId && (<Button variant="ghost" size="icon" className="absolute -right-2 -top-2 h-6 w-6 rounded-full bg-secondary border border-border/50" onClick={() => revertMatchWinner(m.id)}><ArrowLeft className="h-3 w-3" /></Button>)}
+                              
+                              {/* 👇 BOTÓN DESHACER BRACKET (MUY VISIBLE) 👇 */}
+                              {m.winnerId && (
+                                <Button variant="secondary" size="icon" className="absolute -right-2 -top-2 h-6 w-6 rounded-full border border-border shadow-sm hover:bg-destructive hover:text-destructive-foreground transition-colors" onClick={() => revertMatchWinner(m.id)} title="Corregir Resultado">
+                                  <RotateCcw className="h-3 w-3" />
+                                </Button>
+                              )}
                             </div>
                           )
                         })
@@ -472,6 +435,55 @@ export function TournamentTab() {
           </Card>
         </div>
       )}
+
+      {/* 👇 TABLA PERMANENTE DE PARTICIPANTES (SIEMPRE VISIBLE) 👇 */}
+      <Card className="border-border/40 overflow-hidden mt-6">
+        <div className="bg-secondary/30 p-3 sm:p-4 border-b border-border/50 flex justify-between items-center">
+          <h3 className="font-display text-sm sm:text-base tracking-wider flex items-center gap-2"><Users className="h-4 w-4 text-accent" /> Lista de Participantes</h3>
+          {activeTourney.status === "registering" && (
+            <Button size="sm" onClick={() => { setPlayerName(""); setPlayerPhone(""); setPlayerIdDoc(""); setEnrollOpen(activeTourney); }} disabled={activeParts.length >= activeTourney.maxPlayers} className="bg-purple-600 hover:bg-purple-700 text-white h-8"><UserPlus className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">Inscribir</span></Button>
+          )}
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-left min-w-[600px]">
+            <thead className="bg-secondary/50 text-muted-foreground uppercase text-xs tracking-wider">
+              <tr><th className="p-3 sm:p-4">Jugador</th><th className="p-3 sm:p-4">Estado de Pago</th><th className="p-3 sm:p-4 text-center">Acciones</th></tr>
+            </thead>
+            <tbody className="divide-y divide-border/50">
+              {activeParts.length === 0 ? ( <tr><td colSpan={3} className="p-6 text-center text-muted-foreground italic">Nadie inscrito todavía.</td></tr> ) : (
+                activeParts.map(p => (
+                  <tr key={p.id} className="hover:bg-secondary/10">
+                    <td className="p-3 sm:p-4 font-bold">
+                      {p.memberName}
+                      {p.phone && (
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-[11px] text-muted-foreground font-normal">📱 {p.phone}</span>
+                          <a href={`https://wa.me/${p.phone.replace(/\D/g,'')}`} target="_blank" rel="noreferrer" className="text-green-500 hover:text-green-400 flex items-center gap-1 text-[10px] border border-green-500/30 px-1.5 py-0.5 rounded-full bg-green-500/10"><MessageCircle className="h-3 w-3" /> WhatsApp</a>
+                        </div>
+                      )}
+                    </td>
+                    <td className="p-3 sm:p-4">{p.paymentStatus === "paid" ? <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Pagado</Badge> : <Badge className="bg-yellow-500/20 text-yellow-500 border-yellow-500/30">Pendiente</Badge>}</td>
+                    <td className="p-3 sm:p-4 flex justify-center gap-2">
+                      {p.paymentStatus === "pending" ? ( <Button size="sm" variant="outline" className="border-green-500/40 text-green-400 hover:bg-green-500/10 h-8" onClick={() => setPayOpen(p)}><Receipt className="h-3 w-3 mr-1" /> Cobrar</Button> ) : ( <Button size="sm" variant="outline" className="border-blue-500/40 text-blue-400 hover:bg-blue-500/10 h-8" onClick={() => showPastReceipt(p)}><FileText className="h-3 w-3 mr-1" /> Recibo</Button> )}
+                      {/* 👇 BOTÓN EDITAR NOMBRE/TELÉFONO SIEMPRE ACTIVO 👇 */}
+                      <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/20 text-primary" onClick={() => { setEditPName(p.memberName); setEditPPhone(p.phone || ""); setEditPartOpen(p); }} title="Editar Nombre/WhatsApp"><Edit2 className="h-4 w-4" /></Button>
+                      
+                      {activeTourney.status === "registering" && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:bg-red-500/10" onClick={() => { if(confirm(`¿Remover a ${p.memberName}?`)) removeParticipant(p.id); }}><Trash2 className="h-4 w-4" /></Button>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        {activeTourney.status === "registering" && activeParts.length >= 2 && (
+          <div className="p-4 bg-secondary/30 border-t border-border/50 text-center">
+            <Button onClick={() => { const unpaids = activeParts.filter(x => x.paymentStatus === "pending").length; if (unpaids > 0 && !confirm(`Hay ${unpaids} participantes sin pagar. ¿Arrancar de todas formas?`)) return; generateBracket(activeId); toast.success("¡El Torneo ha comenzado!"); }} className="w-full sm:w-auto bg-gradient-to-r from-accent to-primary shadow-lg text-lg h-12 px-8"><Play className="h-5 w-5 mr-2" /> GENERAR FIXTURE Y COMENZAR</Button>
+          </div>
+        )}
+      </Card>
 
       {/* MODALES REUTILIZABLES */}
       <Dialog open={editTourneyOpen} onOpenChange={setEditTourneyOpen}>
