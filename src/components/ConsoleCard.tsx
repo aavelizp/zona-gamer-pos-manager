@@ -17,7 +17,17 @@ import { MixedPaymentInputs } from "@/components/MixedPaymentInputs";
 function CustomerSearch({ name, idDoc, phone, setName, setIdDoc, setPhone }: any) {
   const members = useStore((s) => s.members || []); const [query, setQuery] = useState(""); const [open, setOpen] = useState(false); const [creating, setCreating] = useState(false); const [selected, setSelected] = useState<Member | null>(null); const wrapRef = useRef<HTMLDivElement>(null);
   useEffect(() => { const onClick = (e: MouseEvent) => { if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false); }; document.addEventListener("mousedown", onClick); return () => document.removeEventListener("mousedown", onClick); }, []);
-  const results = useMemo(() => { const q = (query || "").trim().toLowerCase(); const safeMembers = Array.isArray(members) ? members : []; if (!q) return safeMembers.slice(0, 8); return safeMembers.filter((m) => (m?.name || "").toLowerCase().includes(q) || (m?.phone || "").includes(q) || (m?.idDoc || "").toLowerCase().includes(q)).slice(0, 8); }, [members, query]);
+  
+  // 👇 AQUÍ SE APLICA EL ORDEN ALFABÉTICO EN LA BÚSQUEDA 👇
+  const results = useMemo(() => { 
+    const q = (query || "").trim().toLowerCase(); 
+    let safeMembers = Array.isArray(members) ? [...members] : []; 
+    safeMembers.sort((a, b) => (a?.name || "").localeCompare(b?.name || "")); // Orden alfabético A-Z
+    
+    if (!q) return safeMembers.slice(0, 8); 
+    return safeMembers.filter((m) => (m?.name || "").toLowerCase().includes(q) || (m?.phone || "").includes(q) || (m?.idDoc || "").toLowerCase().includes(q)).slice(0, 8); 
+  }, [members, query]);
+  
   const pick = (m: Member) => { setSelected(m); setName(m.name || ""); setIdDoc(m.idDoc || ""); setPhone(m.phone || ""); setQuery(m.name || ""); setOpen(false); setCreating(false); }; const clear = () => { setSelected(null); setName(""); setIdDoc(""); setPhone(""); setQuery(""); setCreating(false); };
   return (
     <div className="space-y-2 border border-border rounded-md p-3 bg-background/40">
@@ -120,8 +130,8 @@ function PrepayCheckout({ open, onClose, consoleObj }: any) {
           
           {step === "time" && (
             <div className="space-y-3">
-              <div className="grid grid-cols-2 sm:grid-cols-2 gap-2">
-                {[60, 120].map((m) => ( 
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[60, 120, 180, 240].map((m) => ( 
                   <Button key={m} variant={chosenMinutes === m ? "default" : "outline"} className="px-1 text-xs" onClick={() => setChosenMinutes(m)}>
                     {m >= 60 ? `${m / 60}h` : `${m} min`} · {fmtUsd(+((consoleObj?.ratePerHour||0) * (m / 60)).toFixed(2))}
                   </Button> 
@@ -318,7 +328,6 @@ export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleStat
 
         {!occupied ? (
           <div className="space-y-2 mt-auto">
-            {/* 👇 Botones Libres: Responsivos y Simplificados (Libre, 1h, 2h, Otra) 👇 */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <Button size="sm" variant="outline" className="text-[10px] sm:text-xs h-8 sm:h-9 px-1" onClick={() => startSession(consoleObj.id)}>Libre</Button>
               <Button size="sm" className="text-[10px] sm:text-xs h-8 sm:h-9 px-1" onClick={() => startSession(consoleObj.id, 60)}>1 hora</Button>
@@ -345,7 +354,6 @@ export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleStat
           </div>
         ) : (
           <div className="space-y-2 mt-auto">
-            {/* 👇 Botones de Extensión Simplificados 👇 */}
             <div className="grid grid-cols-3 gap-2">
               {isPrepaid ? ( 
                 <>

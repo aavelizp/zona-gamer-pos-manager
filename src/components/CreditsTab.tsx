@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useStore, fmtUsd, fmtBs } from "@/lib/store";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,12 +17,15 @@ export function CreditsTab() {
   const rate = useStore((s) => s.rate);
   const members = useStore((s) => s.members || []);
   
+  // 👇 AQUÍ ORDENAMOS LAS DEUDAS ALFABÉTICAMENTE 👇
+  const sortedCredits = useMemo(() => {
+    return [...credits].sort((a, b) => (a.customer || "").localeCompare(b.customer || ""));
+  }, [credits]);
+  
   const [payOpen, setPayOpen] = useState<any>(null);
   const [amount, setAmount] = useState("");
   const [payMode, setPayMode] = useState<"cash" | "mobile" | "cash_bs">("cash");
   const [mobileBank, setMobileBank] = useState("");
-  
-  // Estado para disparar el comprobante
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
 
   useEffect(() => {
@@ -46,7 +49,6 @@ export function CreditsTab() {
     const cashBsN = payMode === "cash_bs" ? val * rate : 0;
     const finalMethod = payMode === "cash_bs" ? "cash_bs" : payMode;
 
-    // Intentamos rastrear si este deudor de fiado tiene teléfono en el club gamer
     const matchedMember = members.find(m => m.name.toLowerCase() === payOpen.customer.toLowerCase() || m.phone === payOpen.phone);
 
     const payload: any = {
@@ -59,7 +61,6 @@ export function CreditsTab() {
       customerInfo: matchedMember ? { name: matchedMember.name, phone: matchedMember.phone, idDoc: matchedMember.idDoc } : { name: payOpen.customer }
     };
 
-    // 1. Armamos el recibo visual antes de limpiar la deuda de la grilla
     setReceipt({
       ts: Date.now(),
       rate,
@@ -75,7 +76,6 @@ export function CreditsTab() {
       customer: { name: payOpen.customer, phone: payOpen.phone || undefined }
     });
 
-    // 2. Ejecutamos la orden en el store
     payCredit(payOpen.id, payload);
     setPayOpen(null);
   };
@@ -107,10 +107,10 @@ export function CreditsTab() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
-              {credits.length === 0 ? (
+              {sortedCredits.length === 0 ? (
                 <tr><td colSpan={5} className="p-8 text-center text-muted-foreground italic">No hay cuentas por cobrar. 🎉</td></tr>
               ) : (
-                credits.map(c => (
+                sortedCredits.map(c => (
                   <tr key={c.id} className="hover:bg-secondary/10 transition-colors">
                     <td className="p-3 sm:p-4 text-xs text-muted-foreground">{fDate(c.createdAt)}</td>
                     <td className="p-3 sm:p-4 font-semibold text-sm sm:text-base">{c.customer} {c.phone && <span className="text-[11px] text-muted-foreground block">📱 {c.phone}</span>}</td>
@@ -174,7 +174,6 @@ export function CreditsTab() {
         </Dialog>
       )}
 
-      {/* 👇 MODAL INTERECTADO DEL RECIBO FLOTANTE 👇 */}
       <ReceiptDialog open={!!receipt} onClose={() => setReceipt(null)} data={receipt} />
     </div>
   );
