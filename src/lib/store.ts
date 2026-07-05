@@ -25,11 +25,12 @@ export type ExpenseCategory = "Servicios" | "Compras" | "Mantenimiento" | "Sueld
 export const EXPENSE_CATEGORIES: ExpenseCategory[] = ["Servicios", "Compras", "Mantenimiento", "Sueldos", "Limpieza", "Impuestos", "Otros"];
 export interface Expense { id: string; ts: number; createdAt?: number; description: string; amount: number; method: "cash" | "mobile"; amountBs?: number; rate: number; category?: ExpenseCategory; }
 
-export type TournamentFormat = "single_elimination" | "league";
-export interface Tournament { id: string; name: string; game: string; maxPlayers: number; entryFee: number; prizePercentage: number; format: TournamentFormat; dateRange: string; status: "registering" | "active" | "completed"; createdAt: number; } 
-export interface TournamentParticipant { id: string; tournamentId: string; memberId?: string; memberName: string; phone?: string; paymentStatus: "paid" | "pending"; enrolledAt: number; enrollSaleId?: string; }
-// 👇 Se aseguró el soporte de isDraw 👇
-export interface TournamentMatch { id: string; tournamentId: string; round: number; matchIndex: number; player1Id?: string; player2Id?: string; winnerId?: string; isDraw?: boolean; nextMatchId?: string; }
+export type TournamentFormat = "single_elimination" | "league" | "groups";
+export interface Tournament { id: string; name: string; game: string; maxPlayers: number; entryFee: number; prizePercentage: number; format: TournamentFormat; groupCount?: number; dateRange: string; status: "registering" | "active" | "completed"; createdAt: number; } 
+export interface TournamentParticipant { id: string; tournamentId: string; memberId?: string; memberName: string; phone?: string; groupName?: string; paymentStatus: "paid" | "pending"; enrolledAt: number; enrollSaleId?: string; }
+
+// 👇 NUEVO: Añadidos score1 y score2 para guardar los goles exactos 👇
+export interface TournamentMatch { id: string; tournamentId: string; round: number; matchIndex: number; player1Id?: string; player2Id?: string; winnerId?: string; isDraw?: boolean; score1?: number; score2?: number; nextMatchId?: string; phase?: "groups" | "knockout"; groupName?: string; }
 
 export interface PastClosure { id: string; date: number; totalSales: number; totalExpenses: number; sales: SaleRecord[]; expenses: Expense[]; }
 
@@ -61,8 +62,13 @@ interface State {
   removeParticipant: (participantId: string) => void; 
   payEnrollment: (participantId: string, payload: any) => void; 
   generateBracket: (tournamentId: string) => void; 
+  generateKnockoutFromGroups: (tournamentId: string) => void; 
+  
+  // 👇 NUEVA FUNCIÓN MAESTRA PARA RESULTADOS EXACTOS 👇
+  setMatchScore: (matchId: string, score1: number, score2: number) => void; 
+  
   setMatchWinner: (matchId: string, winnerId: string) => void; 
-  setMatchDraw: (matchId: string) => void; // 👈 NUEVO: Empates
+  setMatchDraw: (matchId: string) => void; 
   revertMatchWinner: (matchId: string) => void; 
   revertTournamentToRegistering: (tournamentId: string) => void;
 }
@@ -146,45 +152,189 @@ export const useStore = create<State>()(
       removeParticipant: (participantId) => set((s) => { const p = (s.participants||[]).find(x => x?.id === participantId); if (!p) return s; return { participants: (s.participants||[]).filter(x => x?.id !== participantId), sales: p.enrollSaleId ? (s.sales||[]).filter(sale => sale?.id !== p.enrollSaleId) : (s.sales||[]) }; }),
       payEnrollment: (participantId, payload) => set((s) => { const p = (s.participants||[]).find(x => x?.id === participantId); if (!p) return s; const t = (s.tournaments||[]).find(x => x?.id === p.tournamentId); const enrollSaleId = uid(); const sale: SaleRecord = { id: enrollSaleId, ts: Date.now(), timeAmount: 0, extrasAmount: payload.total, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, cashBs: payload.cashBs || 0, rate: s.rate, method: payload.method, customer: p.memberName, concept: `Pago de Inscripción: ${t?.name || 'Torneo'}`, items: [{ name: `Pago Inscripción: ${p.memberName}`, qty: 1, price: payload.total }] }; return { participants: (s.participants||[]).map(x => x?.id === participantId ? { ...x, paymentStatus: "paid" as "paid", enrollSaleId } : x), sales: [...(s.sales||[]), sale] }; }),
       
-      // 👇 ALGORITMO PARA GENERAR LA LIGA (Todos contra todos) 👇
       generateBracket: (tournamentId) => set((s) => { 
         const t = (s.tournaments||[]).find(x => x?.id === tournamentId); 
         const parts = (s.participants||[]).filter(p => p?.tournamentId === tournamentId); 
         if (!t || parts.length < 2) return s; 
         
         const matches: TournamentMatch[] = []; 
+        const shuffled = [...parts].sort(() => Math.random() - 0.5);
 
-        if (t.format === "league") {
-          const players = [...parts];
-          if (players.length % 2 !== 0) {
-            players.push({ id: "bye", memberName: "BYE" } as any); // Comodín si son impares
-          }
-          const numRounds = players.length - 1;
-          const half = players.length / 2;
+        if (t.format === "league" || t.format === "groups") {
+          const numGroups = t.format === "groups" ? (t.groupCount || 2) : 1;
+          const groupsList = ["A", "B", "C", "D", "E", "F", "G", "H"].slice(0, numGroups);
+          
+          const newParticipants = (s.participants||[]).map(p => {
+             if(p.tournamentId === tournamentId) {
+                 const idx = shuffled.findIndex(x => x.id === p.id);
+                 return { ...p, groupName: groupsList[idx % numGroups] };
+             }
+             return p;
+          });
+
           let matchIndex = 0;
+          for (let g = 0; g < numGroups; g++) {
+              const gName = groupsList[g];
+              const gParts = newParticipants.filter(p => p.tournamentId === tournamentId && p.groupName === gName);
+              
+              const players = [...gParts];
+              if (players.length % 2 !== 0) players.push({ id: "bye", memberName: "BYE", groupName: gName } as any);
+              const numRounds = players.length - 1;
+              const half = players.length / 2;
 
-          for (let r = 0; r < numRounds; r++) {
-            for (let i = 0; i < half; i++) {
-              const p1 = players[i];
-              const p2 = players[players.length - 1 - i];
-              if (p1.id !== "bye" && p2.id !== "bye") {
-                matches.push({ id: uid(), tournamentId, round: r + 1, matchIndex: matchIndex++, player1Id: p1.id, player2Id: p2.id, winnerId: undefined, isDraw: false });
+              for (let r = 0; r < numRounds; r++) {
+                  for (let i = 0; i < half; i++) {
+                      const p1 = players[i];
+                      const p2 = players[players.length - 1 - i];
+                      if (p1.id !== "bye" && p2.id !== "bye") {
+                          matches.push({ id: uid(), tournamentId, round: r + 1, matchIndex: matchIndex++, player1Id: p1.id, player2Id: p2.id, isDraw: false, groupName: gName, phase: "groups" });
+                      }
+                  }
+                  players.splice(1, 0, players.pop()!);
               }
-            }
-            players.splice(1, 0, players.pop()!);
           }
-          return { tournaments: (s.tournaments||[]).map(x => x?.id === tournamentId ? { ...x, status: "active" as "active" } : x), matches: [...(s.matches||[]), ...matches] };
+          return { tournaments: (s.tournaments||[]).map(x => x?.id === tournamentId ? { ...x, status: "active" as "active" } : x), participants: newParticipants, matches: [...(s.matches||[]), ...matches] };
         }
 
-        // Eliminatoria Clásica
-        const shuffled = [...parts].sort(() => Math.random() - 0.5); let n = 2; while (n < shuffled.length) n *= 2; const matchNodes: { [key: string]: string } = {}; let totalRounds = Math.log2(n); for(let r = 1; r <= totalRounds; r++) { let matchesInRound = n / Math.pow(2, r); for(let i = 0; i < matchesInRound; i++) { matchNodes[`${r}_${i}`] = uid(); } } for(let r = 1; r <= totalRounds; r++) { let matchesInRound = n / Math.pow(2, r); for(let i = 0; i < matchesInRound; i++) { const matchId = matchNodes[`${r}_${i}`]; const nextRoundMatchId = r < totalRounds ? matchNodes[`${r+1}_${Math.floor(i/2)}`] : undefined; matches.push({ id: matchId, tournamentId, round: r, matchIndex: i, player1Id: undefined, player2Id: undefined, winnerId: undefined, nextMatchId: nextRoundMatchId }); } } let pIndex = 0; let r1Matches = matches.filter(m => m.round === 1); r1Matches.forEach(m => { if(pIndex < shuffled.length) m.player1Id = shuffled[pIndex++].id; if(pIndex < shuffled.length) m.player2Id = shuffled[pIndex++].id; }); r1Matches.forEach(m => { if (m.player1Id && !m.player2Id) { m.winnerId = m.player1Id; if (m.nextMatchId) { const nextM = matches.find(x => x?.id === m.nextMatchId); if (nextM) { if (!nextM.player1Id) nextM.player1Id = m.winnerId; else nextM.player2Id = m.winnerId; } } } }); return { tournaments: (s.tournaments||[]).map(x => x?.id === tournamentId ? { ...x, status: "active" as "active" } : x), matches: [...(s.matches||[]), ...matches] }; 
+        let n = 2; while (n < shuffled.length) n *= 2; const matchNodes: { [key: string]: string } = {}; let totalRounds = Math.log2(n); for(let r = 1; r <= totalRounds; r++) { let matchesInRound = n / Math.pow(2, r); for(let i = 0; i < matchesInRound; i++) { matchNodes[`${r}_${i}`] = uid(); } } for(let r = 1; r <= totalRounds; r++) { let matchesInRound = n / Math.pow(2, r); for(let i = 0; i < matchesInRound; i++) { const matchId = matchNodes[`${r}_${i}`]; const nextRoundMatchId = r < totalRounds ? matchNodes[`${r+1}_${Math.floor(i/2)}`] : undefined; matches.push({ id: matchId, tournamentId, round: r, matchIndex: i, player1Id: undefined, player2Id: undefined, winnerId: undefined, nextMatchId: nextRoundMatchId }); } } let pIndex = 0; let r1Matches = matches.filter(m => m.round === 1); r1Matches.forEach(m => { if(pIndex < shuffled.length) m.player1Id = shuffled[pIndex++].id; if(pIndex < shuffled.length) m.player2Id = shuffled[pIndex++].id; }); r1Matches.forEach(m => { if (m.player1Id && !m.player2Id) { m.winnerId = m.player1Id; if (m.nextMatchId) { const nextM = matches.find(x => x?.id === m.nextMatchId); if (nextM) { if (!nextM.player1Id) nextM.player1Id = m.winnerId; else nextM.player2Id = m.winnerId; } } } }); return { tournaments: (s.tournaments||[]).map(x => x?.id === tournamentId ? { ...x, status: "active" as "active" } : x), matches: [...(s.matches||[]), ...matches] }; 
       }),
       
-      // 👇 SOPORTE PARA EMPATES EN LIGA 👇
+      generateKnockoutFromGroups: (tournamentId) => set((s) => {
+        const t = (s.tournaments||[]).find(x => x?.id === tournamentId);
+        if (!t) return s;
+        
+        const tMatches = (s.matches||[]).filter(m => m?.tournamentId === tournamentId && m.phase === "groups");
+        const tParts = (s.participants||[]).filter(p => p?.tournamentId === tournamentId);
+        
+        const standings: Record<string, any[]> = {};
+        tParts.forEach(p => {
+            if(!standings[p.groupName!]) standings[p.groupName!] = [];
+            // Agregamos gf y gc para el desempate por diferencia de goles
+            standings[p.groupName!].push({ id: p.id, pts: 0, w: 0, d: 0, l: 0, gf: 0, gc: 0, dg: 0 });
+        });
+        
+        tMatches.forEach(m => {
+            if (m.winnerId || m.isDraw) {
+                const p1 = standings[m.groupName!].find(x => x.id === m.player1Id);
+                const p2 = standings[m.groupName!].find(x => x.id === m.player2Id);
+                if (p1 && p2) {
+                    p1.gf += m.score1 || 0; p1.gc += m.score2 || 0;
+                    p2.gf += m.score2 || 0; p2.gc += m.score1 || 0;
+                    if (m.winnerId === m.player1Id) { p1.pts += 3; p1.w += 1; p2.l += 1; }
+                    else if (m.winnerId === m.player2Id) { p2.pts += 3; p2.w += 1; p1.l += 1; }
+                    else { p1.pts += 1; p2.pts += 1; p1.d += 1; p2.d += 1; }
+                }
+            }
+        });
+        
+        Object.values(standings).flat().forEach(s => s.dg = s.gf - s.gc);
+        
+        let qualified: string[] = [];
+        const groupsList = ["A", "B", "C", "D", "E", "F", "G", "H"].slice(0, t.groupCount || 2);
+        
+        const topPerGroup: Record<string, any[]> = {};
+        groupsList.forEach(g => {
+           // Ordena por Puntos, luego Diferencia de Goles, luego Goles a Favor
+           const sorted = (standings[g] || []).sort((a,b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
+           topPerGroup[g] = sorted.slice(0, 2);
+        });
+        
+        if (t.groupCount === 2) {
+            qualified = [ topPerGroup["A"][0]?.id, topPerGroup["B"][1]?.id, topPerGroup["B"][0]?.id, topPerGroup["A"][1]?.id ];
+        } else if (t.groupCount === 4) {
+            qualified = [ topPerGroup["A"][0]?.id, topPerGroup["B"][1]?.id, topPerGroup["C"][0]?.id, topPerGroup["D"][1]?.id, topPerGroup["B"][0]?.id, topPerGroup["A"][1]?.id, topPerGroup["D"][0]?.id, topPerGroup["C"][1]?.id ];
+        } else {
+            groupsList.forEach(g => qualified.push(topPerGroup[g]?.[0]?.id, topPerGroup[g]?.[1]?.id));
+        }
+        
+        qualified = qualified.filter(Boolean);
+        
+        let n = 2; while (n < qualified.length) n *= 2; 
+        const matchNodes: { [key: string]: string } = {}; 
+        let totalRounds = Math.log2(n); 
+        const koMatches: TournamentMatch[] = [];
+        
+        for(let r = 1; r <= totalRounds; r++) { 
+            let matchesInRound = n / Math.pow(2, r); 
+            for(let i = 0; i < matchesInRound; i++) { matchNodes[`${r}_${i}`] = uid(); } 
+        } 
+        
+        for(let r = 1; r <= totalRounds; r++) { 
+            let matchesInRound = n / Math.pow(2, r); 
+            for(let i = 0; i < matchesInRound; i++) { 
+                const matchId = matchNodes[`${r}_${i}`]; 
+                const nextRoundMatchId = r < totalRounds ? matchNodes[`${r+1}_${Math.floor(i/2)}`] : undefined; 
+                koMatches.push({ id: matchId, tournamentId, round: r, matchIndex: i, player1Id: undefined, player2Id: undefined, winnerId: undefined, nextMatchId: nextRoundMatchId, phase: "knockout" }); 
+            } 
+        } 
+        
+        let pIndex = 0; 
+        let r1Matches = koMatches.filter(m => m.round === 1); 
+        r1Matches.forEach(m => { 
+            if(pIndex < qualified.length) m.player1Id = qualified[pIndex++]; 
+            if(pIndex < qualified.length) m.player2Id = qualified[pIndex++]; 
+        }); 
+        
+        r1Matches.forEach(m => { 
+            if (m.player1Id && !m.player2Id) { 
+                m.winnerId = m.player1Id; 
+                if (m.nextMatchId) { 
+                    const nextM = koMatches.find(x => x?.id === m.nextMatchId); 
+                    if (nextM) { if (!nextM.player1Id) nextM.player1Id = m.winnerId; else nextM.player2Id = m.winnerId; } 
+                } 
+            } 
+        });
+        
+        return { matches: [...(s.matches||[]), ...koMatches] };
+      }),
+
+      // 👇 FUNCIÓN MAESTRA: REGISTRA LOS GOLES EXACTOS 👇
+      setMatchScore: (matchId, score1, score2) => set((s) => {
+        const m = (s.matches||[]).find(x => x?.id === matchId);
+        if (!m || !m.player1Id || !m.player2Id) return s;
+
+        let winnerId = undefined;
+        let isDraw = false;
+        if (score1 > score2) winnerId = m.player1Id;
+        else if (score2 > score1) winnerId = m.player2Id;
+        else isDraw = true;
+
+        let newMatches = (s.matches||[]).map(x => x?.id === matchId ? { ...x, score1, score2, winnerId, isDraw } : x);
+
+        // Si hay una siguiente llave (Bracket) y hay un ganador, lo avanzamos
+        if (m.nextMatchId && winnerId) {
+          newMatches = newMatches.map(x => {
+            if (x?.id === m.nextMatchId) {
+              if (m.matchIndex % 2 === 0) return { ...x, player1Id: winnerId };
+              else return { ...x, player2Id: winnerId };
+            }
+            return x;
+          });
+        }
+
+        let newTournaments = s.tournaments || [];
+        // Si esta llave no tiene siguiente (es la final o es liga pura)
+        if (!m.nextMatchId) {
+          const t = newTournaments.find(x => x?.id === m.tournamentId);
+          if (t && (t.format === "league" || t.format === "groups")) {
+            if (m.phase === "knockout") {
+              const allDone = newMatches.filter(x => x.tournamentId === m.tournamentId && x.phase === "knockout").every(x => x.winnerId || x.isDraw);
+              if (allDone) newTournaments = newTournaments.map(x => x?.id === m.tournamentId ? { ...x, status: "completed" as "completed" } : x);
+            } else if (t.format === "league") {
+              const allDone = newMatches.filter(x => x.tournamentId === m.tournamentId).every(x => x.winnerId || x.isDraw);
+              if (allDone) newTournaments = newTournaments.map(x => x?.id === m.tournamentId ? { ...x, status: "completed" as "completed" } : x);
+            }
+          } else if (t) {
+            newTournaments = newTournaments.map(x => x?.id === m.tournamentId ? { ...x, status: "completed" as "completed" } : x);
+          }
+        }
+        return { matches: newMatches, tournaments: newTournaments };
+      }),
+
       setMatchDraw: (matchId) => set((s) => { 
         const m = (s.matches||[]).find(x => x?.id === matchId); 
         if (!m) return s; 
-        let newMatches = (s.matches||[]).map(x => x?.id === matchId ? { ...x, isDraw: true, winnerId: undefined } : x); 
+        let newMatches = (s.matches||[]).map(x => x?.id === matchId ? { ...x, isDraw: true, winnerId: undefined, score1: undefined, score2: undefined } : x); 
         let newTournaments = s.tournaments || []; 
         const t = newTournaments.find(x => x?.id === m.tournamentId); 
         if (t && t.format === "league") { 
@@ -194,27 +344,35 @@ export const useStore = create<State>()(
         return { matches: newMatches, tournaments: newTournaments }; 
       }),
 
-      setMatchWinner: (matchId, winnerId) => set((s) => { const m = (s.matches||[]).find(x => x?.id === matchId); if (!m || !winnerId) return s; let newMatches = (s.matches||[]).map(x => x?.id === matchId ? { ...x, winnerId, isDraw: false } : x); if (m.nextMatchId) { newMatches = newMatches.map(x => { if (x?.id === m.nextMatchId) { if (m.matchIndex % 2 === 0) return { ...x, player1Id: winnerId }; else return { ...x, player2Id: winnerId }; } return x; }); } let newTournaments = s.tournaments || []; if (!m.nextMatchId) { const t = newTournaments.find(x => x?.id === m.tournamentId); if (t && t.format === "league") { const allDone = newMatches.filter(x => x.tournamentId === m.tournamentId).every(x => x.winnerId || x.isDraw); if (allDone) newTournaments = newTournaments.map(x => x?.id === m.tournamentId ? { ...x, status: "completed" as "completed" } : x); } else if (t) { newTournaments = newTournaments.map(x => x?.id === m.tournamentId ? { ...x, status: "completed" as "completed" } : x); } } return { matches: newMatches, tournaments: newTournaments }; }),
-      revertMatchWinner: (matchId) => set((s) => { const m = (s.matches||[]).find(x => x?.id === matchId); if (!m || (!m.winnerId && !m.isDraw)) return s; const oldWinnerId = m.winnerId; let newMatches = (s.matches||[]).map(x => x?.id === matchId ? { ...x, winnerId: undefined, isDraw: false } : x); if (m.nextMatchId && oldWinnerId) { newMatches = newMatches.map(x => { if (x?.id === m.nextMatchId) { if (x.player1Id === oldWinnerId) return { ...x, player1Id: undefined }; if (x.player2Id === oldWinnerId) return { ...x, player2Id: undefined }; } return x; }); } let newTournaments = (s.tournaments||[]).map(t => t?.id === m.tournamentId ? { ...t, status: "active" as "active" } : t); return { matches: newMatches, tournaments: newTournaments }; }),
+      setMatchWinner: (matchId, winnerId) => set((s) => { const m = (s.matches||[]).find(x => x?.id === matchId); if (!m || !winnerId) return s; let newMatches = (s.matches||[]).map(x => x?.id === matchId ? { ...x, winnerId, isDraw: false, score1: undefined, score2: undefined } : x); if (m.nextMatchId) { newMatches = newMatches.map(x => { if (x?.id === m.nextMatchId) { if (m.matchIndex % 2 === 0) return { ...x, player1Id: winnerId }; else return { ...x, player2Id: winnerId }; } return x; }); } let newTournaments = s.tournaments || []; if (!m.nextMatchId) { const t = newTournaments.find(x => x?.id === m.tournamentId); if (t && t.format === "league") { const allDone = newMatches.filter(x => x.tournamentId === m.tournamentId).every(x => x.winnerId || x.isDraw); if (allDone) newTournaments = newTournaments.map(x => x?.id === m.tournamentId ? { ...x, status: "completed" as "completed" } : x); } else if (t && t.format === "groups") { if (m.phase === "knockout") { newTournaments = newTournaments.map(x => x?.id === m.tournamentId ? { ...x, status: "completed" as "completed" } : x); } } else if (t) { newTournaments = newTournaments.map(x => x?.id === m.tournamentId ? { ...x, status: "completed" as "completed" } : x); } } return { matches: newMatches, tournaments: newTournaments }; }),
+      
+      revertMatchWinner: (matchId) => set((s) => { 
+        const m = (s.matches||[]).find(x => x?.id === matchId); 
+        if (!m || (!m.winnerId && !m.isDraw)) return s; 
+        const oldWinnerId = m.winnerId; 
+        
+        // 👇 Limpiamos también los goles 👇
+        let newMatches = (s.matches||[]).map(x => x?.id === matchId ? { ...x, winnerId: undefined, isDraw: false, score1: undefined, score2: undefined } : x); 
+        
+        if (m.nextMatchId && oldWinnerId) { 
+            newMatches = newMatches.map(x => { 
+                if (x?.id === m.nextMatchId) { 
+                    if (x.player1Id === oldWinnerId) return { ...x, player1Id: undefined }; 
+                    if (x.player2Id === oldWinnerId) return { ...x, player2Id: undefined }; 
+                } 
+                return x; 
+            }); 
+        } 
+        let newTournaments = (s.tournaments||[]).map(t => t?.id === m.tournamentId ? { ...t, status: "active" as "active" } : t); 
+        return { matches: newMatches, tournaments: newTournaments }; 
+      }),
       revertTournamentToRegistering: (tournamentId) => set((s) => { return { tournaments: (s.tournaments||[]).map(t => t?.id === tournamentId ? { ...t, status: "registering" as "registering" } : t), matches: (s.matches||[]).filter(m => m?.tournamentId !== tournamentId) }; })
     }),
     {
       name: "gamerzone-store-v1",
       storage: {
         getItem: async (name) => { try { const { data, error } = await supabase.from('app_state').select('state').eq('id', name).maybeSingle(); if (!error && data && data.state) { const safeData = vaccinateZustandPayload(data.state); localStorage.setItem(name, JSON.stringify(safeData)); return safeData; } } catch (err) {} const local = localStorage.getItem(name); if (local) { try { return vaccinateZustandPayload(JSON.parse(local)); } catch(e) {} } return null; },
-        setItem: async (name, value) => { 
-          localStorage.setItem(name, typeof value === 'string' ? value : JSON.stringify(value)); 
-          if ((window as any).pausarSubida) return; 
-          (window as any).pausarDescarga = true; 
-          if ((window as any).relojBloqueo) clearTimeout((window as any).relojBloqueo);
-          (window as any).relojBloqueo = setTimeout(() => { (window as any).pausarDescarga = false; }, 3500);
-          (window as any).estadoPendiente = value; 
-          if ((window as any).relojSubida) clearTimeout((window as any).relojSubida); 
-          (window as any).relojSubida = setTimeout(async () => { 
-            if ((window as any).pausarSubida) return; 
-            try { await supabase.from('app_state').upsert({ id: name, state: typeof (window as any).estadoPendiente === 'string' ? JSON.parse((window as any).estadoPendiente) : (window as any).estadoPendiente }); } catch (err) {} 
-          }, 800); 
-        },
+        setItem: async (name, value) => { localStorage.setItem(name, typeof value === 'string' ? value : JSON.stringify(value)); if ((window as any).pausarSubida) return; (window as any).pausarDescarga = true; if ((window as any).relojBloqueo) clearTimeout((window as any).relojBloqueo); (window as any).relojBloqueo = setTimeout(() => { (window as any).pausarDescarga = false; }, 3500); (window as any).estadoPendiente = value; if ((window as any).relojSubida) clearTimeout((window as any).relojSubida); (window as any).relojSubida = setTimeout(async () => { if ((window as any).pausarSubida) return; try { await supabase.from('app_state').upsert({ id: name, state: typeof (window as any).estadoPendiente === 'string' ? JSON.parse((window as any).estadoPendiente) : (window as any).estadoPendiente }); } catch (err) {} }, 800); },
         removeItem: async (name) => { localStorage.removeItem(name); try { await supabase.from('app_state').delete().eq('id', name); } catch (err) {} }
       }
     }
