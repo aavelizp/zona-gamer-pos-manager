@@ -2,7 +2,7 @@ import { useRef, useMemo, useState, useEffect } from "react";
 import { useStore, fmtUsd } from "@/lib/store";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Gamepad2, ShoppingBag, Banknote, Smartphone, Handshake, FileText, AlertTriangle, Download, FileSpreadsheet } from "lucide-react";
+import { Gamepad2, ShoppingBag, Banknote, Smartphone, Handshake, FileText, AlertTriangle, Download, FileSpreadsheet, Copy } from "lucide-react";
 import { toast } from "sonner";
 import html2canvas from "html2canvas";
 import { exportData } from "@/lib/excel";
@@ -57,51 +57,102 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     return { totalFacturadoUsd, horasUsd, snacksUsd, cashUsd, mobileBs, fiadoUsd, deudasRecuperadasUsd };
   }, [sales, shiftStart]);
 
-  // 👇 SISTEMA DE CAPTURA MASTER CON INTERCEPCIÓN DE CLON 👇
+  // 👇 HACK DE FUERZA BRUTA: CLON EN MEMORIA PARA EVITAR BLOQUEO DE NAVEGADOR 👇
   const downloadImage = async () => {
     if (!printRef.current) return;
     setIsProcessing(true);
-    const toastId = toast.loading("Procesando descarga del reporte...");
+    const toastId = toast.loading("Generando y descargando imagen...");
     
     try {
-      // Forzamos la renderización apuntando a un clon limpio en memoria sin scrollbars
-      const canvas = await html2canvas(printRef.current, { 
+      // 1. Clonar el ticket y sacarlo de la ventana flotante
+      const clone = printRef.current.cloneNode(true) as HTMLDivElement;
+      clone.style.position = "fixed";
+      clone.style.top = "0";
+      clone.style.left = "0";
+      clone.style.width = "400px"; // Forzar resolución celular
+      clone.style.height = "auto";
+      clone.style.zIndex = "-9999"; // Ocultarlo detrás de todo
+      clone.style.overflow = "visible"; // Quitar el scroll maldito
+      clone.style.backgroundColor = "#ffffff";
+      document.body.appendChild(clone);
+
+      // 2. Tomar la foto al clon puro sin bloqueos
+      const canvas = await html2canvas(clone, { 
         backgroundColor: "#ffffff",
         scale: 2, 
         useCORS: true,
-        logging: false,
-        onclone: (clonedDoc) => {
-          // Buscamos el contenedor del ticket en el DOM clonado en memoria
-          const ticket = clonedDoc.getElementById("ticket-render-zone");
-          if (ticket) {
-            // Le removemos CUALQUIER restricción de altura o desborde antes de la foto
-            ticket.style.height = "auto";
-            ticket.style.maxHeight = "none";
-            ticket.style.overflow = "visible";
-            ticket.style.padding = "24px";
-          }
-        }
+        allowTaint: true,
+        logging: false
       });
       
-      const dataUrl = canvas.toDataURL("image/png");
-      const fileName = `Cierre_Caja_${businessDate.toLocaleDateString('es-VE').replace(/\//g,'-')}.png`;
+      document.body.removeChild(clone); // Limpiamos la basura
 
-      // Colgamos el enlace temporal ADENTRO del printRef para burlar el Focus Trap del Modal
-      const link = document.createElement("a");
-      link.href = dataUrl;
-      link.download = fileName;
-      printRef.current.appendChild(link);
-      
-      link.click(); // Descarga síncrona instantánea
-      
-      printRef.current.removeChild(link);
-      toast.success("¡Reporte guardado en descargas!", { id: toastId });
+      // 3. Descarga blindada
+      canvas.toBlob(async (blob) => {
+        if (!blob) throw new Error("Fallo en blob");
+        const fileName = `Cierre_Caja_${businessDate.toLocaleDateString('es-VE').replace(/\//g,'-')}.png`;
+
+        // Intento Nativo (Solo celulares, abre WhatsApp directo)
+        if (navigator.canShare && /mobile/i.test(navigator.userAgent)) {
+          const file = new File([blob], fileName, { type: 'image/png' });
+          if (navigator.canShare({ files: [file] })) {
+            try {
+              await navigator.share({ files: [file], title: 'Cierre de Caja' });
+              toast.success("¡Imagen compartida con éxito!", { id: toastId });
+              setIsProcessing(false);
+              return;
+            } catch (e) {
+              console.log("Usuario canceló compartir");
+            }
+          }
+        }
+
+        // Intento Directo
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.style.display = "none";
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        
+        setTimeout(() => {
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(url);
+          toast.success("¡Imagen guardada en el dispositivo!", { id: toastId });
+          setIsProcessing(false);
+        }, 300);
+
+      }, "image/png", 1.0);
+
     } catch (error) {
       console.error(error);
-      toast.error("Error al procesar la descarga.", { id: toastId });
-    } finally {
+      toast.error("Error al forzar la descarga.", { id: toastId });
       setIsProcessing(false);
     }
+  };
+
+  // 👇 SALVAVIDAS INFALIBLE: COPIAR AL PORTAPAPELES PARA WHATSAPP 👇
+  const copySummaryToClipboard = () => {
+    const text = `📊 *CIERRE DE CAJA* 📊
+📅 *Fecha:* ${businessDate.toLocaleDateString("es-VE")}
+💵 *Total Facturado:* ${fmtUsd(stats.totalFacturadoUsd)}
+🔄 *Tasa:* Bs ${rate.toLocaleString('es-VE')}
+
+🎮 *Horas de Juego:* ${fmtUsd(stats.horasUsd)}
+🍿 *Snacks:* ${fmtUsd(stats.snacksUsd)}
+
+*ARQUEO POR MÉTODO:*
+💵 Efectivo ($): ${fmtUsd(stats.cashUsd)}
+📱 Pago Móvil: Bs ${stats.mobileBs.toLocaleString('es-VE', {minimumFractionDigits: 2})}
+🤝 Fiado Hoy: ${fmtUsd(stats.fiadoUsd)}
+📝 Deudas Recuperadas: ${fmtUsd(stats.deudasRecuperadasUsd)}`;
+
+    navigator.clipboard.writeText(text).then(() => {
+      toast.success("¡Resumen copiado! Listo para pegar en WhatsApp.", { icon: "📋" });
+    }).catch(() => {
+      toast.error("Tu navegador no permite copiar automáticamente.");
+    });
   };
 
   const handleCloseDay = () => {
@@ -118,9 +169,8 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto p-0 bg-white">
         
-        {/* 👇 Le agregamos un ID estricto para que el clonador lo encuentre en memoria 👇 */}
-        <div ref={printRef} id="ticket-render-zone" className="p-6 bg-white text-slate-800 font-sans">
-          
+        {/* ZONA DE TICKET */}
+        <div ref={printRef} className="p-6 bg-white text-slate-800 font-sans">
           <div className="text-center border-b-2 border-slate-800 pb-4 mb-6">
             <h2 className="font-display text-3xl text-slate-900 tracking-widest uppercase">CIERRE DE CAJA</h2>
             <p className="text-xs text-slate-500 mt-1">
@@ -173,22 +223,35 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           </div>
         </div>
 
+        {/* ZONA DE BOTONES */}
         <div className="p-4 bg-slate-50 border-t border-slate-200 space-y-3 rounded-b-lg">
           <div className="flex items-start gap-2 bg-amber-100/50 text-amber-800 p-3 rounded-lg border border-amber-200 text-xs">
             <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-            <p>Descarga tu imagen y tu Excel antes de confirmar el cierre.</p>
+            <p>Exporta tu resumen o Excel antes de confirmar el cierre.</p>
           </div>
           
-          <div className="flex gap-2">
-            <Button variant="outline" className="flex-1 bg-white hover:bg-slate-100" onClick={() => onOpenChange(false)}>Cancelar</Button>
-            <Button className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white" onClick={downloadImage} disabled={isProcessing}>
-              <Download className="h-4 w-4 mr-2" /> {isProcessing ? "Procesando..." : "Descargar"}
+          <div className="grid grid-cols-2 gap-2">
+            {/* Botón Descargar Imagen */}
+            <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" onClick={downloadImage} disabled={isProcessing}>
+              <Download className="h-4 w-4 mr-2" /> {isProcessing ? "Generando..." : "Imagen"}
             </Button>
-            <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => exportData({ sales, products, credits, rate })}>
+
+            {/* NUEVO: Botón Copiar Texto (INFALIBLE) */}
+            <Button className="bg-slate-800 hover:bg-slate-900 text-white" onClick={copySummaryToClipboard}>
+              <Copy className="h-4 w-4 mr-2" /> Copiar Texto
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="outline" className="bg-white hover:bg-slate-100" onClick={() => onOpenChange(false)}>
+              Cancelar
+            </Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => exportData({ sales, products, credits, rate })}>
               <FileSpreadsheet className="h-4 w-4 mr-2" /> Excel
             </Button>
           </div>
-          <Button onClick={handleCloseDay} className="w-full bg-slate-900 hover:bg-black text-white h-12 font-bold tracking-widest">
+
+          <Button onClick={handleCloseDay} className="w-full bg-slate-900 hover:bg-black text-white h-12 font-bold tracking-widest mt-2">
             CONFIRMAR CIERRE
           </Button>
         </div>
