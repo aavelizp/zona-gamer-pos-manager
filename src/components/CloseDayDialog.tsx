@@ -2,7 +2,7 @@ import { useRef, useMemo, useState, useEffect } from "react";
 import { useStore, fmtUsd } from "@/lib/store";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Gamepad2, ShoppingBag, Banknote, Smartphone, Handshake, FileText, AlertTriangle, Download, FileSpreadsheet, RefreshCcw, XCircle } from "lucide-react";
+import { AlertTriangle, Download, FileSpreadsheet, XCircle, RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
 import html2canvas from "html2canvas";
 import { exportData } from "@/lib/excel";
@@ -16,30 +16,12 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   
   const printRef = useRef<HTMLDivElement>(null);
   const [now, setNow] = useState(new Date());
-  
-  // 👇 ESTADO PARA LA IMAGEN PRE-GENERADA 👇
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     if (open) {
       setNow(new Date());
-      setImageUrl(null); // Reiniciamos la imagen al abrir
-
-      // Esperamos 1 segundo para que la ventana cargue bien y le tomamos la foto en silencio
-      const timer = setTimeout(() => {
-        if (printRef.current) {
-          html2canvas(printRef.current, { 
-            backgroundColor: "#ffffff",
-            scale: 2, 
-            useCORS: true,
-            logging: false
-          }).then(canvas => {
-            setImageUrl(canvas.toDataURL("image/png"));
-          }).catch(err => console.error("Error al generar el canvas", err));
-        }
-      }, 1000);
-
-      return () => clearTimeout(timer);
+      setIsProcessing(false);
     }
   }, [open]);
 
@@ -75,6 +57,41 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     return { totalFacturadoUsd, horasUsd, snacksUsd, cashUsd, mobileBs, fiadoUsd, deudasRecuperadasUsd };
   }, [sales, shiftStart]);
 
+  // 👇 DESCARGA INSTANTÁNEA (Libre de SVGs que congelan el sistema) 👇
+  const downloadImage = async () => {
+    if (!printRef.current) return;
+    setIsProcessing(true);
+    const toastId = toast.loading("Descargando imagen...");
+    
+    try {
+      const canvas = await html2canvas(printRef.current, { 
+        backgroundColor: "#ffffff",
+        scale: 2, 
+        useCORS: true,
+        logging: false
+      });
+      
+      const dataUrl = canvas.toDataURL("image/png");
+      const fileName = `Cierre_Caja_${businessDate.toLocaleDateString('es-VE').replace(/\//g,'-')}.png`;
+
+      const link = document.createElement("a");
+      link.href = dataUrl;
+      link.download = fileName;
+      link.style.display = "none";
+      document.body.appendChild(link);
+      
+      link.click();
+      
+      document.body.removeChild(link);
+      toast.success("¡Imagen descargada exitosamente!", { id: toastId });
+    } catch (error) {
+      console.error(error);
+      toast.error("Error al procesar la imagen.", { id: toastId });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleCloseDay = () => {
     if (confirm("⚠️ ¿Estás seguro de cerrar la caja? Esto archivará las ventas actuales y reiniciará el turno.")) {
       closeDay();
@@ -89,7 +106,7 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto p-0 bg-white">
         
-        {/* ZONA DE TICKET */}
+        {/* 👇 ZONA DE TICKET (Ahora usa Emojis en lugar de Íconos para evitar que se congele) 👇 */}
         <div ref={printRef} className="p-6 bg-white text-slate-800 font-sans">
           <div className="text-center border-b-2 border-slate-800 pb-4 mb-6">
             <h2 className="font-display text-3xl text-slate-900 tracking-widest uppercase">CIERRE DE CAJA</h2>
@@ -108,11 +125,11 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
 
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-                <p className="text-xs text-slate-500 flex items-center gap-1.5 mb-2"><Gamepad2 className="h-4 w-4" /> Horas de Juego</p>
+                <p className="text-xs text-slate-600 font-bold mb-2">🎮 Horas de Juego</p>
                 <p className="font-display text-2xl text-slate-900">{fmtUsd(stats.horasUsd)}</p>
               </div>
               <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-                <p className="text-xs text-slate-500 flex items-center gap-1.5 mb-2"><ShoppingBag className="h-4 w-4 text-emerald-500" /> Snacks</p>
+                <p className="text-xs text-slate-600 font-bold mb-2">🛍️ Snacks</p>
                 <p className="font-display text-2xl text-slate-900">{fmtUsd(stats.snacksUsd)}</p>
               </div>
             </div>
@@ -121,22 +138,22 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
 
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-4">
-                <p className="text-[10px] sm:text-xs text-slate-600 flex items-center gap-1 mb-1"><Banknote className="h-3 w-3 text-emerald-600" /> Efectivo en Caja ($)</p>
+                <p className="text-[10px] sm:text-xs text-slate-700 font-bold mb-1">💵 Efectivo ($)</p>
                 <p className="font-display text-xl text-emerald-700">{fmtUsd(stats.cashUsd)}</p>
               </div>
               
               <div className="bg-blue-50/50 border border-blue-200 rounded-2xl p-4">
-                <p className="text-[10px] sm:text-xs text-slate-600 flex items-center gap-1 mb-1"><Smartphone className="h-3 w-3 text-blue-500" /> Pago Móvil (Bs)</p>
+                <p className="text-[10px] sm:text-xs text-slate-700 font-bold mb-1">📱 Pago Móvil (Bs)</p>
                 <p className="font-display text-xl text-blue-600">Bs {stats.mobileBs.toLocaleString('es-VE', {minimumFractionDigits: 2})}</p>
               </div>
 
               <div className="bg-amber-50/50 border border-amber-100 rounded-2xl p-4">
-                <p className="text-[10px] sm:text-xs text-slate-600 flex items-center gap-1 mb-1"><Handshake className="h-3 w-3 text-amber-500" /> Fiado Hoy</p>
+                <p className="text-[10px] sm:text-xs text-slate-700 font-bold mb-1">🤝 Fiado Hoy</p>
                 <p className="font-display text-xl text-amber-700">{fmtUsd(stats.fiadoUsd)}</p>
               </div>
 
               <div className="bg-teal-50 border border-teal-100 rounded-2xl p-4">
-                <p className="text-[10px] sm:text-xs text-slate-600 flex items-center gap-1 mb-1"><FileText className="h-3 w-3 text-teal-400" /> Deudas Recuperadas</p>
+                <p className="text-[10px] sm:text-xs text-slate-700 font-bold mb-1">📝 Recuperado</p>
                 <p className="font-display text-xl text-teal-600">{fmtUsd(stats.deudasRecuperadasUsd)}</p>
               </div>
             </div>
@@ -147,39 +164,28 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
         <div className="p-4 bg-slate-50 border-t border-slate-200 space-y-3 rounded-b-lg">
           <div className="flex items-start gap-2 bg-amber-100/50 text-amber-800 p-3 rounded-lg border border-amber-200 text-xs">
             <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-            <p>Exporta tu resumen o Excel antes de confirmar el cierre.</p>
+            <p>Exporta tu imagen o Excel antes de confirmar el cierre.</p>
           </div>
           
-          <div className="grid grid-cols-3 gap-2">
-            
+          <div className="grid grid-cols-2 gap-2">
             {/* 👇 BOTÓN ROJO DE CANCELAR 👇 */}
-            <Button className="bg-red-500 hover:bg-red-600 text-white shadow-sm" onClick={() => onOpenChange(false)}>
-              <XCircle className="h-4 w-4 mr-1 hidden sm:block" /> Cancelar
+            <Button className="bg-red-500 hover:bg-red-600 text-white shadow-sm font-bold" onClick={() => onOpenChange(false)}>
+              <XCircle className="h-4 w-4 mr-2" /> Cancelar
             </Button>
 
-            {/* 👇 BOTÓN DE IMAGEN PRE-GENERADA (ENLACE PURO, NO PUEDE FALLAR) 👇 */}
-            {imageUrl ? (
-              <a 
-                href={imageUrl} 
-                download={`Cierre_Caja_${businessDate.toLocaleDateString('es-VE').replace(/\//g,'-')}.png`}
-                className="flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-sm font-medium transition-colors shadow-sm"
-                onClick={() => toast.success("Descargando imagen...")}
-              >
-                <Download className="h-4 w-4 mr-1" /> Imagen
-              </a>
-            ) : (
-              <Button disabled className="bg-indigo-400 text-white opacity-80 cursor-not-allowed">
-                <RefreshCcw className="h-4 w-4 mr-1 animate-spin" /> Cargando
-              </Button>
-            )}
-
-            {/* BOTÓN EXCEL */}
-            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm" onClick={() => exportData({ sales, products, credits, rate })}>
-              <FileSpreadsheet className="h-4 w-4 mr-1" /> Excel
+            {/* 👇 BOTÓN DE EXCEL 👇 */}
+            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm font-bold" onClick={() => exportData({ sales, products, credits, rate })}>
+              <FileSpreadsheet className="h-4 w-4 mr-2" /> Excel
             </Button>
           </div>
 
-          <Button onClick={handleCloseDay} className="w-full bg-slate-900 hover:bg-black text-white h-12 font-bold tracking-widest mt-2">
+          {/* 👇 BOTÓN DE IMAGEN 👇 */}
+          <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-12 shadow-sm" onClick={downloadImage} disabled={isProcessing}>
+            {isProcessing ? <RefreshCcw className="h-5 w-5 mr-2 animate-spin" /> : <Download className="h-5 w-5 mr-2" />}
+            {isProcessing ? "Procesando..." : "Descargar Imagen"}
+          </Button>
+
+          <Button onClick={handleCloseDay} className="w-full bg-slate-900 hover:bg-black text-white h-12 font-bold tracking-widest mt-2 shadow-md">
             CONFIRMAR CIERRE
           </Button>
         </div>
