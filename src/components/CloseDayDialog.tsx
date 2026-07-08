@@ -15,7 +15,6 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   const closeDay = useStore(s => s.closeDay);
   
   const printRef = useRef<HTMLDivElement>(null);
-
   const [now, setNow] = useState(new Date());
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -26,6 +25,13 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     }
   }, [open]);
 
+  // Reloj comercial para cierres nocturnos
+  const businessDate = useMemo(() => {
+    const d = new Date(now);
+    if (d.getHours() < 6) d.setDate(d.getDate() - 1);
+    return d;
+  }, [now]);
+
   const shiftStart = useMemo(() => {
     const d = new Date();
     if (d.getHours() < 6) d.setDate(d.getDate() - 1);
@@ -35,69 +41,64 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
 
   const stats = useMemo(() => {
     const tSales = sales.filter(s => s.ts >= shiftStart.getTime());
-
-    let totalFacturadoUsd = 0;
-    let horasUsd = 0;
-    let snacksUsd = 0;
-    
-    let cashUsd = 0;
-    let mobileBs = 0;
-    let fiadoUsd = 0;
-    let deudasRecuperadasUsd = 0;
+    let totalFacturadoUsd = 0; let horasUsd = 0; let snacksUsd = 0;
+    let cashUsd = 0; let mobileBs = 0; let fiadoUsd = 0; let deudasRecuperadasUsd = 0;
 
     tSales.forEach(s => {
       if (s.concept === "Deuda Cobrada") {
-        deudasRecuperadasUsd += (s.total || 0);
-        cashUsd += (s.cashUsd || 0);
-        mobileBs += (s.mobileBs || 0); 
+        deudasRecuperadasUsd += (s.total || 0); cashUsd += (s.cashUsd || 0); mobileBs += (s.mobileBs || 0); 
       } else {
-        totalFacturadoUsd += (s.total || 0);
-        horasUsd += (s.timeAmount || 0);
-        snacksUsd += (s.extrasAmount || 0);
-        
-        if (s.method === "credit") {
-          fiadoUsd += (s.total || 0);
-        } else {
-          cashUsd += (s.cashUsd || 0);
-          mobileBs += (s.mobileBs || 0); 
-        }
+        totalFacturadoUsd += (s.total || 0); horasUsd += (s.timeAmount || 0); snacksUsd += (s.extrasAmount || 0);
+        if (s.method === "credit") fiadoUsd += (s.total || 0);
+        else { cashUsd += (s.cashUsd || 0); mobileBs += (s.mobileBs || 0); }
       }
     });
 
-    return {
-      totalFacturadoUsd, horasUsd, snacksUsd,
-      cashUsd, mobileBs, fiadoUsd, deudasRecuperadasUsd
-    };
+    return { totalFacturadoUsd, horasUsd, snacksUsd, cashUsd, mobileBs, fiadoUsd, deudasRecuperadasUsd };
   }, [sales, shiftStart]);
 
-  // 👇 DESCARGA DIRECTA DE 1 SOLO CLIC 👇
+  // 👇 SISTEMA DE CAPTURA MASTER CON INTERCEPCIÓN DE CLON 👇
   const downloadImage = async () => {
     if (!printRef.current) return;
     setIsProcessing(true);
-    toast("Descargando imagen...", { icon: "⏳" });
+    const toastId = toast.loading("Procesando descarga del reporte...");
     
     try {
+      // Forzamos la renderización apuntando a un clon limpio en memoria sin scrollbars
       const canvas = await html2canvas(printRef.current, { 
         backgroundColor: "#ffffff",
         scale: 2, 
         useCORS: true,
-        logging: false
+        logging: false,
+        onclone: (clonedDoc) => {
+          // Buscamos el contenedor del ticket en el DOM clonado en memoria
+          const ticket = clonedDoc.getElementById("ticket-render-zone");
+          if (ticket) {
+            // Le removemos CUALQUIER restricción de altura o desborde antes de la foto
+            ticket.style.height = "auto";
+            ticket.style.maxHeight = "none";
+            ticket.style.overflow = "visible";
+            ticket.style.padding = "24px";
+          }
+        }
       });
       
       const dataUrl = canvas.toDataURL("image/png");
-      const fileName = `Cierre_Caja_${now.toLocaleDateString('es-VE').replace(/\//g,'-')}.png`;
+      const fileName = `Cierre_Caja_${businessDate.toLocaleDateString('es-VE').replace(/\//g,'-')}.png`;
 
+      // Colgamos el enlace temporal ADENTRO del printRef para burlar el Focus Trap del Modal
       const link = document.createElement("a");
       link.href = dataUrl;
       link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      toast.success("¡Imagen descargada exitosamente!");
+      printRef.current.appendChild(link);
+      
+      link.click(); // Descarga síncrona instantánea
+      
+      printRef.current.removeChild(link);
+      toast.success("¡Reporte guardado en descargas!", { id: toastId });
     } catch (error) {
       console.error(error);
-      toast.error("Hubo un error al generar la imagen.");
+      toast.error("Error al procesar la descarga.", { id: toastId });
     } finally {
       setIsProcessing(false);
     }
@@ -117,12 +118,14 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto p-0 bg-white">
         
-        <div ref={printRef} className="p-6 bg-white text-slate-800 font-sans">
+        {/* 👇 Le agregamos un ID estricto para que el clonador lo encuentre en memoria 👇 */}
+        <div ref={printRef} id="ticket-render-zone" className="p-6 bg-white text-slate-800 font-sans">
           
           <div className="text-center border-b-2 border-slate-800 pb-4 mb-6">
             <h2 className="font-display text-3xl text-slate-900 tracking-widest uppercase">CIERRE DE CAJA</h2>
             <p className="text-xs text-slate-500 mt-1">
-              {now.toLocaleDateString("es-VE")} {now.toLocaleTimeString("es-VE")} · Tasa: Bs {rate.toLocaleString('es-VE')}/$
+              Fecha Contable: {businessDate.toLocaleDateString("es-VE")} <br/>
+              (Emitido: {now.toLocaleTimeString("es-VE")}) · Tasa: Bs {rate.toLocaleString('es-VE')}/$
             </p>
           </div>
 
