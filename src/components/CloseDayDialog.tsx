@@ -1,8 +1,8 @@
 import { useRef, useMemo, useState, useEffect } from "react";
 import { useStore, fmtUsd } from "@/lib/store";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Gamepad2, ShoppingBag, Banknote, Smartphone, Handshake, FileText, AlertTriangle, Download, FileSpreadsheet, Copy } from "lucide-react";
+import { Gamepad2, ShoppingBag, Banknote, Smartphone, Handshake, FileText, AlertTriangle, Download, FileSpreadsheet, RefreshCcw, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import html2canvas from "html2canvas";
 import { exportData } from "@/lib/excel";
@@ -16,12 +16,30 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   
   const printRef = useRef<HTMLDivElement>(null);
   const [now, setNow] = useState(new Date());
-  const [isProcessing, setIsProcessing] = useState(false);
+  
+  // 👇 ESTADO PARA LA IMAGEN PRE-GENERADA 👇
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setNow(new Date());
-      setIsProcessing(false);
+      setImageUrl(null); // Reiniciamos la imagen al abrir
+
+      // Esperamos 1 segundo para que la ventana cargue bien y le tomamos la foto en silencio
+      const timer = setTimeout(() => {
+        if (printRef.current) {
+          html2canvas(printRef.current, { 
+            backgroundColor: "#ffffff",
+            scale: 2, 
+            useCORS: true,
+            logging: false
+          }).then(canvas => {
+            setImageUrl(canvas.toDataURL("image/png"));
+          }).catch(err => console.error("Error al generar el canvas", err));
+        }
+      }, 1000);
+
+      return () => clearTimeout(timer);
     }
   }, [open]);
 
@@ -56,104 +74,6 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
 
     return { totalFacturadoUsd, horasUsd, snacksUsd, cashUsd, mobileBs, fiadoUsd, deudasRecuperadasUsd };
   }, [sales, shiftStart]);
-
-  // 👇 HACK DE FUERZA BRUTA: CLON EN MEMORIA PARA EVITAR BLOQUEO DE NAVEGADOR 👇
-  const downloadImage = async () => {
-    if (!printRef.current) return;
-    setIsProcessing(true);
-    const toastId = toast.loading("Generando y descargando imagen...");
-    
-    try {
-      // 1. Clonar el ticket y sacarlo de la ventana flotante
-      const clone = printRef.current.cloneNode(true) as HTMLDivElement;
-      clone.style.position = "fixed";
-      clone.style.top = "0";
-      clone.style.left = "0";
-      clone.style.width = "400px"; // Forzar resolución celular
-      clone.style.height = "auto";
-      clone.style.zIndex = "-9999"; // Ocultarlo detrás de todo
-      clone.style.overflow = "visible"; // Quitar el scroll maldito
-      clone.style.backgroundColor = "#ffffff";
-      document.body.appendChild(clone);
-
-      // 2. Tomar la foto al clon puro sin bloqueos
-      const canvas = await html2canvas(clone, { 
-        backgroundColor: "#ffffff",
-        scale: 2, 
-        useCORS: true,
-        allowTaint: true,
-        logging: false
-      });
-      
-      document.body.removeChild(clone); // Limpiamos la basura
-
-      // 3. Descarga blindada
-      canvas.toBlob(async (blob) => {
-        if (!blob) throw new Error("Fallo en blob");
-        const fileName = `Cierre_Caja_${businessDate.toLocaleDateString('es-VE').replace(/\//g,'-')}.png`;
-
-        // Intento Nativo (Solo celulares, abre WhatsApp directo)
-        if (navigator.canShare && /mobile/i.test(navigator.userAgent)) {
-          const file = new File([blob], fileName, { type: 'image/png' });
-          if (navigator.canShare({ files: [file] })) {
-            try {
-              await navigator.share({ files: [file], title: 'Cierre de Caja' });
-              toast.success("¡Imagen compartida con éxito!", { id: toastId });
-              setIsProcessing(false);
-              return;
-            } catch (e) {
-              console.log("Usuario canceló compartir");
-            }
-          }
-        }
-
-        // Intento Directo
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.style.display = "none";
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        
-        setTimeout(() => {
-          document.body.removeChild(a);
-          window.URL.revokeObjectURL(url);
-          toast.success("¡Imagen guardada en el dispositivo!", { id: toastId });
-          setIsProcessing(false);
-        }, 300);
-
-      }, "image/png", 1.0);
-
-    } catch (error) {
-      console.error(error);
-      toast.error("Error al forzar la descarga.", { id: toastId });
-      setIsProcessing(false);
-    }
-  };
-
-  // 👇 SALVAVIDAS INFALIBLE: COPIAR AL PORTAPAPELES PARA WHATSAPP 👇
-  const copySummaryToClipboard = () => {
-    const text = `📊 *CIERRE DE CAJA* 📊
-📅 *Fecha:* ${businessDate.toLocaleDateString("es-VE")}
-💵 *Total Facturado:* ${fmtUsd(stats.totalFacturadoUsd)}
-🔄 *Tasa:* Bs ${rate.toLocaleString('es-VE')}
-
-🎮 *Horas de Juego:* ${fmtUsd(stats.horasUsd)}
-🍿 *Snacks:* ${fmtUsd(stats.snacksUsd)}
-
-*ARQUEO POR MÉTODO:*
-💵 Efectivo ($): ${fmtUsd(stats.cashUsd)}
-📱 Pago Móvil: Bs ${stats.mobileBs.toLocaleString('es-VE', {minimumFractionDigits: 2})}
-🤝 Fiado Hoy: ${fmtUsd(stats.fiadoUsd)}
-📝 Deudas Recuperadas: ${fmtUsd(stats.deudasRecuperadasUsd)}`;
-
-    navigator.clipboard.writeText(text).then(() => {
-      toast.success("¡Resumen copiado! Listo para pegar en WhatsApp.", { icon: "📋" });
-    }).catch(() => {
-      toast.error("Tu navegador no permite copiar automáticamente.");
-    });
-  };
 
   const handleCloseDay = () => {
     if (confirm("⚠️ ¿Estás seguro de cerrar la caja? Esto archivará las ventas actuales y reiniciará el turno.")) {
@@ -230,24 +150,32 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
             <p>Exporta tu resumen o Excel antes de confirmar el cierre.</p>
           </div>
           
-          <div className="grid grid-cols-2 gap-2">
-            {/* Botón Descargar Imagen */}
-            <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" onClick={downloadImage} disabled={isProcessing}>
-              <Download className="h-4 w-4 mr-2" /> {isProcessing ? "Generando..." : "Imagen"}
+          <div className="grid grid-cols-3 gap-2">
+            
+            {/* 👇 BOTÓN ROJO DE CANCELAR 👇 */}
+            <Button className="bg-red-500 hover:bg-red-600 text-white shadow-sm" onClick={() => onOpenChange(false)}>
+              <XCircle className="h-4 w-4 mr-1 hidden sm:block" /> Cancelar
             </Button>
 
-            {/* NUEVO: Botón Copiar Texto (INFALIBLE) */}
-            <Button className="bg-slate-800 hover:bg-slate-900 text-white" onClick={copySummaryToClipboard}>
-              <Copy className="h-4 w-4 mr-2" /> Copiar Texto
-            </Button>
-          </div>
+            {/* 👇 BOTÓN DE IMAGEN PRE-GENERADA (ENLACE PURO, NO PUEDE FALLAR) 👇 */}
+            {imageUrl ? (
+              <a 
+                href={imageUrl} 
+                download={`Cierre_Caja_${businessDate.toLocaleDateString('es-VE').replace(/\//g,'-')}.png`}
+                className="flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-sm font-medium transition-colors shadow-sm"
+                onClick={() => toast.success("Descargando imagen...")}
+              >
+                <Download className="h-4 w-4 mr-1" /> Imagen
+              </a>
+            ) : (
+              <Button disabled className="bg-indigo-400 text-white opacity-80 cursor-not-allowed">
+                <RefreshCcw className="h-4 w-4 mr-1 animate-spin" /> Cargando
+              </Button>
+            )}
 
-          <div className="grid grid-cols-2 gap-2">
-            <Button variant="outline" className="bg-white hover:bg-slate-100" onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => exportData({ sales, products, credits, rate })}>
-              <FileSpreadsheet className="h-4 w-4 mr-2" /> Excel
+            {/* BOTÓN EXCEL */}
+            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm" onClick={() => exportData({ sales, products, credits, rate })}>
+              <FileSpreadsheet className="h-4 w-4 mr-1" /> Excel
             </Button>
           </div>
 
