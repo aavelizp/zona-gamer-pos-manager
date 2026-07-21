@@ -9,7 +9,8 @@ export interface Combo { id: string; name: string; price: number; hours: number;
 export type ConsoleType = "PS4" | "PS5";
 export type SessionMode = "free" | "fixed" | "tournament"; 
 
-export interface ConsoleSession { mode: SessionMode; startedAt: number; endsAt?: number; alerted?: boolean; preAlerted?: boolean; prepaid?: boolean; prepaidMinutes?: number; customerName?: string; pausedAt?: number; isTournament?: boolean; }
+// 👇 NUEVO: 'prepaidSaleIds' agregado para rastrear las ventas prepagadas 👇
+export interface ConsoleSession { mode: SessionMode; startedAt: number; endsAt?: number; alerted?: boolean; preAlerted?: boolean; prepaid?: boolean; prepaidMinutes?: number; customerName?: string; pausedAt?: number; isTournament?: boolean; prepaidSaleIds?: string[]; }
 export interface ExtraCharge { label: string; amount: number; ts: number; productId?: ProductId; qty?: number; }
 export interface ConsoleState { id: string; name: string; type: ConsoleType; ratePerHour: number; totalMinutes: number; maintenanceMinutes?: number; session?: ConsoleSession; charges: ExtraCharge[]; }
 export interface MaintenanceLog { id: string; consoleId: string; consoleName: string; description: string; date: number; minutesAtService: number; }
@@ -29,7 +30,6 @@ export type TournamentFormat = "single_elimination" | "league" | "groups";
 export interface Tournament { id: string; name: string; game: string; maxPlayers: number; entryFee: number; prizePercentage: number; format: TournamentFormat; groupCount?: number; dateRange: string; status: "registering" | "active" | "completed"; createdAt: number; } 
 export interface TournamentParticipant { id: string; tournamentId: string; memberId?: string; memberName: string; phone?: string; groupName?: string; paymentStatus: "paid" | "pending"; enrolledAt: number; enrollSaleId?: string; }
 
-// 👇 NUEVO: Añadidos score1 y score2 para guardar los goles exactos 👇
 export interface TournamentMatch { id: string; tournamentId: string; round: number; matchIndex: number; player1Id?: string; player2Id?: string; winnerId?: string; isDraw?: boolean; score1?: number; score2?: number; nextMatchId?: string; phase?: "groups" | "knockout"; groupName?: string; }
 
 export interface PastClosure { id: string; date: number; totalSales: number; totalExpenses: number; sales: SaleRecord[]; expenses: Expense[]; }
@@ -64,9 +64,7 @@ interface State {
   generateBracket: (tournamentId: string) => void; 
   generateKnockoutFromGroups: (tournamentId: string) => void; 
   
-  // 👇 NUEVA FUNCIÓN MAESTRA PARA RESULTADOS EXACTOS 👇
   setMatchScore: (matchId: string, score1: number, score2: number) => void; 
-  
   setMatchWinner: (matchId: string, winnerId: string) => void; 
   setMatchDraw: (matchId: string) => void; 
   revertMatchWinner: (matchId: string) => void; 
@@ -117,9 +115,24 @@ export const useStore = create<State>()(
       markPreAlerted: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId && c.session ? { ...c, session: { ...c.session, preAlerted: true } } : c ) })), 
       pauseSession: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId && c.session && !c.session.pausedAt ? { ...c, session: { ...c.session, pausedAt: Date.now() } } : c ) })), 
       resumeSession: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => { if (c?.id !== consoleId || !c.session || !c.session.pausedAt) return c; const delta = Date.now() - c.session.pausedAt; return { ...c, session: { ...c.session, startedAt: c.session.startedAt + delta, endsAt: c.session.endsAt ? c.session.endsAt + delta : undefined, pausedAt: undefined, alerted: false, preAlerted: false } }; }) })), 
-      cancelSession: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId ? { ...c, session: undefined, charges: [] } : c ) })),
-      updateSessionCustomer: (consoleId, customerName) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId && c.session ? { ...c, session: { ...c.session, customerName } } : c ) })),
       
+      // 👇 SE ACTUALIZÓ PARA BORRAR VENTAS PREPAGADAS AUTOMÁTICAMENTE 👇
+      cancelSession: (consoleId) => set((s) => { 
+        const c = (s.consoles||[]).find((x) => x?.id === consoleId); 
+        if (!c) return s; 
+        
+        let newSales = s.sales || []; 
+        if (c.session?.prepaidSaleIds && c.session.prepaidSaleIds.length > 0) { 
+          newSales = newSales.filter(sale => !c.session!.prepaidSaleIds!.includes(sale.id)); 
+        } 
+        
+        return { 
+          consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, session: undefined, charges: [] } : x ), 
+          sales: newSales 
+        }; 
+      }),
+      
+      updateSessionCustomer: (consoleId, customerName) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId && c.session ? { ...c, session: { ...c.session, customerName } } : c ) })),
       addSnackToConsole: (consoleId, productId, qty) => set((s) => { const product = (s.products||[]).find((p) => p?.id === productId); if (!product || product.stock < qty) return s; return { products: (s.products||[]).map((p) => (p?.id === productId ? { ...p, stock: p.stock - qty } : p)), consoles: (s.consoles||[]).map((c) => c?.id === consoleId ? { ...c, charges: [ ...(c.charges || []), { label: `${product.name} x${qty}`, amount: product.price * qty, ts: Date.now(), productId, qty } ] } : c ), }; }),
       applyComboToConsole: (consoleId, comboId) => set((s) => { const combo = (s.combos||[]).find((c) => c?.id === comboId); if (!combo) return s; for (const it of combo.items || []) { const p = (s.products||[]).find((pp) => pp?.id === it.productId); if (!p || p.stock < it.qty) return s; } const consoleObj = (s.consoles||[]).find((c) => c?.id === consoleId); if (!consoleObj) return s; const newProducts = (s.products||[]).map((p) => { const it = (combo.items||[]).find((i) => i.productId === p?.id); return it ? { ...p, stock: p.stock - it.qty } : p; }); const addMs = combo.hours * 60 * 60_000; const newSession: ConsoleSession = consoleObj.session ? { ...consoleObj.session, mode: "fixed", endsAt: (consoleObj.session.endsAt && consoleObj.session.endsAt > Date.now() ? consoleObj.session.endsAt : Date.now()) + addMs, alerted: false } : { mode: "fixed", startedAt: Date.now(), endsAt: Date.now() + addMs }; return { products: newProducts, consoles: (s.consoles||[]).map((c) => c?.id === consoleId ? { ...c, session: combo.hours > 0 ? newSession : c.session, charges: [ ...(c.charges || []), { label: `Combo: ${combo.name}`, amount: combo.price, ts: Date.now() } ] } : c ) }; }),
       addExtraController: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId ? { ...c, charges: [ ...(c.charges || []), { label: "Control Adicional", amount: 1, ts: Date.now() } ] } : c ) })),
@@ -135,10 +148,68 @@ export const useStore = create<State>()(
       closeDay: () => set((s) => { const totalSales = (s.sales || []).reduce((acc, x) => acc + (x?.total || 0), 0); const totalExpenses = (s.expenses || []).reduce((acc, x) => acc + (x?.amount || 0), 0); const snapshot: PastClosure = { id: uid(), date: Date.now(), totalSales, totalExpenses, sales: [...(s.sales || [])], expenses: [...(s.expenses || [])] }; return { pastClosures: [snapshot, ...(s.pastClosures || [])], sales: [], sessionHistory: [], consoles: (s.consoles||[]).map((c) => ({ ...c, session: undefined, charges: [] })) }; }),
       registerMaintenance: (consoleId, description, date) => set((s) => { const c = (s.consoles||[]).find((x) => x?.id === consoleId); if (!c) return s; const log: MaintenanceLog = { id: uid(), consoleId: c.id, consoleName: c.name, description, date, minutesAtService: c.maintenanceMinutes || 0 }; return { consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, maintenanceMinutes: 0 } : x ), maintenanceLogs: [log, ...(s.maintenanceLogs||[])] }; }),
       deleteMaintenanceLog: (logId) => set((s) => { const log = (s.maintenanceLogs||[]).find(l => l?.id === logId); if (!log) return s; const consoles = (s.consoles||[]).map(c => { if (c?.id === log.consoleId) { return { ...c, maintenanceMinutes: (c.maintenanceMinutes || 0) + log.minutesAtService }; } return c; }); return { maintenanceLogs: (s.maintenanceLogs||[]).filter(l => l?.id !== logId), consoles }; }),
-      prepaySession: (consoleId, minutes, payload) => set((s) => { const c = (s.consoles||[]).find((x) => x?.id === consoleId); if (!c) return s; const combo = payload.comboId ? (s.combos||[]).find((cm) => cm?.id === payload.comboId) : undefined; let newProducts = s.products || []; const items: SaleRecord["items"] = []; if (combo) { for (const it of combo.items || []) { const p = (s.products||[]).find((pp) => pp?.id === it.productId); if (!p || p.stock < it.qty) return s; } newProducts = (s.products||[]).map((p) => { const it = (combo.items||[]).find((i) => i.productId === p?.id); return it ? { ...p, stock: p.stock - it.qty } : p; }); items.push({ name: `Combo: ${combo.name} - ${c.name} (${minutes} min)`, qty: 1, price: payload.total }); for (const it of combo.items || []) { const p = (s.products||[]).find((pp) => pp?.id === it.productId); if (p) items.push({ name: `  · ${p.name}`, qty: it.qty, price: 0 }); } } else { items.push({ name: `Prepago ${c.name} (${minutes} min)`, qty: 1, price: payload.total }); } const sale: SaleRecord = { id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, minutes, timeAmount: payload.total, extrasAmount: 0, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, cashBs: payload.cashBs || 0, rate: s.rate, method: payload.method, customer: payload.customerInfo?.name, concept: "Consola", items }; let newMembers = s.members || []; const ci = payload.customerInfo; if (ci && ci.name?.trim() && ci.phone?.trim()) { const key = ci.phone.trim(); const existing = newMembers.find((m) => m?.phone === key); if (existing) { const newReward = (existing.rewardMinutes||0) + minutes; const earned = Math.floor(newReward / 600); newMembers = newMembers.map((m) => m?.id === existing.id ? { ...m, name: ci.name.trim(), idDoc: ci.idDoc?.trim() || m.idDoc, totalMinutes: (m.totalMinutes||0) + minutes, rewardMinutes: newReward - earned * 600, pendingRewards: (m.pendingRewards||0) + earned, lastVisit: Date.now() } : m ); } else { const earned = Math.floor(minutes / 600); newMembers = [...newMembers, { id: uid(), name: ci.name.trim(), idDoc: ci.idDoc?.trim(), phone: key, totalMinutes: minutes, rewardMinutes: minutes - earned * 600, pendingRewards: earned, createdAt: Date.now(), lastVisit: Date.now() }]; } } return { products: newProducts, consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, session: { mode: "fixed", startedAt: Date.now(), endsAt: Date.now() + minutes * 60_000, prepaid: true, prepaidMinutes: minutes, customerName: ci?.name?.trim() } } : x ), sales: [...(s.sales||[]), sale], members: newMembers }; }),
+      
+      // 👇 SE ACTUALIZÓ PARA GUARDAR EL ID DE LA VENTA 👇
+      prepaySession: (consoleId, minutes, payload) => set((s) => { 
+        const c = (s.consoles||[]).find((x) => x?.id === consoleId); 
+        if (!c) return s; 
+        const combo = payload.comboId ? (s.combos||[]).find((cm) => cm?.id === payload.comboId) : undefined; 
+        let newProducts = s.products || []; 
+        const items: SaleRecord["items"] = []; 
+        if (combo) { 
+          for (const it of combo.items || []) { const p = (s.products||[]).find((pp) => pp?.id === it.productId); if (!p || p.stock < it.qty) return s; } 
+          newProducts = (s.products||[]).map((p) => { const it = (combo.items||[]).find((i) => i.productId === p?.id); return it ? { ...p, stock: p.stock - it.qty } : p; }); 
+          items.push({ name: `Combo: ${combo.name} - ${c.name} (${minutes} min)`, qty: 1, price: payload.total }); 
+          for (const it of combo.items || []) { const p = (s.products||[]).find((pp) => pp?.id === it.productId); if (p) items.push({ name: `  · ${p.name}`, qty: it.qty, price: 0 }); } 
+        } else { 
+          items.push({ name: `Prepago ${c.name} (${minutes} min)`, qty: 1, price: payload.total }); 
+        } 
+        
+        const saleId = uid(); // 👈 El ID único para la factura
+        const sale: SaleRecord = { id: saleId, ts: Date.now(), consoleId: c.id, consoleName: c.name, minutes, timeAmount: payload.total, extrasAmount: 0, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, cashBs: payload.cashBs || 0, rate: s.rate, method: payload.method, customer: payload.customerInfo?.name, concept: "Consola", items }; 
+        
+        let newMembers = s.members || []; 
+        const ci = payload.customerInfo; 
+        if (ci && ci.name?.trim() && ci.phone?.trim()) { 
+          const key = ci.phone.trim(); const existing = newMembers.find((m) => m?.phone === key); 
+          if (existing) { 
+            const newReward = (existing.rewardMinutes||0) + minutes; const earned = Math.floor(newReward / 600); 
+            newMembers = newMembers.map((m) => m?.id === existing.id ? { ...m, name: ci.name.trim(), idDoc: ci.idDoc?.trim() || m.idDoc, totalMinutes: (m.totalMinutes||0) + minutes, rewardMinutes: newReward - earned * 600, pendingRewards: (m.pendingRewards||0) + earned, lastVisit: Date.now() } : m ); 
+          } else { 
+            const earned = Math.floor(minutes / 600); 
+            newMembers = [...newMembers, { id: uid(), name: ci.name.trim(), idDoc: ci.idDoc?.trim(), phone: key, totalMinutes: minutes, rewardMinutes: minutes - earned * 600, pendingRewards: earned, createdAt: Date.now(), lastVisit: Date.now() }]; 
+          } 
+        } 
+        
+        return { 
+          products: newProducts, 
+          consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, session: { mode: "fixed", startedAt: Date.now(), endsAt: Date.now() + minutes * 60_000, prepaid: true, prepaidMinutes: minutes, customerName: ci?.name?.trim(), prepaidSaleIds: [saleId] } } : x ), 
+          sales: [...(s.sales||[]), sale], 
+          members: newMembers 
+        }; 
+      }),
+      
       releaseConsole: (consoleId) => { const s = get(); const c = (s.consoles||[]).find((x) => x?.id === consoleId); if (!c || !c.session) return false; const pendingExtras = (c.charges || []).reduce((a, ch) => a + (ch?.amount||0), 0); if (pendingExtras > 0.001) return false; const mins = c.session.prepaidMinutes ?? 0; const histEntry: SessionHistoryEntry = { id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, customer: c.session.customerName, minutes: mins, amount: 0, prepaid: true }; set({ consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, session: undefined, charges: [], totalMinutes: (x.totalMinutes||0) + mins, maintenanceMinutes: (x.maintenanceMinutes || 0) + mins } : x ), sessionHistory: [histEntry, ...(s.sessionHistory||[])] }); return true; },
       payExtras: (consoleId, payload) => set((s) => { const c = (s.consoles||[]).find((x) => x?.id === consoleId); if (!c || (c.charges || []).length === 0) return s; const sale: SaleRecord = { id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, minutes: 0, timeAmount: 0, extrasAmount: payload.total, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, rate: s.rate, method: payload.method, customer: payload.customer, concept: "Adicionales", items: (c.charges || []).map((ch) => ({ name: ch.label, qty: 1, price: ch.amount })) }; const newCredits = payload.method === "credit" ? [...(s.credits||[]), { id: uid(), customer: payload.customer || "Sin nombre", amount: payload.total, createdAt: Date.now(), note: `Adicionales ${c.name}` }] : (s.credits||[]); return { consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, charges: [] } : x), sales: payload.method === "credit" ? (s.sales||[]) : [...(s.sales||[]), sale], credits: newCredits }; }),
-      extendPaidSession: (consoleId, addMinutes, payload) => set((s) => { const c = (s.consoles||[]).find((x) => x?.id === consoleId); if (!c || !c.session) return s; const base = c.session.endsAt && c.session.endsAt > Date.now() ? c.session.endsAt : Date.now(); const newEnds = base + addMinutes * 60_000; const sale: SaleRecord = { id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, minutes: addMinutes, timeAmount: payload.total, extrasAmount: 0, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, rate: s.rate, method: payload.method, customer: payload.customer || c.session.customerName, concept: "Consola", items: [{ name: `Extensión ${c.name} (+${addMinutes} min)`, qty: 1, price: payload.total }] }; const newCredits = payload.method === "credit" ? [...(s.credits||[]), { id: uid(), customer: payload.customer || c.session.customerName || "Sin nombre", amount: payload.total, createdAt: Date.now(), note: `Extensión ${c.name}` }] : (s.credits||[]); return { consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, session: { ...x.session!, mode: "fixed", endsAt: newEnds, prepaidMinutes: (x.session!.prepaidMinutes ?? 0) + addMinutes, alerted: false, preAlerted: false } } : x ), sales: payload.method === "credit" ? (s.sales||[]) : [...(s.sales||[]), sale], credits: newCredits }; }),
+      
+      // 👇 SE ACTUALIZÓ PARA ACUMULAR VENTAS SI LE EXTIENDEN EL TIEMPO 👇
+      extendPaidSession: (consoleId, addMinutes, payload) => set((s) => { 
+        const c = (s.consoles||[]).find((x) => x?.id === consoleId); 
+        if (!c || !c.session) return s; 
+        const base = c.session.endsAt && c.session.endsAt > Date.now() ? c.session.endsAt : Date.now(); 
+        const newEnds = base + addMinutes * 60_000; 
+        
+        const saleId = uid(); 
+        const sale: SaleRecord = { id: saleId, ts: Date.now(), consoleId: c.id, consoleName: c.name, minutes: addMinutes, timeAmount: payload.total, extrasAmount: 0, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, rate: s.rate, method: payload.method, customer: payload.customer || c.session.customerName, concept: "Consola", items: [{ name: `Extensión ${c.name} (+${addMinutes} min)`, qty: 1, price: payload.total }] }; 
+        const newCredits = payload.method === "credit" ? [...(s.credits||[]), { id: uid(), customer: payload.customer || c.session.customerName || "Sin nombre", amount: payload.total, createdAt: Date.now(), note: `Extensión ${c.name}` }] : (s.credits||[]); 
+        
+        return { 
+          consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, session: { ...x.session!, mode: "fixed", endsAt: newEnds, prepaidMinutes: (x.session!.prepaidMinutes ?? 0) + addMinutes, alerted: false, preAlerted: false, prepaidSaleIds: [...(x.session!.prepaidSaleIds || []), saleId] } } : x ), 
+          sales: payload.method === "credit" ? (s.sales||[]) : [...(s.sales||[]), sale], 
+          credits: newCredits 
+        }; 
+      }),
+      
       addExpense: ({ ts, ...rest }) => set((s) => ({ expenses: [ { id: uid(), ts: ts ?? Date.now(), createdAt: Date.now(), rate: s.rate, ...rest }, ...(s.expenses||[]) ] })),
       setConsoleRate: (type, ratePerHour) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.type === type ? { ...c, ratePerHour: Math.max(0, ratePerHour) } : c ) })),
       deleteSale: (id) => set((s) => ({ sales: (s.sales||[]).filter((x) => x?.id !== id) })),
@@ -209,7 +280,6 @@ export const useStore = create<State>()(
         const standings: Record<string, any[]> = {};
         tParts.forEach(p => {
             if(!standings[p.groupName!]) standings[p.groupName!] = [];
-            // Agregamos gf y gc para el desempate por diferencia de goles
             standings[p.groupName!].push({ id: p.id, pts: 0, w: 0, d: 0, l: 0, gf: 0, gc: 0, dg: 0 });
         });
         
@@ -234,7 +304,6 @@ export const useStore = create<State>()(
         
         const topPerGroup: Record<string, any[]> = {};
         groupsList.forEach(g => {
-           // Ordena por Puntos, luego Diferencia de Goles, luego Goles a Favor
            const sorted = (standings[g] || []).sort((a,b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
            topPerGroup[g] = sorted.slice(0, 2);
         });
@@ -288,7 +357,6 @@ export const useStore = create<State>()(
         return { matches: [...(s.matches||[]), ...koMatches] };
       }),
 
-      // 👇 FUNCIÓN MAESTRA: REGISTRA LOS GOLES EXACTOS 👇
       setMatchScore: (matchId, score1, score2) => set((s) => {
         const m = (s.matches||[]).find(x => x?.id === matchId);
         if (!m || !m.player1Id || !m.player2Id) return s;
@@ -301,7 +369,6 @@ export const useStore = create<State>()(
 
         let newMatches = (s.matches||[]).map(x => x?.id === matchId ? { ...x, score1, score2, winnerId, isDraw } : x);
 
-        // Si hay una siguiente llave (Bracket) y hay un ganador, lo avanzamos
         if (m.nextMatchId && winnerId) {
           newMatches = newMatches.map(x => {
             if (x?.id === m.nextMatchId) {
@@ -313,7 +380,6 @@ export const useStore = create<State>()(
         }
 
         let newTournaments = s.tournaments || [];
-        // Si esta llave no tiene siguiente (es la final o es liga pura)
         if (!m.nextMatchId) {
           const t = newTournaments.find(x => x?.id === m.tournamentId);
           if (t && (t.format === "league" || t.format === "groups")) {
@@ -350,10 +416,7 @@ export const useStore = create<State>()(
         const m = (s.matches||[]).find(x => x?.id === matchId); 
         if (!m || (!m.winnerId && !m.isDraw)) return s; 
         const oldWinnerId = m.winnerId; 
-        
-        // 👇 Limpiamos también los goles 👇
         let newMatches = (s.matches||[]).map(x => x?.id === matchId ? { ...x, winnerId: undefined, isDraw: false, score1: undefined, score2: undefined } : x); 
-        
         if (m.nextMatchId && oldWinnerId) { 
             newMatches = newMatches.map(x => { 
                 if (x?.id === m.nextMatchId) { 
