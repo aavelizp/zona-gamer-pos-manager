@@ -4,6 +4,24 @@ import { persist } from 'zustand/middleware';
 export const fmtUsd = (val: number) => `$${val.toFixed(2)}`;
 export const fmtBs = (val: number) => `Bs${val.toFixed(2)}`;
 
+// ==========================================
+// UTILIDADES E INTERFACES GENERALES
+// ==========================================
+
+export const computeTimeAmount = (minutes: number, pricePerHour: number): number => {
+  if (!minutes || minutes <= 0) return 0;
+  return Number(((minutes / 60) * pricePerHour).toFixed(2));
+};
+
+export interface Combo {
+  id?: string;
+  name?: string;
+  price?: number;
+  minutes?: number;
+}
+
+export type ConsoleState = 'available' | 'in_use' | 'paused' | 'time_up';
+
 export interface Member {
   id: string;
   name: string;
@@ -56,10 +74,14 @@ export interface Sale {
   isTournamentEnrollment?: boolean;
 }
 
+// ==========================================
+// INTERFACES DE TORNEOS (MK / FIFA)
+// ==========================================
+
 export interface Tournament {
   id: string;
   name: string;
-  game: string; // Ejemplo: "Mortal Kombat 1", "FIFA 24"
+  game: string; // "Mortal Kombat 1", "FIFA 24", "EA FC 25", etc.
   dateRange: string;
   status: 'registering' | 'active' | 'completed';
   entryFee: number;
@@ -68,7 +90,7 @@ export interface Tournament {
   format: "single_elimination" | "double_elimination" | "league" | "groups";
   groupCount?: number;
   defaultMatchFormat?: "FT2" | "FT3" | "FT5";
-  allowDraws?: boolean; // Automático: true para FIFA en grupos, false para MK
+  allowDraws?: boolean; // true para FIFA en grupos, false para MK
 }
 
 export interface TournamentParticipant {
@@ -99,9 +121,13 @@ export interface TournamentMatch {
   nextMatchId?: string;
   assignedConsoleId?: string;
   matchFormat?: "FT2" | "FT3" | "FT5";
-  penalties1?: number; // Para empates en eliminatorias de FIFA
+  penalties1?: number; // Penales para eliminatorias de FIFA
   penalties2?: number;
 }
+
+// ==========================================
+// ESTADO Y FUNCIONES DEL STORE
+// ==========================================
 
 export interface StoreState {
   rate: number;
@@ -254,7 +280,6 @@ export const useStore = create<StoreState>()(
       matches: [],
       
       createTournament: (t) => set((state) => {
-        // ASIGNACIÓN AUTOMÁTICA DE REGLAS SEGÚN EL JUEGO
         const gameLower = t.game.toLowerCase();
         const isMK = gameLower.includes('mortal') || gameLower.includes('mk') || gameLower.includes('kombat') || gameLower.includes('tekken') || gameLower.includes('street');
         const isFIFA = gameLower.includes('fifa') || gameLower.includes('fc') || gameLower.includes('pes') || gameLower.includes('efootball');
@@ -352,7 +377,6 @@ export const useStore = create<StoreState>()(
           const t = state.tournaments.find((x) => x.id === tournamentId);
           const parts = state.participants.filter((p) => p.tournamentId === tournamentId);
           
-          // BLINDAJE: Si faltan datos o participantes, no borra nada ni se rompe
           if (!t) {
             console.error("Torneo no encontrado");
             return state;
@@ -365,7 +389,6 @@ export const useStore = create<StoreState>()(
           let finalParts = parts;
           const newMatches: TournamentMatch[] = [];
 
-          // FORMATO LIGA
           if (t.format === "league") {
             let round = 1;
             for (let i = 0; i < parts.length; i++) {
@@ -379,10 +402,9 @@ export const useStore = create<StoreState>()(
               }
             }
           } 
-          // FORMATO GRUPOS (ESTILO MUNDIAL O CHAMPIONS PARA FIFA)
           else if (t.format === "groups") {
             const gCount = t.groupCount || 2;
-            const groups = Array.from({ length: gCount }, (_, i) => String.fromCharCode(65 + i)); // A, B...
+            const groups = Array.from({ length: gCount }, (_, i) => String.fromCharCode(65 + i));
             
             const shuffled = [...parts].sort(() => Math.random() - 0.5);
             finalParts = shuffled.map((p, idx) => ({ ...p, groupName: groups[idx % gCount] }));
@@ -402,7 +424,6 @@ export const useStore = create<StoreState>()(
               }
             });
           } 
-          // ELIMINATORIA SENCILLA O DOBLE (ESTILO MK)
           else if (t.format === "single_elimination" || t.format === "double_elimination") {
             const shuffled = [...parts].sort(() => Math.random() - 0.5);
             const totalPlayers = shuffled.length;
@@ -413,7 +434,6 @@ export const useStore = create<StoreState>()(
             let pIndex = 0;
             const wMatches: TournamentMatch[] = [];
 
-            // Winners Bracket - Ronda 1
             for (let i = 0; i < firstRoundMatches; i++) {
               const p1 = shuffled[pIndex++];
               const p2 = byes > i ? null : shuffled[pIndex++];
@@ -451,7 +471,6 @@ export const useStore = create<StoreState>()(
 
             newMatches.push(...allWinners);
 
-            // Losers Bracket (Doble Eliminación MK)
             if (t.format === "double_elimination") {
               const losersRounds = (Math.log2(nextPowerOf2) - 1) * 2;
               let lMatchCount = firstRoundMatches / 2;
@@ -485,7 +504,6 @@ export const useStore = create<StoreState>()(
               }
               newMatches.push(...allLosers);
 
-              // Grand Finals
               const grandFinal = {
                 id: crypto.randomUUID(), tournamentId, phase: "knockout", bracket: "grand_finals",
                 round: 1, matchIndex: 0, matchFormat: t.defaultMatchFormat
@@ -526,7 +544,6 @@ export const useStore = create<StoreState>()(
           let loserId: string | undefined;
           let isDraw = false;
 
-          // REGLA FIFA vs REGLA MK: Si es Knockout o Lucha, no hay empate.
           if (score1 > score2) {
             winnerId = m.player1Id;
             loserId = m.player2Id;
@@ -534,11 +551,9 @@ export const useStore = create<StoreState>()(
             winnerId = m.player2Id;
             loserId = m.player1Id;
           } else {
-            // Empate en marcador (ej. 2-2)
             if (tourney && tourney.format === "groups" && tourney.allowDraws) {
                isDraw = true;
             } else if (penalties1 !== undefined && penalties2 !== undefined) {
-               // Resuelto en Penales en una fase eliminatoria de FIFA
                if (penalties1 > penalties2) {
                  winnerId = m.player1Id;
                  loserId = m.player2Id;
@@ -547,7 +562,6 @@ export const useStore = create<StoreState>()(
                  loserId = m.player1Id;
                }
             } else {
-               // En Mortal Kombat no se permite empate
                alert("En este torneo no se permiten empates. Debe haber un ganador.");
                return state;
             }
@@ -556,7 +570,6 @@ export const useStore = create<StoreState>()(
           newMatches[mIndex] = { ...m, score1, score2, winnerId, isDraw, penalties1, penalties2, assignedConsoleId: undefined };
 
           if (tourney && tourney.format !== "league" && m.phase === "knockout" && winnerId) {
-            // Avanzar Ganador
             if (m.nextMatchId) {
               const nextIdx = newMatches.findIndex((nx) => nx.id === m.nextMatchId);
               if (nextIdx !== -1) {
@@ -567,7 +580,6 @@ export const useStore = create<StoreState>()(
               }
             }
 
-            // Perdedor cae al Losers Bracket (Doble Eliminación MK)
             if (tourney.format === "double_elimination" && m.bracket === "winners" && loserId) {
               const targetLosersRound = m.round === 1 ? 1 : (m.round - 1) * 2;
               
@@ -586,7 +598,6 @@ export const useStore = create<StoreState>()(
               }
             }
 
-            // Regla Mortal Kombat: Reset de Grand Finals
             if (m.bracket === "grand_finals" && tourney.format === "double_elimination") {
               const isLoserBracketWinner = state.matches.some(prevM => 
                  prevM.bracket === "losers" && prevM.winnerId === winnerId && prevM.nextMatchId === m.id
@@ -680,7 +691,6 @@ export const useStore = create<StoreState>()(
             }
           });
           
-          // Desempate por Puntos y luego por Diferencia de Goles (DG)
           const sorted = Object.values(stats).sort((a: any, b: any) => {
              if (b.pts !== a.pts) return b.pts - a.pts;
              return b.gd - a.gd;
