@@ -1,18 +1,44 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+// ==========================================
+// 1. UTILIDADES GENERALES
+// ==========================================
 export const fmtUsd = (val: number) => `$${val.toFixed(2)}`;
 export const fmtBs = (val: number) => `Bs${val.toFixed(2)}`;
-
-// ==========================================
-// UTILIDADES E INTERFACES GENERALES
-// ==========================================
 
 export const computeTimeAmount = (minutes: number, pricePerHour: number): number => {
   if (!minutes || minutes <= 0) return 0;
   return Number(((minutes / 60) * pricePerHour).toFixed(2));
 };
 
+// ==========================================
+// 2. CONSTANTES Y TIPOS DE GASTOS
+// ==========================================
+export const EXPENSE_CATEGORIES = [
+  'Servicios',
+  'Mantenimiento',
+  'Nomina',
+  'Insumos',
+  'Alquiler',
+  'Otros',
+] as const;
+
+export type ExpenseCategory = typeof EXPENSE_CATEGORIES[number];
+
+export interface Expense {
+  id: string;
+  ts: number;
+  category: ExpenseCategory;
+  description: string;
+  amountUsd: number;
+  amountBs?: number;
+  rate?: number;
+}
+
+// ==========================================
+// 3. INTERFACES DEL POS Y CONSOLAS
+// ==========================================
 export interface Combo {
   id?: string;
   name?: string;
@@ -75,13 +101,12 @@ export interface Sale {
 }
 
 // ==========================================
-// INTERFACES DE TORNEOS (MK / FIFA)
+// 4. INTERFACES DE TORNEOS (MK vs FIFA)
 // ==========================================
-
 export interface Tournament {
   id: string;
   name: string;
-  game: string; // "Mortal Kombat 1", "FIFA 24", "EA FC 25", etc.
+  game: string; // Ej. "Mortal Kombat 1", "FIFA 24", "EA FC 25"
   dateRange: string;
   status: 'registering' | 'active' | 'completed';
   entryFee: number;
@@ -90,7 +115,7 @@ export interface Tournament {
   format: "single_elimination" | "double_elimination" | "league" | "groups";
   groupCount?: number;
   defaultMatchFormat?: "FT2" | "FT3" | "FT5";
-  allowDraws?: boolean; // true para FIFA en grupos, false para MK
+  allowDraws?: boolean;
 }
 
 export interface TournamentParticipant {
@@ -101,7 +126,7 @@ export interface TournamentParticipant {
   paymentStatus: 'pending' | 'paid';
   enrollSaleId?: string;
   groupName?: string;
-  teamName?: string; // Para FIFA: Ej. "Real Madrid"
+  teamName?: string;
 }
 
 export interface TournamentMatch {
@@ -121,14 +146,13 @@ export interface TournamentMatch {
   nextMatchId?: string;
   assignedConsoleId?: string;
   matchFormat?: "FT2" | "FT3" | "FT5";
-  penalties1?: number; // Penales para eliminatorias de FIFA
+  penalties1?: number;
   penalties2?: number;
 }
 
 // ==========================================
-// ESTADO Y FUNCIONES DEL STORE
+// 5. ESTADO GLOBAL (ZUSTAND STORE STATE)
 // ==========================================
-
 export interface StoreState {
   rate: number;
   setRate: (rate: number) => void;
@@ -159,6 +183,10 @@ export interface StoreState {
   deleteSale: (id: string) => void;
   clearDailySales: () => void;
 
+  expenses: Expense[];
+  addExpense: (e: Omit<Expense, 'id'>) => void;
+  deleteExpense: (id: string) => void;
+
   tournaments: Tournament[];
   participants: TournamentParticipant[];
   matches: TournamentMatch[];
@@ -178,6 +206,9 @@ export interface StoreState {
   assignConsoleToMatch: (matchId: string, consoleId: string) => void;
 }
 
+// ==========================================
+// 6. IMPLEMENTACIÓN DEL STORE
+// ==========================================
 export const useStore = create<StoreState>()(
   persist(
     (set) => ({
@@ -274,6 +305,10 @@ export const useStore = create<StoreState>()(
         const activeOrUnpaidSessions = state.prepaidSessions.filter(s => s.status !== 'completed' || !s.isPaid);
         return { sales: [], prepaidSessions: activeOrUnpaidSessions };
       }),
+
+      expenses: [],
+      addExpense: (e) => set((state) => ({ expenses: [...state.expenses, { ...e, id: crypto.randomUUID() }] })),
+      deleteExpense: (id) => set((state) => ({ expenses: state.expenses.filter((x) => x.id !== id) })),
 
       tournaments: [],
       participants: [],
