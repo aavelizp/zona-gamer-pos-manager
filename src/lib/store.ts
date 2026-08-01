@@ -1,184 +1,306 @@
-import { create } from "zustand";
-import { persist } from "zustand/middleware";
-import { supabase } from "./supabase";
+import { useState, useEffect } from "react";
+import { useStore, fmtUsd, fmtBs, computeTimeAmount, type ConsoleState, type PaymentMethod } from "@/lib/store";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { MixedPaymentInputs } from "@/components/MixedPaymentInputs";
+import { Play, Pause, Square, Plus, Clock, Gamepad2 } from "lucide-react";
+import { toast } from "sonner";
 
-export type ProductId = string;
-export interface Product { id: ProductId; name: string; price: number; stock: number; }
-export interface ComboItem { productId: ProductId; qty: number; }
-export interface Combo { id: string; name: string; price: number; hours: number; items: ComboItem[]; }
-export type ConsoleType = "PS4" | "PS5";
-export type SessionMode = "free" | "fixed";
+export function ConsoleCard({ console: c }: { console: ConsoleState }) {
+  const store = useStore();
+  const [now, setNow] = useState(Date.now());
 
-export interface ConsoleSession { mode: SessionMode; startedAt: number; endsAt?: number; alerted?: boolean; preAlerted?: boolean; prepaid?: boolean; prepaidMinutes?: number; customerName?: string; pausedAt?: number; prepaidSaleIds?: string[]; }
-export interface ExtraCharge { label: string; amount: number; ts: number; productId?: ProductId; qty?: number; }
-export interface ConsoleState { id: string; name: string; type: ConsoleType; ratePerHour: number; totalMinutes: number; maintenanceMinutes?: number; session?: ConsoleSession; charges: ExtraCharge[]; }
-export interface MaintenanceLog { id: string; consoleId: string; consoleName: string; description: string; date: number; minutesAtService: number; }
-export type PaymentMethod = "full" | "mixed" | "credit" | "cash_bs";
+  // Reloj en vivo
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
-export interface SaleRecord { id: string; ts: number; consoleId?: string; consoleName?: string; minutes?: number; timeAmount: number; extrasAmount: number; total: number; cashUsd: number; mobileBs: number; cashBs?: number; mobileBank?: string; mobileRef?: string; rate: number; method: PaymentMethod; customer?: string; concept: string; items: { name: string; qty: number; price: number }[]; }
-export interface Credit { id: string; customer: string; amount: number; createdAt: number; note?: string; phone?: string; }
-export interface CustomerInfo { name: string; idDoc?: string; phone?: string; }
-export interface Member { id: string; name: string; idDoc?: string; phone?: string; totalMinutes: number; rewardMinutes: number; pendingRewards: number; createdAt: number; lastVisit: number; }
-export interface QueueEntry { id: string; name: string; preference: "PS4" | "PS5" | "Cualquiera"; ts: number; }
-export interface SessionHistoryEntry { id: string; ts: number; consoleId: string; consoleName: string; customer?: string; minutes: number; amount: number; prepaid: boolean; }
-export type ExpenseCategory = "Servicios" | "Compras" | "Mantenimiento" | "Sueldos" | "Limpieza" | "Impuestos" | "Otros";
-export const EXPENSE_CATEGORIES: ExpenseCategory[] = ["Servicios", "Compras", "Mantenimiento", "Sueldos", "Limpieza", "Impuestos", "Otros"];
-export interface Expense { id: string; ts: number; createdAt?: number; description: string; amount: number; method: "cash" | "mobile"; amountBs?: number; rate: number; category?: ExpenseCategory; }
-export interface PastClosure { id: string; date: number; totalSales: number; totalExpenses: number; sales: SaleRecord[]; expenses: Expense[]; }
+  const { minutes, amount } = computeTimeAmount(c, now);
+  const isPrepaid = !!c.session?.prepaid;
+  const isTournament = !!c.session?.isTournament;
 
-interface State {
-  rate: number; soundOn: boolean; products: Product[]; combos: Combo[]; consoles: ConsoleState[]; sales: SaleRecord[]; credits: Credit[]; queue: QueueEntry[]; members: Member[]; maintenanceLogs: MaintenanceLog[]; sessionHistory: SessionHistoryEntry[]; expenses: Expense[]; pastClosures: PastClosure[];
+  // Estados de Modales
+  const [action, setAction] = useState<"start" | "prepay" | "extend" | "finalize" | null>(null);
+  
+  // Estados de Formularios
+  const [inputMins, setInputMins] = useState("60");
+  const [customerName, setCustomerName] = useState("");
+  
+  // Estados de Pago (SIN REFERENCIA)
+  const [method, setMethod] = useState<"full" | "mixed">("full");
+  const [fullPayMode, setFullPayMode] = useState<"cash" | "mobile" | "cash_bs">("mobile");
+  const [cashUsd, setCashUsd] = useState("");
+  const [mobileBs, setMobileBs] = useState("");
+  const [cashBs, setCashBs] = useState("");
+  const [mobileBank, setMobileBank] = useState("Banesco");
 
-  setRate: (n: number) => void; toggleSound: () => void;
-  addProduct: (p: Omit<Product, "id">) => void; updateProduct: (id: string, p: Partial<Product>) => void; removeProduct: (id: string) => void;
-  addCombo: (c: Omit<Combo, "id">) => void; removeCombo: (id: string) => void;
-  startSession: (consoleId: string, minutes?: number, customerName?: string) => void; extendSession: (consoleId: string, addMinutes: number) => void; markAlerted: (consoleId: string) => void; markPreAlerted: (consoleId: string) => void; pauseSession: (consoleId: string) => void; resumeSession: (consoleId: string) => void; cancelSession: (consoleId: string) => void;
-  updateSessionCustomer: (consoleId: string, customerName: string) => void;
-  addSnackToConsole: (consoleId: string, productId: string, qty: number) => void; applyComboToConsole: (consoleId: string, comboId: string) => void; addExtraController: (consoleId: string) => void; transferSession: (originId: string, destId: string) => void;
-  finalizeConsole: (consoleId: string, payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; cashBs?: number; customer?: string; total: number; timeAmount: number; extrasAmount: number; minutes: number; customerInfo?: CustomerInfo }) => void;
-  finalizeMultipleConsoles: (consoleIds: string[], payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; cashBs?: number; customer?: string; total: number; timeAmount: number; extrasAmount: number; totalMinutes: number; customerInfo?: CustomerInfo; items: { name: string; qty: number; price: number }[] }) => void;
-  directSale: (payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; cashBs?: number; total: number; customer?: string; items: { productId: string; qty: number; price: number; name: string }[] }) => void;
-  payCredit: (creditId: string, payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; amount: number; customerInfo?: CustomerInfo }) => void;
-  enqueue: (e: Omit<QueueEntry, "id" | "ts">) => void; dequeue: (id: string) => void; redeemReward: (memberId: string) => void; removeMember: (memberId: string) => void; 
-  addMember: (data: { name: string; idDoc?: string; phone?: string }) => void; 
-  updateMember: (memberId: string, data: Partial<Member>) => void;
-  closeDay: () => void; registerMaintenance: (consoleId: string, description: string, date: number) => void; deleteMaintenanceLog: (logId: string) => void;
-  prepaySession: (consoleId: string, minutes: number, payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; cashBs?: number; total: number; customerInfo?: CustomerInfo; comboId?: string }) => void; releaseConsole: (consoleId: string) => boolean; payExtras: (consoleId: string, payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; total: number; customer?: string }) => void; extendPaidSession: (consoleId: string, addMinutes: number, payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; total: number; customer?: string }) => void;
-  addExpense: (e: { description: string; amount: number; method: "cash" | "mobile"; amountBs?: number; category?: ExpenseCategory; ts?: number }) => void; setConsoleRate: (type: ConsoleType, ratePerHour: number) => void; deleteSale: (saleId: string) => void; resetConsoleStats: (consoleId: string) => void;
-}
+  const resetForm = () => {
+    setInputMins("60");
+    setCustomerName("");
+    setMethod("full");
+    setFullPayMode("mobile");
+    setCashUsd("");
+    setMobileBs("");
+    setCashBs("");
+    setMobileBank("Banesco");
+  };
 
-const uid = () => Math.random().toString(36).slice(2, 10);
-const defaultConsoles: ConsoleState[] = [ { id: "ps4-1", name: "PS4 #3", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] }, { id: "ps4-2", name: "PS4 #4", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] }, { id: "ps4-3", name: "PS4 #5", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] }, { id: "ps4-4", name: "PS4 #6", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] }, { id: "ps5-1", name: "PS5 #1", type: "PS5", ratePerHour: 3, totalMinutes: 0, charges: [] }, { id: "ps5-2", name: "PS5 #2", type: "PS5", ratePerHour: 3, totalMinutes: 0, charges: [] } ];
+  const processPayment = (totalAmount: number) => {
+    const cashUsdN = parseFloat(cashUsd) || 0;
+    const mobileBsN = parseFloat(mobileBs) || 0;
+    const cashBsN = parseFloat(cashBs) || 0;
 
-const vaccinateZustandPayload = (payload: any) => { 
-  if (payload && payload.state) { 
-    if (Array.isArray(payload.state.consoles)) { 
-      payload.state.consoles = payload.state.consoles.map((c: any) => { 
-        if (!c) return null;
-        if (c.id === "ps4-1") c.name = "PS4 #3"; if (c.id === "ps4-2") c.name = "PS4 #4"; if (c.id === "ps4-3") c.name = "PS4 #5"; if (c.id === "ps4-4") c.name = "PS4 #6"; 
-        return { ...c, charges: Array.isArray(c.charges) ? c.charges : [] }; 
-      }).filter(Boolean); 
-    } else { payload.state.consoles = JSON.parse(JSON.stringify(defaultConsoles)); }
-    payload.state.sales = Array.isArray(payload.state.sales) ? payload.state.sales : []; 
-    payload.state.members = Array.isArray(payload.state.members) ? payload.state.members : []; 
-    payload.state.products = Array.isArray(payload.state.products) ? payload.state.products : []; 
-    payload.state.combos = Array.isArray(payload.state.combos) ? payload.state.combos : []; 
-    payload.state.credits = Array.isArray(payload.state.credits) ? payload.state.credits : []; 
-    payload.state.maintenanceLogs = Array.isArray(payload.state.maintenanceLogs) ? payload.state.maintenanceLogs : []; 
-    payload.state.queue = Array.isArray(payload.state.queue) ? payload.state.queue : []; 
-    payload.state.sessionHistory = Array.isArray(payload.state.sessionHistory) ? payload.state.sessionHistory : []; 
-    payload.state.expenses = Array.isArray(payload.state.expenses) ? payload.state.expenses : [];
-    payload.state.pastClosures = Array.isArray(payload.state.pastClosures) ? payload.state.pastClosures : [];
-  } 
-  return payload; 
-};
+    const resolvedCashUsd = method === "full" ? (fullPayMode === "cash" ? totalAmount : 0) : cashUsdN;
+    const resolvedMobileBs = method === "full" ? (fullPayMode === "mobile" ? totalAmount * store.rate : 0) : mobileBsN;
+    const resolvedCashBs = method === "full" ? (fullPayMode === "cash_bs" ? totalAmount * store.rate : 0) : cashBsN;
+    
+    const finalMethod: PaymentMethod = method === "full" && fullPayMode === "cash_bs" ? "cash_bs" : (method === "mixed" ? "mixed" : fullPayMode as PaymentMethod);
 
-export const useStore = create<State>()(
-  persist(
-    (set, get) => ({
-      rate: 40, soundOn: true, products: [{ id: uid(), name: "Pepsi 355ml", price: 1, stock: 24 }], combos: [], consoles: defaultConsoles, sales: [], credits: [], queue: [], members: [], maintenanceLogs: [], sessionHistory: [], expenses: [], pastClosures: [],
-      
-      setRate: (n) => set({ rate: Math.max(0, n) }), toggleSound: () => set((s) => ({ soundOn: !s.soundOn })),
-      addProduct: (p) => set((s) => ({ products: [...(s.products||[]), { ...p, id: uid() }] })), updateProduct: (id, p) => set((s) => ({ products: (s.products||[]).map((x) => (x?.id === id ? { ...x, ...p } : x)) })), removeProduct: (id) => set((s) => ({ products: (s.products||[]).filter((p) => p?.id !== id) })),
-      addCombo: (c) => set((s) => ({ combos: [...(s.combos||[]), { ...c, id: uid() }] })), removeCombo: (id) => set((s) => ({ combos: (s.combos||[]).filter((c) => c?.id !== id) })),
-      
-      startSession: (consoleId, minutes, customerName) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId ? { ...c, session: { mode: minutes ? "fixed" : "free", startedAt: Date.now(), endsAt: minutes ? Date.now() + minutes * 60_000 : undefined, customerName } } : c ) })),
-      extendSession: (consoleId, addMinutes) => set((s) => ({ consoles: (s.consoles||[]).map((c) => { if (c?.id !== consoleId || !c.session) return c; const base = c.session.endsAt && c.session.endsAt > Date.now() ? c.session.endsAt : Date.now(); return { ...c, session: { ...c.session, mode: "fixed", endsAt: base + addMinutes * 60_000, alerted: false } }; }) })),
-      markAlerted: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId && c.session ? { ...c, session: { ...c.session, alerted: true } } : c ) })), 
-      markPreAlerted: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId && c.session ? { ...c, session: { ...c.session, preAlerted: true } } : c ) })), 
-      pauseSession: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId && c.session && !c.session.pausedAt ? { ...c, session: { ...c.session, pausedAt: Date.now() } } : c ) })), 
-      resumeSession: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => { if (c?.id !== consoleId || !c.session || !c.session.pausedAt) return c; const delta = Date.now() - c.session.pausedAt; return { ...c, session: { ...c.session, startedAt: c.session.startedAt + delta, endsAt: c.session.endsAt ? c.session.endsAt + delta : undefined, pausedAt: undefined, alerted: false, preAlerted: false } }; }) })), 
-      
-      cancelSession: (consoleId) => set((s) => { 
-        const c = (s.consoles||[]).find((x) => x?.id === consoleId); 
-        if (!c) return s; 
-        let newSales = s.sales || []; 
-        if (c.session?.prepaidSaleIds && c.session.prepaidSaleIds.length > 0) { 
-          newSales = newSales.filter(sale => !c.session!.prepaidSaleIds!.includes(sale.id)); 
-        } 
-        return { consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, session: undefined, charges: [] } : x ), sales: newSales }; 
-      }),
-      
-      updateSessionCustomer: (consoleId, customerName) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId && c.session ? { ...c, session: { ...c.session, customerName } } : c ) })),
-      addSnackToConsole: (consoleId, productId, qty) => set((s) => { const product = (s.products||[]).find((p) => p?.id === productId); if (!product || product.stock < qty) return s; return { products: (s.products||[]).map((p) => (p?.id === productId ? { ...p, stock: p.stock - qty } : p)), consoles: (s.consoles||[]).map((c) => c?.id === consoleId ? { ...c, charges: [ ...(c.charges || []), { label: `${product.name} x${qty}`, amount: product.price * qty, ts: Date.now(), productId, qty } ] } : c ), }; }),
-      applyComboToConsole: (consoleId, comboId) => set((s) => { const combo = (s.combos||[]).find((c) => c?.id === comboId); if (!combo) return s; for (const it of combo.items || []) { const p = (s.products||[]).find((pp) => pp?.id === it.productId); if (!p || p.stock < it.qty) return s; } const consoleObj = (s.consoles||[]).find((c) => c?.id === consoleId); if (!consoleObj) return s; const newProducts = (s.products||[]).map((p) => { const it = (combo.items||[]).find((i) => i.productId === p?.id); return it ? { ...p, stock: p.stock - it.qty } : p; }); const addMs = combo.hours * 60 * 60_000; const newSession: ConsoleSession = consoleObj.session ? { ...consoleObj.session, mode: "fixed", endsAt: (consoleObj.session.endsAt && consoleObj.session.endsAt > Date.now() ? consoleObj.session.endsAt : Date.now()) + addMs, alerted: false } : { mode: "fixed", startedAt: Date.now(), endsAt: Date.now() + addMs }; return { products: newProducts, consoles: (s.consoles||[]).map((c) => c?.id === consoleId ? { ...c, session: combo.hours > 0 ? newSession : c.session, charges: [ ...(c.charges || []), { label: `Combo: ${combo.name}`, amount: combo.price, ts: Date.now() } ] } : c ) }; }),
-      addExtraController: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId ? { ...c, charges: [ ...(c.charges || []), { label: "Control Adicional", amount: 1, ts: Date.now() } ] } : c ) })),
-      transferSession: (originId, destId) => set((s) => { const origin = (s.consoles||[]).find(c => c?.id === originId); const dest = (s.consoles||[]).find(c => c?.id === destId); if (!origin || !origin.session || !dest || dest.session) return s; const nowMs = Date.now(); const ref = origin.session.pausedAt ?? nowMs; const elapsedMs = Math.max(0, ref - origin.session.startedAt); const minutes = Math.ceil(elapsedMs / 60_000); const amount = (minutes / 60) * origin.ratePerHour; const newCharges = [...(dest.charges || []), ...(origin.charges || [])]; if (!origin.session.prepaid && amount > 0.01) { newCharges.push({ label: `Tiempo ${origin.name} (${minutes} min)`, amount: +(amount.toFixed(2)), ts: nowMs }); } let newEndsAt = undefined; let newStartedAt = nowMs; let newPausedAt = origin.session.pausedAt ? nowMs : undefined; if (origin.session.mode === "fixed" && origin.session.endsAt) { const remainingMs = Math.max(0, origin.session.endsAt - ref); newEndsAt = nowMs + remainingMs; } const newSession: ConsoleSession = { ...origin.session, startedAt: newStartedAt, endsAt: newEndsAt, pausedAt: newPausedAt }; return { consoles: (s.consoles||[]).map(c => { if (c?.id === originId) return { ...c, session: undefined, charges: [], totalMinutes: (c.totalMinutes||0) + minutes, maintenanceMinutes: (c.maintenanceMinutes || 0) + minutes }; if (c?.id === destId) return { ...c, session: newSession, charges: newCharges }; return c; }) }; }),
-      
-      finalizeConsole: (consoleId, payload) => set((s) => { const c = (s.consoles||[]).find((x) => x?.id === consoleId); if (!c) return s; const sale: SaleRecord = { id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, minutes: payload.minutes, timeAmount: payload.timeAmount, extrasAmount: payload.extrasAmount, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, cashBs: payload.cashBs || 0, rate: s.rate, method: payload.method, customer: payload.customerInfo?.name || payload.customer, concept: "Consola", items: [ ...(payload.timeAmount > 0 ? [{ name: `Tiempo ${c.name} (${payload.minutes} min)`, qty: 1, price: payload.timeAmount }] : []), ...(c.charges || []).map((ch) => ({ name: ch.label, qty: 1, price: ch.amount })) ] }; const newCredits = payload.method === "credit" ? [ ... (s.credits||[]), { id: uid(), customer: payload.customerInfo?.name || payload.customer || "Sin nombre", phone: payload.customerInfo?.phone || undefined, amount: payload.total, createdAt: Date.now(), note: c.name } ] : (s.credits||[]); let newMembers = s.members || []; const ci = payload.customerInfo; if (ci && ci.name?.trim() && ci.phone?.trim()) { const key = ci.phone.trim(); const existing = newMembers.find((m) => m?.phone === key); if (existing) { const newReward = (existing.rewardMinutes||0) + payload.minutes; const earned = Math.floor(newReward / 600); newMembers = newMembers.map((m) => m?.id === existing.id ? { ...m, name: ci.name.trim(), idDoc: ci.idDoc?.trim() || m.idDoc, totalMinutes: (m.totalMinutes||0) + payload.minutes, rewardMinutes: newReward - earned * 600, pendingRewards: (m.pendingRewards||0) + earned, lastVisit: Date.now() } : m ); } else { const earned = Math.floor(payload.minutes / 600); newMembers = [ ...newMembers, { id: uid(), name: ci.name.trim(), idDoc: ci.idDoc?.trim(), phone: key, totalMinutes: payload.minutes, rewardMinutes: payload.minutes - earned * 600, pendingRewards: earned, createdAt: Date.now(), lastVisit: Date.now() } ]; } } const histEntry: SessionHistoryEntry = { id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, customer: payload.customerInfo?.name || payload.customer, minutes: payload.minutes, amount: payload.total, prepaid: false }; return { consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, session: undefined, charges: [], totalMinutes: (x.totalMinutes||0) + payload.minutes, maintenanceMinutes: (x.maintenanceMinutes || 0) + payload.minutes } : x ), sales: payload.method === "credit" ? (s.sales||[]) : [...(s.sales||[]), sale], credits: newCredits, members: newMembers, sessionHistory: [histEntry, ... (s.sessionHistory||[])] }; }),
-      finalizeMultipleConsoles: (consoleIds, payload) => set((s) => { const involved = (s.consoles||[]).filter((c) => c && consoleIds.includes(c.id)); if (involved.length === 0) return s; const sale: SaleRecord = { id: uid(), ts: Date.now(), consoleName: involved.map(c => c.name).join(" + "), minutes: payload.totalMinutes, timeAmount: payload.timeAmount, extrasAmount: payload.extrasAmount, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, cashBs: payload.cashBs || 0, rate: s.rate, method: payload.method, customer: payload.customerInfo?.name || payload.customer, concept: "Cobro Múltiple", items: payload.items, }; const newCredits = payload.method === "credit" ? [ ... (s.credits||[]), { id: uid(), customer: payload.customerInfo?.name || payload.customer || "Sin nombre", phone: payload.customerInfo?.phone || undefined, amount: payload.total, createdAt: Date.now(), note: sale.consoleName } ] : (s.credits||[]); let clubMinutesToAdd = 0; involved.forEach(c => { const ref = c.session?.pausedAt ?? Date.now(); const elapsedMs = Math.max(0, ref - (c.session?.startedAt ?? ref)); clubMinutesToAdd += Math.ceil(elapsedMs / 60_000); }); let newMembers = s.members || []; const ci = payload.customerInfo; if (ci && ci.name?.trim() && ci.phone?.trim() && clubMinutesToAdd > 0) { const key = ci.phone.trim(); const existing = newMembers.find((m) => m?.phone === key); if (existing) { const newReward = (existing.rewardMinutes||0) + clubMinutesToAdd; const earned = Math.floor(newReward / 600); newMembers = newMembers.map((m) => m?.id === existing.id ? { ...m, name: ci.name.trim(), idDoc: ci.idDoc?.trim() || m.idDoc, totalMinutes: (m.totalMinutes||0) + clubMinutesToAdd, rewardMinutes: newReward - earned * 600, pendingRewards: (m.pendingRewards||0) + earned, lastVisit: Date.now() } : m ); } else { const earned = Math.floor(clubMinutesToAdd / 600); newMembers = [ ...newMembers, { id: uid(), name: ci.name.trim(), idDoc: ci.idDoc?.trim(), phone: key, totalMinutes: clubMinutesToAdd, rewardMinutes: clubMinutesToAdd - earned * 600, pendingRewards: earned, createdAt: Date.now(), lastVisit: Date.now() } ]; } } const newHistEntries: SessionHistoryEntry[] = involved.map((c) => { const ref = c.session?.pausedAt ?? Date.now(); const elapsedMs = Math.max(0, ref - (c.session?.startedAt ?? ref)); const mins = Math.ceil(elapsedMs / 60_000); return { id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, customer: payload.customerInfo?.name || payload.customer, minutes: mins, amount: 0, prepaid: !!c.session?.prepaid }; }); return { consoles: (s.consoles||[]).map((c) => { if (c && consoleIds.includes(c.id)) { const ref = c.session?.pausedAt ?? Date.now(); const elapsedMs = Math.max(0, ref - (c.session?.startedAt ?? ref)); const mins = Math.ceil(elapsedMs / 60_000); return { ...c, session: undefined, charges: [], totalMinutes: (c.totalMinutes||0) + mins, maintenanceMinutes: (c.maintenanceMinutes || 0) + mins }; } return c; }), sales: payload.method === "credit" ? (s.sales||[]) : [...(s.sales||[]), sale], credits: newCredits, members: newMembers, sessionHistory: [...newHistEntries, ... (s.sessionHistory||[])] }; }),
-      directSale: (payload) => set((s) => { let newProducts = s.products || []; for (const it of payload.items) { newProducts = newProducts.map((p) => p?.id === it.productId ? { ...p, stock: p.stock - it.qty } : p ); } const sale: SaleRecord = { id: uid(), ts: Date.now(), timeAmount: 0, extrasAmount: payload.total, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, cashBs: payload.cashBs || 0, rate: s.rate, method: payload.method, customer: payload.customer, concept: "Venta Directa", items: payload.items.map((it) => ({ name: it.name, qty: it.qty, price: it.price })) }; const newCredits = payload.method === "credit" ? [ ... (s.credits||[]), { id: uid(), customer: payload.customer || "Sin nombre", amount: payload.total, createdAt: Date.now(), note: "Venta Directa" } ] : (s.credits||[]); return { products: newProducts, sales: [...(s.sales||[]), sale], credits: newCredits }; }),
-      payCredit: (creditId, payload) => set((s) => { const credit = (s.credits||[]).find((c) => c?.id === creditId); if (!credit) return s; const sale: SaleRecord = { id: uid(), ts: Date.now(), timeAmount: 0, extrasAmount: payload.amount, total: payload.amount, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, rate: s.rate, method: payload.method, customer: credit.customer, concept: "Deuda Cobrada", items: [{ name: `Deuda de ${credit.customer} (${credit.note || "General"})`, qty: 1, price: payload.amount }] }; const remaining = credit.amount - payload.amount; let newMembers = s.members || []; const ci = payload.customerInfo; if (ci && ci.name?.trim() && ci.phone?.trim()) { const key = ci.phone.trim(); const existing = newMembers.find((m) => m?.phone === key); if (existing) { newMembers = newMembers.map((m) => m?.id === existing.id ? { ...m, name: ci.name.trim(), idDoc: ci.idDoc?.trim() || m.idDoc, lastVisit: Date.now() } : m ); } else { newMembers = [ ...newMembers, { id: uid(), name: ci.name.trim(), idDoc: ci.idDoc?.trim(), phone: key, totalMinutes: 0, rewardMinutes: 0, pendingRewards: 0, createdAt: Date.now(), lastVisit: Date.now() } ]; } } return { sales: [...(s.sales||[]), sale], credits: remaining > 0.001 ? (s.credits||[]).map((c) => (c?.id === creditId ? { ...c, amount: remaining } : c)) : (s.credits||[]).filter((c) => c?.id !== creditId), members: newMembers }; }),
-      enqueue: (e) => set((s) => ({ queue: [...(s.queue||[]), { ...e, id: uid(), ts: Date.now() }] })), dequeue: (id) => set((s) => ({ queue: (s.queue||[]).filter((q) => q?.id !== id) })), redeemReward: (memberId) => set((s) => ({ members: (s.members||[]).map((m) => m?.id === memberId && (m.pendingRewards||0) > 0 ? { ...m, pendingRewards: m.pendingRewards - 1, rewardMinutes: 0 } : m ) })), removeMember: (memberId) => set({ members: (get().members||[]).filter((m) => m?.id !== memberId) }),
-      addMember: (data) => set((s) => { const newM: Member = { id: uid(), name: data.name.trim(), idDoc: data.idDoc?.trim(), phone: data.phone?.trim(), totalMinutes: 0, rewardMinutes: 0, pendingRewards: 0, createdAt: Date.now(), lastVisit: Date.now() }; return { members: [...(s.members || []), newM] }; }),
-      updateMember: (memberId, data) => set((s) => { return { members: (s.members || []).map((m) => m?.id === memberId ? { ...m, ...data } : m) }; }),
-      closeDay: () => set((s) => { const totalSales = (s.sales || []).reduce((acc, x) => acc + (x?.total || 0), 0); const totalExpenses = (s.expenses || []).reduce((acc, x) => acc + (x?.amount || 0), 0); const snapshot: PastClosure = { id: uid(), date: Date.now(), totalSales, totalExpenses, sales: [...(s.sales || [])], expenses: [...(s.expenses || [])] }; return { pastClosures: [snapshot, ...(s.pastClosures || [])], sales: [], sessionHistory: [], consoles: (s.consoles||[]).map((c) => ({ ...c, session: undefined, charges: [] })) }; }),
-      registerMaintenance: (consoleId, description, date) => set((s) => { const c = (s.consoles||[]).find((x) => x?.id === consoleId); if (!c) return s; const log: MaintenanceLog = { id: uid(), consoleId: c.id, consoleName: c.name, description, date, minutesAtService: c.maintenanceMinutes || 0 }; return { consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, maintenanceMinutes: 0 } : x ), maintenanceLogs: [log, ...(s.maintenanceLogs||[])] }; }),
-      deleteMaintenanceLog: (logId) => set((s) => { const log = (s.maintenanceLogs||[]).find(l => l?.id === logId); if (!log) return s; const consoles = (s.consoles||[]).map(c => { if (c?.id === log.consoleId) { return { ...c, maintenanceMinutes: (c.maintenanceMinutes || 0) + log.minutesAtService }; } return c; }); return { maintenanceLogs: (s.maintenanceLogs||[]).filter(l => l?.id !== logId), consoles }; }),
-      
-      prepaySession: (consoleId, minutes, payload) => set((s) => { 
-        const c = (s.consoles||[]).find((x) => x?.id === consoleId); 
-        if (!c) return s; 
-        const combo = payload.comboId ? (s.combos||[]).find((cm) => cm?.id === payload.comboId) : undefined; 
-        let newProducts = s.products || []; 
-        const items: SaleRecord["items"] = []; 
-        if (combo) { 
-          for (const it of combo.items || []) { const p = (s.products||[]).find((pp) => pp?.id === it.productId); if (!p || p.stock < it.qty) return s; } 
-          newProducts = (s.products||[]).map((p) => { const it = (combo.items||[]).find((i) => i.productId === p?.id); return it ? { ...p, stock: p.stock - it.qty } : p; }); 
-          items.push({ name: `Combo: ${combo.name} - ${c.name} (${minutes} min)`, qty: 1, price: payload.total }); 
-          for (const it of combo.items || []) { const p = (s.products||[]).find((pp) => pp?.id === it.productId); if (p) items.push({ name: `  · ${p.name}`, qty: it.qty, price: 0 }); } 
-        } else { 
-          items.push({ name: `Prepago ${c.name} (${minutes} min)`, qty: 1, price: payload.total }); 
-        } 
-        const saleId = uid(); 
-        const sale: SaleRecord = { id: saleId, ts: Date.now(), consoleId: c.id, consoleName: c.name, minutes, timeAmount: payload.total, extrasAmount: 0, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, cashBs: payload.cashBs || 0, rate: s.rate, method: payload.method, customer: payload.customerInfo?.name, concept: "Consola", items }; 
-        let newMembers = s.members || []; 
-        const ci = payload.customerInfo; 
-        if (ci && ci.name?.trim() && ci.phone?.trim()) { 
-          const key = ci.phone.trim(); const existing = newMembers.find((m) => m?.phone === key); 
-          if (existing) { 
-            const newReward = (existing.rewardMinutes||0) + minutes; const earned = Math.floor(newReward / 600); 
-            newMembers = newMembers.map((m) => m?.id === existing.id ? { ...m, name: ci.name.trim(), idDoc: ci.idDoc?.trim() || m.idDoc, totalMinutes: (m.totalMinutes||0) + minutes, rewardMinutes: newReward - earned * 600, pendingRewards: (m.pendingRewards||0) + earned, lastVisit: Date.now() } : m ); 
-          } else { 
-            const earned = Math.floor(minutes / 600); 
-            newMembers = [...newMembers, { id: uid(), name: ci.name.trim(), idDoc: ci.idDoc?.trim(), phone: key, totalMinutes: minutes, rewardMinutes: minutes - earned * 600, pendingRewards: earned, createdAt: Date.now(), lastVisit: Date.now() }]; 
-          } 
-        } 
-        return { products: newProducts, consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, session: { mode: "fixed", startedAt: Date.now(), endsAt: Date.now() + minutes * 60_000, prepaid: true, prepaidMinutes: minutes, customerName: ci?.name?.trim(), prepaidSaleIds: [saleId] } } : x ), sales: [...(s.sales||[]), sale], members: newMembers }; 
-      }),
-      
-      releaseConsole: (consoleId) => { const s = get(); const c = (s.consoles||[]).find((x) => x?.id === consoleId); if (!c || !c.session) return false; const pendingExtras = (c.charges || []).reduce((a, ch) => a + (ch?.amount||0), 0); if (pendingExtras > 0.001) return false; const mins = c.session.prepaidMinutes ?? 0; const histEntry: SessionHistoryEntry = { id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, customer: c.session.customerName, minutes: mins, amount: 0, prepaid: true }; set({ consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, session: undefined, charges: [], totalMinutes: (x.totalMinutes||0) + mins, maintenanceMinutes: (x.maintenanceMinutes || 0) + mins } : x ), sessionHistory: [histEntry, ...(s.sessionHistory||[])] }); return true; },
-      payExtras: (consoleId, payload) => set((s) => { const c = (s.consoles||[]).find((x) => x?.id === consoleId); if (!c || (c.charges || []).length === 0) return s; const sale: SaleRecord = { id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, minutes: 0, timeAmount: 0, extrasAmount: payload.total, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, rate: s.rate, method: payload.method, customer: payload.customer, concept: "Adicionales", items: (c.charges || []).map((ch) => ({ name: ch.label, qty: 1, price: ch.amount })) }; const newCredits = payload.method === "credit" ? [...(s.credits||[]), { id: uid(), customer: payload.customer || "Sin nombre", amount: payload.total, createdAt: Date.now(), note: `Adicionales ${c.name}` }] : (s.credits||[]); return { consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, charges: [] } : x), sales: payload.method === "credit" ? (s.sales||[]) : [...(s.sales||[]), sale], credits: newCredits }; }),
-      extendPaidSession: (consoleId, addMinutes, payload) => set((s) => { 
-        const c = (s.consoles||[]).find((x) => x?.id === consoleId); 
-        if (!c || !c.session) return s; 
-        const base = c.session.endsAt && c.session.endsAt > Date.now() ? c.session.endsAt : Date.now(); 
-        const newEnds = base + addMinutes * 60_000; 
-        const saleId = uid(); 
-        const sale: SaleRecord = { id: saleId, ts: Date.now(), consoleId: c.id, consoleName: c.name, minutes: addMinutes, timeAmount: payload.total, extrasAmount: 0, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, rate: s.rate, method: payload.method, customer: payload.customer || c.session.customerName, concept: "Consola", items: [{ name: `Extensión ${c.name} (+${addMinutes} min)`, qty: 1, price: payload.total }] }; 
-        const newCredits = payload.method === "credit" ? [...(s.credits||[]), { id: uid(), customer: payload.customer || c.session.customerName || "Sin nombre", amount: payload.total, createdAt: Date.now(), note: `Extensión ${c.name}` }] : (s.credits||[]); 
-        return { consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, session: { ...x.session!, mode: "fixed", endsAt: newEnds, prepaidMinutes: (x.session!.prepaidMinutes ?? 0) + addMinutes, alerted: false, preAlerted: false, prepaidSaleIds: [...(x.session!.prepaidSaleIds || []), saleId] } } : x ), sales: payload.method === "credit" ? (s.sales||[]) : [...(s.sales||[]), sale], credits: newCredits }; 
-      }),
-      addExpense: ({ ts, ...rest }) => set((s) => ({ expenses: [ { id: uid(), ts: ts ?? Date.now(), createdAt: Date.now(), rate: s.rate, ...rest }, ...(s.expenses||[]) ] })),
-      setConsoleRate: (type, ratePerHour) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.type === type ? { ...c, ratePerHour: Math.max(0, ratePerHour) } : c ) })),
-      deleteSale: (id) => set((s) => ({ sales: (s.sales||[]).filter((x) => x?.id !== id) })),
-      resetConsoleStats: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId ? { ...c, totalMinutes: 0, maintenanceMinutes: 0 } : c), sessionHistory: (s.sessionHistory||[]).filter((h) => h?.consoleId !== consoleId) }))
-    }),
-    {
-      name: "gamerzone-store-v1",
-      storage: {
-        getItem: async (name) => { try { const { data, error } = await supabase.from('app_state').select('state').eq('id', name).maybeSingle(); if (!error && data && data.state) { const safeData = vaccinateZustandPayload(data.state); localStorage.setItem(name, JSON.stringify(safeData)); return safeData; } } catch (err) {} const local = localStorage.getItem(name); if (local) { try { return vaccinateZustandPayload(JSON.parse(local)); } catch(e) {} } return null; },
-        setItem: async (name, value) => { localStorage.setItem(name, typeof value === 'string' ? value : JSON.stringify(value)); if ((window as any).pausarSubida) return; (window as any).pausarDescarga = true; if ((window as any).relojBloqueo) clearTimeout((window as any).relojBloqueo); (window as any).relojBloqueo = setTimeout(() => { (window as any).pausarDescarga = false; }, 3500); (window as any).estadoPendiente = value; if ((window as any).relojSubida) clearTimeout((window as any).relojSubida); (window as any).relojSubida = setTimeout(async () => { if ((window as any).pausarSubida) return; try { await supabase.from('app_state').upsert({ id: name, state: typeof (window as any).estadoPendiente === 'string' ? JSON.parse((window as any).estadoPendiente) : (window as any).estadoPendiente }); } catch (err) {} }, 800); },
-        removeItem: async (name) => { localStorage.removeItem(name); try { await supabase.from('app_state').delete().eq('id', name); } catch (err) {} }
-      }
+    return {
+      total: totalAmount,
+      method: finalMethod,
+      cashUsd: resolvedCashUsd,
+      mobileBs: resolvedMobileBs,
+      cashBs: resolvedCashBs,
+      mobileBank: mobileBank || undefined,
+    };
+  };
+
+  // ACCIONES DE CONSOLA
+  const handleStartFree = () => {
+    store.startSession(c.id, undefined, customerName);
+    setAction(null); resetForm();
+    toast.success("Sesión libre iniciada");
+  };
+
+  const handleStartFixed = () => {
+    const m = parseInt(inputMins);
+    if (!m || m <= 0) return toast.error("Minutos inválidos");
+    store.startSession(c.id, m, customerName);
+    setAction(null); resetForm();
+    toast.success("Sesión por tiempo iniciada");
+  };
+
+  const handlePrepay = () => {
+    const m = parseInt(inputMins);
+    if (!m || m <= 0) return toast.error("Minutos inválidos");
+    const total = (m / 60) * c.ratePerHour;
+    const payload = processPayment(total);
+    store.prepaySession(c.id, m, { ...payload, customerInfo: { name: customerName } });
+    setAction(null); resetForm();
+    toast.success("Sesión prepagada registrada");
+  };
+
+  const handleExtend = () => {
+    const m = parseInt(inputMins);
+    if (!m || m <= 0) return toast.error("Minutos inválidos");
+    
+    if (isPrepaid) {
+      const total = (m / 60) * c.ratePerHour;
+      const payload = processPayment(total);
+      store.extendPaidSession(c.id, m, { ...payload, customer: c.session?.customerName });
+      toast.success("Tiempo extendido y cobrado");
+    } else {
+      store.extendSession(c.id, m);
+      toast.success("Tiempo extendido");
     }
-  )
-);
+    setAction(null); resetForm();
+  };
 
-export const fmtUsd = (n: number) => { if (isNaN(n)) return "$0.00"; return `$${(n || 0).toFixed(2)}`; };
-export const fmtBs = (usd: number, rate: number) => { if (isNaN(usd) || isNaN(rate)) return "Bs 0.00"; return `Bs ${((usd || 0) * rate).toLocaleString("es-VE", { maximumFractionDigits: 2 })}`; };
-export const computeTimeAmount = (consoleObj: ConsoleState, nowMs: number): { minutes: number; amount: number } => { if (!consoleObj || !consoleObj.session) return { minutes: 0, amount: 0 }; const ref = consoleObj.session.pausedAt ?? nowMs; const elapsedMs = Math.max(0, ref - (consoleObj.session.startedAt || ref)); const minutes = Math.ceil(elapsedMs / 60_000); return { minutes, amount: (minutes / 60) * (consoleObj.ratePerHour || 0) }; };
+  const handleFinalize = () => {
+    if (isPrepaid) {
+      store.releaseConsole(c.id);
+      toast.success("Consola liberada");
+    } else {
+      const payload = processPayment(amount);
+      store.finalizeConsole(c.id, {
+        ...payload,
+        timeAmount: amount,
+        extrasAmount: 0,
+        minutes,
+        customerInfo: { name: c.session?.customerName }
+      });
+      toast.success("Sesión finalizada y cobrada");
+    }
+    setAction(null); resetForm();
+  };
 
-const resyncFromCloud = async () => { if ((window as any).pausarDescarga) return; (window as any).pausarSubida = true; try { const { data, error } = await supabase.from('app_state').select('state').eq('id', 'gamerzone-store-v1').maybeSingle(); if ((window as any).pausarDescarga) return; if (!error && data && data.state) { const safeData = vaccinateZustandPayload(data.state); const estadoActual = JSON.stringify(useStore.getState()); if (safeData?.state && estadoActual !== JSON.stringify(safeData.state)) { useStore.setState(safeData.state); localStorage.setItem("gamerzone-store-v1", JSON.stringify(safeData)); } } } catch (e) { } finally { setTimeout(() => { (window as any).pausarSubida = false; }, 500); } };
-const channel = supabase.channel('escuchar-nube'); channel.on('postgres_changes', { event: '*', schema: 'public', table: 'app_state' }, () => { resyncFromCloud(); }).subscribe((status) => { if (status === 'CLOSED' || status === 'CHANNEL_ERROR') { setTimeout(() => supabase.channel('escuchar-nube').subscribe(), 5000); } });
-window.addEventListener('online', resyncFromCloud); window.addEventListener('focus', resyncFromCloud); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { resyncFromCloud(); } }); setInterval(() => { if (document.visibilityState === 'visible') resyncFromCloud(); }, 15000);
+  const handleCancel = () => {
+    if (confirm("¿Seguro que deseas cancelar esta sesión? No se registrarán cobros.")) {
+      store.cancelSession(c.id);
+      toast.success("Sesión cancelada");
+    }
+  };
+
+  // RENDERIZADO DEL FORMULARIO DE PAGO
+  const renderPaymentForm = (totalAmount: number) => {
+    const cashUsdN = parseFloat(cashUsd) || 0;
+    const mobileBsN = parseFloat(mobileBs) || 0;
+    const cashBsN = parseFloat(cashBs) || 0;
+    
+    const mobileUsd = store.rate > 0 ? mobileBsN / store.rate : 0;
+    const cashBsUsd = store.rate > 0 ? cashBsN / store.rate : 0;
+    const paid = method === "full" ? totalAmount : cashUsdN + mobileUsd + cashBsUsd;
+    const remaining = totalAmount - paid;
+    
+    const needsRef = (method === "full" && fullPayMode === "mobile") || (method === "mixed" && mobileBsN > 0);
+    const isValidRef = !needsRef || mobileBank !== ""; // Solo valida el banco, CERO NÚMEROS DE REFERENCIA
+
+    return (
+      <div className="space-y-4 mt-4">
+        <Card className="p-3 bg-secondary/40">
+          <div className="flex justify-between font-display text-lg">
+            <span>TOTAL A PAGAR</span>
+            <span className="text-green-400">{fmtUsd(totalAmount)}</span>
+          </div>
+        </Card>
+        
+        <div className="grid grid-cols-2 gap-2">
+          <Button variant={method === "full" ? "default" : "outline"} onClick={() => setMethod("full")}>Completo</Button>
+          <Button variant={method === "mixed" ? "default" : "outline"} onClick={() => setMethod("mixed")}>Mixto</Button>
+        </div>
+
+        {method === "full" && (
+          <div className="space-y-2 border border-border rounded-md p-3 bg-background/40">
+            <Label className="text-xs uppercase tracking-wider text-accent font-semibold">¿Cómo paga?</Label>
+            <RadioGroup value={fullPayMode} onValueChange={(v:any) => setFullPayMode(v)} className="grid grid-cols-1 gap-2">
+              <label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "cash" ? "border-primary bg-primary/10" : "border-border"}`}>
+                <RadioGroupItem value="cash" />
+                <p className="text-sm font-semibold">Efectivo $</p>
+              </label>
+              <label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "mobile" ? "border-primary bg-primary/10" : "border-border"}`}>
+                <RadioGroupItem value="mobile" />
+                <p className="text-sm font-semibold">Pago Móvil Bs</p>
+              </label>
+              <label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "cash_bs" ? "border-primary bg-primary/10" : "border-border"}`}>
+                <RadioGroupItem value="cash_bs" />
+                <p className="text-sm font-semibold">Efectivo Bs 💵</p>
+              </label>
+            </RadioGroup>
+
+            {fullPayMode === "mobile" && (
+              <div className="mt-3 p-4 bg-primary/10 rounded-md border border-primary/20">
+                <Label className="text-[10px] uppercase font-bold text-primary tracking-wider block mb-1">Banco Emisor *</Label>
+                <select className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:ring-1 focus:ring-primary" value={mobileBank} onChange={(e) => setMobileBank(e.target.value)}>
+                  <option value="Banesco">Banesco</option>
+                  <option value="Mercantil">Mercantil</option>
+                  <option value="Venezuela">Venezuela</option>
+                  <option value="Provincial">Provincial</option>
+                  <option value="BNC">BNC</option>
+                  <option value="Bancamiga">Bancamiga</option>
+                </select>
+              </div>
+            )}
+          </div>
+        )}
+
+        {method === "mixed" && (
+          <MixedPaymentInputs total={totalAmount} cashUsd={cashUsd} mobileBs={mobileBs} cashBs={cashBs} mobileBank={mobileBank} setCashUsd={setCashUsd} setMobileBs={setMobileBs} setCashBs={setCashBs} setMobileBank={setMobileBank} />
+        )}
+
+        <div className="flex justify-end pt-2">
+          <Button 
+             className="w-full h-12 text-lg bg-green-600 hover:bg-green-700 text-white" 
+             disabled={(method === "mixed" && remaining > 0.01) || !isValidRef} 
+             onClick={action === "prepay" ? handlePrepay : action === "extend" ? handleExtend : handleFinalize}
+          >
+            Confirmar Pago
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
+  // DISEÑO DE LA TARJETA
+  return (
+    <>
+      <Card className={`p-4 border-2 transition-all duration-200 flex flex-col justify-between ${!c.session ? 'border-green-500/50 bg-green-950/10' : c.session.pausedAt ? 'border-yellow-500/50 bg-yellow-950/10' : 'border-blue-500/50 bg-blue-950/10'}`}>
+        <div>
+          <div className="flex justify-between items-start mb-2">
+            <div>
+              <h3 className="font-bold text-lg text-white flex items-center gap-2"><Gamepad2 className="h-5 w-5" /> {c.name}</h3>
+              <span className="text-xs font-semibold px-2 py-0.5 rounded bg-secondary text-muted-foreground">{c.type}</span>
+            </div>
+            <span className="text-sm font-bold text-primary">{fmtUsd(c.ratePerHour)}/h</span>
+          </div>
+
+          {!c.session ? (
+            <div className="my-6 text-center"><span className="text-sm font-medium text-green-400 bg-green-500/10 px-3 py-1 rounded-full border border-green-500/20">• Disponible</span></div>
+          ) : (
+            <div className="my-3 space-y-1 bg-black/40 p-3 rounded-lg border border-white/5">
+              <div className="flex justify-between text-xs text-muted-foreground"><span>Cliente:</span><span className="font-medium text-white truncate max-w-[120px]">{c.session.customerName || "General"}</span></div>
+              <div className="flex justify-between text-xs text-muted-foreground"><span>Tiempo Jugado:</span><span className="text-white font-medium">{minutes} min</span></div>
+              <div className="flex justify-between text-xs text-muted-foreground"><span>Monto:</span><span className={isPrepaid ? "text-green-400 font-bold" : "text-amber-400 font-bold"}>{isPrepaid ? "PREPAGADO" : fmtUsd(amount)}</span></div>
+
+              {isTournament && <div className="mt-2 text-center text-xs font-bold text-purple-400 bg-purple-500/10 rounded py-1 border border-purple-500/20">🏆 MODO TORNEO</div>}
+            </div>
+          )}
+        </div>
+
+        {/* BOTONES DE LA TARJETA */}
+        <div className="mt-4 flex flex-wrap gap-2">
+          {!c.session ? (
+            <>
+              <Button className="flex-1 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/50" onClick={() => setAction("start")}><Play className="h-4 w-4 mr-1" /> Libre</Button>
+              <Button className="flex-1 bg-green-600 hover:bg-green-700 text-white" onClick={() => setAction("prepay")}><Clock className="h-4 w-4 mr-1" /> Prepago</Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" size="sm" className="flex-1" onClick={() => c.session?.pausedAt ? store.resumeSession(c.id) : store.pauseSession(c.id)}>
+                {c.session?.pausedAt ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+              </Button>
+              {!isTournament && <Button variant="outline" size="sm" className="flex-1 text-blue-400 border-blue-500/30" onClick={() => setAction("extend")}><Plus className="h-4 w-4 mr-1" /> Extender</Button>}
+              <Button size="sm" className={`w-full ${isPrepaid ? 'bg-primary hover:bg-primary/90' : 'bg-amber-600 hover:bg-amber-700'} text-white font-bold`} onClick={() => isPrepaid ? handleFinalize() : setAction("finalize")}>
+                <Square className="h-4 w-4 mr-1" /> {isPrepaid ? "Liberar Consola" : `Cobrar ${fmtUsd(amount)}`}
+              </Button>
+              <Button variant="ghost" size="sm" className="w-full text-xs text-red-400 hover:bg-red-500/10 mt-1" onClick={handleCancel}>Cancelar Sesión (Anular)</Button>
+            </>
+          )}
+        </div>
+      </Card>
+
+      {/* MODAL UNIFICADO PARA TODAS LAS ACCIONES */}
+      <Dialog open={!!action} onOpenChange={(open) => { if(!open){ setAction(null); resetForm(); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display">
+              {action === "start" ? "Iniciar Tiempo Libre" : action === "prepay" ? "Iniciar Prepago" : action === "extend" ? "Extender Tiempo" : "Finalizar y Cobrar"}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {(action === "start" || action === "prepay") && (
+              <div><Label>Nombre del Cliente</Label><Input placeholder="Ej: Juan Pérez" value={customerName} onChange={e => setCustomerName(e.target.value)} /></div>
+            )}
+            
+            {(action === "prepay" || action === "extend") && (
+              <div>
+                <Label>Minutos a jugar/extender</Label>
+                <div className="grid grid-cols-4 gap-2 mt-2 mb-2">
+                  <Button variant="outline" type="button" onClick={() => setInputMins("30")}>30m</Button>
+                  <Button variant="outline" type="button" onClick={() => setInputMins("60")}>1h</Button>
+                  <Button variant="outline" type="button" onClick={() => setInputMins("120")}>2h</Button>
+                  <Button variant="outline" type="button" onClick={() => setInputMins("180")}>3h</Button>
+                </div>
+                <Input type="number" min="5" step="5" value={inputMins} onChange={e => setInputMins(e.target.value)} />
+              </div>
+            )}
+
+            {action === "start" && <Button className="w-full h-12" onClick={inputMins ? handleStartFixed : handleStartFree}>Comenzar a Jugar</Button>}
+            
+            {/* RENDERIZA EL FORMULARIO DE PAGO PARA PREPAGOS, EXTENSIONES PAGADAS O COBROS FINALES */}
+            {(action === "prepay") && renderPaymentForm((parseInt(inputMins||"0") / 60) * c.ratePerHour)}
+            {(action === "extend" && isPrepaid) && renderPaymentForm((parseInt(inputMins||"0") / 60) * c.ratePerHour)}
+            {(action === "extend" && !isPrepaid) && <Button className="w-full h-12 mt-4 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleExtend}>Añadir Tiempo a la Cuenta</Button>}
+            {(action === "finalize" && !isPrepaid) && renderPaymentForm(amount)}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
