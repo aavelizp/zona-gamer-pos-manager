@@ -14,6 +14,9 @@ export function ConsoleCard({ console: c }: { console: ConsoleState }) {
   const store = useStore();
   const [now, setNow] = useState(Date.now());
 
+  // 🔥 EL SALVAVIDAS: Si la base de datos envía un dato corrupto/vacío, lo ignoramos y evitamos el choque 🔥
+  if (!c) return null;
+
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
