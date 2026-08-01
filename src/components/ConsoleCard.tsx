@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
-import { useStore, fmtUsd, fmtBs, computeTimeAmount, type ConsoleState, type PaymentMethod } from "@/lib/store";
+import { useStore, fmtUsd, computeTimeAmount, type ConsoleState, type PaymentMethod } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -14,7 +14,6 @@ export function ConsoleCard({ console: c }: { console: ConsoleState }) {
   const store = useStore();
   const [now, setNow] = useState(Date.now());
 
-  // Reloj en vivo
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
@@ -22,22 +21,18 @@ export function ConsoleCard({ console: c }: { console: ConsoleState }) {
 
   const { minutes, amount } = computeTimeAmount(c, now);
   const isPrepaid = !!c.session?.prepaid;
-  const isTournament = !!c.session?.isTournament;
 
-  // Estados de Modales
   const [action, setAction] = useState<"start" | "prepay" | "extend" | "finalize" | null>(null);
-  
-  // Estados de Formularios
   const [inputMins, setInputMins] = useState("60");
   const [customerName, setCustomerName] = useState("");
   
-  // Estados de Pago (SIN REFERENCIA)
   const [method, setMethod] = useState<"full" | "mixed">("full");
   const [fullPayMode, setFullPayMode] = useState<"cash" | "mobile" | "cash_bs">("mobile");
   const [cashUsd, setCashUsd] = useState("");
   const [mobileBs, setMobileBs] = useState("");
   const [cashBs, setCashBs] = useState("");
   const [mobileBank, setMobileBank] = useState("Banesco");
+  const [mobileRef, setMobileRef] = useState("");
 
   const resetForm = () => {
     setInputMins("60");
@@ -48,6 +43,7 @@ export function ConsoleCard({ console: c }: { console: ConsoleState }) {
     setMobileBs("");
     setCashBs("");
     setMobileBank("Banesco");
+    setMobileRef("");
   };
 
   const processPayment = (totalAmount: number) => {
@@ -68,10 +64,10 @@ export function ConsoleCard({ console: c }: { console: ConsoleState }) {
       mobileBs: resolvedMobileBs,
       cashBs: resolvedCashBs,
       mobileBank: mobileBank || undefined,
+      mobileRef: mobileRef || undefined,
     };
   };
 
-  // ACCIONES DE CONSOLA
   const handleStartFree = () => {
     store.startSession(c.id, undefined, customerName);
     setAction(null); resetForm();
@@ -137,7 +133,6 @@ export function ConsoleCard({ console: c }: { console: ConsoleState }) {
     }
   };
 
-  // RENDERIZADO DEL FORMULARIO DE PAGO
   const renderPaymentForm = (totalAmount: number) => {
     const cashUsdN = parseFloat(cashUsd) || 0;
     const mobileBsN = parseFloat(mobileBs) || 0;
@@ -149,7 +144,7 @@ export function ConsoleCard({ console: c }: { console: ConsoleState }) {
     const remaining = totalAmount - paid;
     
     const needsRef = (method === "full" && fullPayMode === "mobile") || (method === "mixed" && mobileBsN > 0);
-    const isValidRef = !needsRef || mobileBank !== ""; // Solo valida el banco, CERO NÚMEROS DE REFERENCIA
+    const isValidRef = !needsRef || (mobileBank !== "" && mobileRef.length >= 4);
 
     return (
       <div className="space-y-4 mt-4">
@@ -184,31 +179,32 @@ export function ConsoleCard({ console: c }: { console: ConsoleState }) {
             </RadioGroup>
 
             {fullPayMode === "mobile" && (
-              <div className="mt-3 p-4 bg-primary/10 rounded-md border border-primary/20">
-                <Label className="text-[10px] uppercase font-bold text-primary tracking-wider block mb-1">Banco Emisor *</Label>
-                <select className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:ring-1 focus:ring-primary" value={mobileBank} onChange={(e) => setMobileBank(e.target.value)}>
-                  <option value="Banesco">Banesco</option>
-                  <option value="Mercantil">Mercantil</option>
-                  <option value="Venezuela">Venezuela</option>
-                  <option value="Provincial">Provincial</option>
-                  <option value="BNC">BNC</option>
-                  <option value="Bancamiga">Bancamiga</option>
-                </select>
+              <div className="mt-3 grid grid-cols-2 gap-2 p-3 bg-primary/10 rounded-md border border-primary/20">
+                <div>
+                  <Label className="text-[10px] uppercase font-bold text-primary block mb-1">Banco</Label>
+                  <select className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm focus:ring-1 focus:ring-primary" value={mobileBank} onChange={(e) => setMobileBank(e.target.value)}>
+                    <option value="Banesco">Banesco</option>
+                    <option value="Mercantil">Mercantil</option>
+                    <option value="Venezuela">Venezuela</option>
+                    <option value="Provincial">Provincial</option>
+                    <option value="BNC">BNC</option>
+                  </select>
+                </div>
+                <div>
+                  <Label className="text-[10px] uppercase font-bold text-primary block mb-1">Referencia *</Label>
+                  <Input placeholder="Últimos 4" className="h-9" maxLength={8} value={mobileRef} onChange={e => setMobileRef(e.target.value.replace(/\D/g, ''))} />
+                </div>
               </div>
             )}
           </div>
         )}
 
         {method === "mixed" && (
-          <MixedPaymentInputs total={totalAmount} cashUsd={cashUsd} mobileBs={mobileBs} cashBs={cashBs} mobileBank={mobileBank} setCashUsd={setCashUsd} setMobileBs={setMobileBs} setCashBs={setCashBs} setMobileBank={setMobileBank} />
+          <MixedPaymentInputs total={totalAmount} cashUsd={cashUsd} mobileBs={mobileBs} cashBs={cashBs} mobileBank={mobileBank} mobileRef={mobileRef} setCashUsd={setCashUsd} setMobileBs={setMobileBs} setCashBs={setCashBs} setMobileBank={setMobileBank} setMobileRef={setMobileRef} />
         )}
 
         <div className="flex justify-end pt-2">
-          <Button 
-             className="w-full h-12 text-lg bg-green-600 hover:bg-green-700 text-white" 
-             disabled={(method === "mixed" && remaining > 0.01) || !isValidRef} 
-             onClick={action === "prepay" ? handlePrepay : action === "extend" ? handleExtend : handleFinalize}
-          >
+          <Button className="w-full h-12 text-lg bg-green-600 hover:bg-green-700 text-white" disabled={(method === "mixed" && remaining > 0.01) || !isValidRef} onClick={action === "prepay" ? handlePrepay : action === "extend" ? handleExtend : handleFinalize}>
             Confirmar Pago
           </Button>
         </div>
@@ -216,7 +212,6 @@ export function ConsoleCard({ console: c }: { console: ConsoleState }) {
     );
   };
 
-  // DISEÑO DE LA TARJETA
   return (
     <>
       <Card className={`p-4 border-2 transition-all duration-200 flex flex-col justify-between ${!c.session ? 'border-green-500/50 bg-green-950/10' : c.session.pausedAt ? 'border-yellow-500/50 bg-yellow-950/10' : 'border-blue-500/50 bg-blue-950/10'}`}>
@@ -236,13 +231,10 @@ export function ConsoleCard({ console: c }: { console: ConsoleState }) {
               <div className="flex justify-between text-xs text-muted-foreground"><span>Cliente:</span><span className="font-medium text-white truncate max-w-[120px]">{c.session.customerName || "General"}</span></div>
               <div className="flex justify-between text-xs text-muted-foreground"><span>Tiempo Jugado:</span><span className="text-white font-medium">{minutes} min</span></div>
               <div className="flex justify-between text-xs text-muted-foreground"><span>Monto:</span><span className={isPrepaid ? "text-green-400 font-bold" : "text-amber-400 font-bold"}>{isPrepaid ? "PREPAGADO" : fmtUsd(amount)}</span></div>
-
-              {isTournament && <div className="mt-2 text-center text-xs font-bold text-purple-400 bg-purple-500/10 rounded py-1 border border-purple-500/20">🏆 MODO TORNEO</div>}
             </div>
           )}
         </div>
 
-        {/* BOTONES DE LA TARJETA */}
         <div className="mt-4 flex flex-wrap gap-2">
           {!c.session ? (
             <>
@@ -254,7 +246,7 @@ export function ConsoleCard({ console: c }: { console: ConsoleState }) {
               <Button variant="outline" size="sm" className="flex-1" onClick={() => c.session?.pausedAt ? store.resumeSession(c.id) : store.pauseSession(c.id)}>
                 {c.session?.pausedAt ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
               </Button>
-              {!isTournament && <Button variant="outline" size="sm" className="flex-1 text-blue-400 border-blue-500/30" onClick={() => setAction("extend")}><Plus className="h-4 w-4 mr-1" /> Extender</Button>}
+              <Button variant="outline" size="sm" className="flex-1 text-blue-400 border-blue-500/30" onClick={() => setAction("extend")}><Plus className="h-4 w-4 mr-1" /> Extender</Button>
               <Button size="sm" className={`w-full ${isPrepaid ? 'bg-primary hover:bg-primary/90' : 'bg-amber-600 hover:bg-amber-700'} text-white font-bold`} onClick={() => isPrepaid ? handleFinalize() : setAction("finalize")}>
                 <Square className="h-4 w-4 mr-1" /> {isPrepaid ? "Liberar Consola" : `Cobrar ${fmtUsd(amount)}`}
               </Button>
@@ -264,7 +256,6 @@ export function ConsoleCard({ console: c }: { console: ConsoleState }) {
         </div>
       </Card>
 
-      {/* MODAL UNIFICADO PARA TODAS LAS ACCIONES */}
       <Dialog open={!!action} onOpenChange={(open) => { if(!open){ setAction(null); resetForm(); } }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -293,7 +284,6 @@ export function ConsoleCard({ console: c }: { console: ConsoleState }) {
 
             {action === "start" && <Button className="w-full h-12" onClick={inputMins ? handleStartFixed : handleStartFree}>Comenzar a Jugar</Button>}
             
-            {/* RENDERIZA EL FORMULARIO DE PAGO PARA PREPAGOS, EXTENSIONES PAGADAS O COBROS FINALES */}
             {(action === "prepay") && renderPaymentForm((parseInt(inputMins||"0") / 60) * c.ratePerHour)}
             {(action === "extend" && isPrepaid) && renderPaymentForm((parseInt(inputMins||"0") / 60) * c.ratePerHour)}
             {(action === "extend" && !isPrepaid) && <Button className="w-full h-12 mt-4 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleExtend}>Añadir Tiempo a la Cuenta</Button>}
