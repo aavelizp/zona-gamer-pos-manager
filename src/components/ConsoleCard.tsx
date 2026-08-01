@@ -1,418 +1,306 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
-import { useStore, fmtUsd, fmtBs, computeTimeAmount, type ConsoleState, type Member, type Combo } from "@/lib/store";
-import { playAlert, playPreAlert } from "@/lib/sound";
+import { useState, useEffect } from "react";
+import { useStore, fmtUsd, fmtBs, computeTimeAmount, type ConsoleState, type PaymentMethod } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Star, Gamepad2, Sparkles, Package, Coins, ShoppingBag, Receipt, Plus, Search, X, User, AlertTriangle, Pause, Play, Trash2, ArrowRightLeft, Trophy, Edit2 } from "lucide-react";
-import { ReceiptDialog, type ReceiptData } from "@/components/Receipt";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { ExtendCheckoutDialog } from "@/components/ExtendCheckoutDialog";
 import { MixedPaymentInputs } from "@/components/MixedPaymentInputs";
+import { Play, Pause, Square, Plus, Clock, Gamepad2 } from "lucide-react";
+import { toast } from "sonner";
 
-function CustomerSearch({ name, idDoc, phone, setName, setIdDoc, setPhone }: any) {
-  const members = useStore((s) => s.members || []); const [query, setQuery] = useState(""); const [open, setOpen] = useState(false); const [creating, setCreating] = useState(false); const [selected, setSelected] = useState<Member | null>(null); const wrapRef = useRef<HTMLDivElement>(null);
-  useEffect(() => { const onClick = (e: MouseEvent) => { if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false); }; document.addEventListener("mousedown", onClick); return () => document.removeEventListener("mousedown", onClick); }, []);
+export function ConsoleCard({ console: c }: { console: ConsoleState }) {
+  const store = useStore();
+  const [now, setNow] = useState(Date.now());
+
+  // Reloj en vivo
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const { minutes, amount } = computeTimeAmount(c, now);
+  const isPrepaid = !!c.session?.prepaid;
+  const isTournament = !!c.session?.isTournament;
+
+  // Estados de Modales
+  const [action, setAction] = useState<"start" | "prepay" | "extend" | "finalize" | null>(null);
   
-  // 👇 AQUÍ SE APLICA EL ORDEN ALFABÉTICO EN LA BÚSQUEDA 👇
-  const results = useMemo(() => { 
-    const q = (query || "").trim().toLowerCase(); 
-    let safeMembers = Array.isArray(members) ? [...members] : []; 
-    safeMembers.sort((a, b) => (a?.name || "").localeCompare(b?.name || "")); // Orden alfabético A-Z
+  // Estados de Formularios
+  const [inputMins, setInputMins] = useState("60");
+  const [customerName, setCustomerName] = useState("");
+  
+  // Estados de Pago (SIN REFERENCIA)
+  const [method, setMethod] = useState<"full" | "mixed">("full");
+  const [fullPayMode, setFullPayMode] = useState<"cash" | "mobile" | "cash_bs">("mobile");
+  const [cashUsd, setCashUsd] = useState("");
+  const [mobileBs, setMobileBs] = useState("");
+  const [cashBs, setCashBs] = useState("");
+  const [mobileBank, setMobileBank] = useState("Banesco");
+
+  const resetForm = () => {
+    setInputMins("60");
+    setCustomerName("");
+    setMethod("full");
+    setFullPayMode("mobile");
+    setCashUsd("");
+    setMobileBs("");
+    setCashBs("");
+    setMobileBank("Banesco");
+  };
+
+  const processPayment = (totalAmount: number) => {
+    const cashUsdN = parseFloat(cashUsd) || 0;
+    const mobileBsN = parseFloat(mobileBs) || 0;
+    const cashBsN = parseFloat(cashBs) || 0;
+
+    const resolvedCashUsd = method === "full" ? (fullPayMode === "cash" ? totalAmount : 0) : cashUsdN;
+    const resolvedMobileBs = method === "full" ? (fullPayMode === "mobile" ? totalAmount * store.rate : 0) : mobileBsN;
+    const resolvedCashBs = method === "full" ? (fullPayMode === "cash_bs" ? totalAmount * store.rate : 0) : cashBsN;
     
-    if (!q) return safeMembers.slice(0, 8); 
-    return safeMembers.filter((m) => (m?.name || "").toLowerCase().includes(q) || (m?.phone || "").includes(q) || (m?.idDoc || "").toLowerCase().includes(q)).slice(0, 8); 
-  }, [members, query]);
-  
-  const pick = (m: Member) => { setSelected(m); setName(m.name || ""); setIdDoc(m.idDoc || ""); setPhone(m.phone || ""); setQuery(m.name || ""); setOpen(false); setCreating(false); }; const clear = () => { setSelected(null); setName(""); setIdDoc(""); setPhone(""); setQuery(""); setCreating(false); };
-  return (
-    <div className="space-y-2 border border-border rounded-md p-3 bg-background/40">
-      <div className="flex items-center justify-between"><p className="text-xs uppercase tracking-wider text-accent font-semibold">Cliente</p>{(selected || creating || name) && (<Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={clear}><X className="h-3 w-3 mr-1" />Limpiar</Button>)}</div>
-      {!creating && ( <div ref={wrapRef} className="relative"> <div className="flex gap-1"><div className="relative flex-1"><Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" /><Input value={query} onChange={(e) => { setQuery(e.target.value); setOpen(true); if (selected) setSelected(null); }} onFocus={() => setOpen(true)} placeholder="Buscar cliente..." className="pl-7" /></div><Button type="button" size="icon" variant="outline" onClick={() => { setCreating(true); setOpen(false); setSelected(null); setName(query); setIdDoc(""); setPhone(""); }}><Plus className="h-4 w-4" /></Button></div> {open && (<div className="absolute z-50 mt-1 w-full bg-popover border border-border rounded-md shadow-lg max-h-56 overflow-auto">{results.length === 0 ? (<div className="p-2 text-xs text-muted-foreground">Sin coincidencias. <button type="button" className="text-primary underline" onClick={() => { setCreating(true); setOpen(false); setName(query); }}>Crear "{query}"</button></div>) : results.map((m) => (<button key={m.id} type="button" onClick={() => pick(m)} className="w-full text-left px-3 py-2 hover:bg-accent/30 border-b border-border/40 last:border-0"><p className="text-sm font-semibold">{m.name}</p><p className="text-[11px] text-muted-foreground">{m.phone || "sin tel"} · {Math.round((m.totalMinutes||0) / 60)}h</p></button>))}</div>)} {selected && (<p className="text-[10px] text-success mt-1">✓ {selected.name} · {Math.round((selected.totalMinutes||0) / 60)}h en Club Gamer</p>)} </div> )}
-      {(creating || selected) && ( <div className="space-y-2"> {creating && (<div><Label className="text-xs">Nombre y Apellido *</Label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Juan Pérez" autoFocus /></div>)} <div className="grid grid-cols-2 gap-2"><div><Label className="text-xs">Cédula/RIF</Label><Input value={idDoc} onChange={(e) => setIdDoc(e.target.value)} placeholder="V-12345678" /></div><div><Label className="text-xs">Teléfono</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="04141234567" /></div></div> {creating && name.trim() && phone.trim() && (<p className="text-[10px] text-success">✓ Se creará en el Club Gamer al cobrar</p>)} </div> )}
-    </div>
-  );
-}
+    const finalMethod: PaymentMethod = method === "full" && fullPayMode === "cash_bs" ? "cash_bs" : (method === "mixed" ? "mixed" : fullPayMode as PaymentMethod);
 
-function useNow(intervalMs = 1000) { const [now, setNow] = useState(Date.now()); useEffect(() => { const id = setInterval(() => setNow(Date.now()), intervalMs); return () => clearInterval(id); }, [intervalMs]); return now; }
-function formatDuration(ms: number) { const sign = ms < 0 ? "-" : ""; const abs = Math.abs(ms); const total = Math.floor(abs / 1000); if (isNaN(total)) return "00:00:00"; const h = Math.floor(total / 3600); const m = Math.floor((total % 3600) / 60); const s = total % 60; const pad = (n: number) => (n||0).toString().padStart(2, "0"); return `${sign}${pad(h)}:${pad(m)}:${pad(s)}`; }
+    return {
+      total: totalAmount,
+      method: finalMethod,
+      cashUsd: resolvedCashUsd,
+      mobileBs: resolvedMobileBs,
+      cashBs: resolvedCashBs,
+      mobileBank: mobileBank || undefined,
+    };
+  };
 
-function SnackPicker({ consoleId, open, onClose }: any) { const products = useStore((s) => s.products || []); const rate = useStore((s) => s.rate); const addSnack = useStore((s) => s.addSnackToConsole); return ( <Dialog open={open} onOpenChange={onClose}> <DialogContent><DialogHeader><DialogTitle className="font-display">Añadir Snack</DialogTitle></DialogHeader><div className="grid grid-cols-2 gap-2 max-h-80 overflow-auto">{products.map((p) => (<Button key={p.id} variant="secondary" className="h-auto py-3 flex flex-col items-start" disabled={p.stock <= 0} onClick={() => { addSnack(consoleId, p.id, 1); onClose(); }}><span className="font-semibold">{p.name}</span><span className="text-xs text-muted-foreground">{fmtUsd(p.price)} · {fmtBs(p.price, rate)}</span><span className={`text-xs ${p.stock <= 0 ? "text-destructive" : "text-muted-foreground"}`}>{p.stock <= 0 ? "Agotado" : `Stock: ${p.stock}`}</span></Button>))}</div></DialogContent> </Dialog> ); }
+  // ACCIONES DE CONSOLA
+  const handleStartFree = () => {
+    store.startSession(c.id, undefined, customerName);
+    setAction(null); resetForm();
+    toast.success("Sesión libre iniciada");
+  };
 
-function ComboPicker({ consoleId, open, onClose }: any) { const combos = useStore((s) => s.combos || []); const products = useStore((s) => s.products || []); const rate = useStore((s) => s.rate); const apply = useStore((s) => s.applyComboToConsole); const canApply = (cId: string) => { const c = combos.find((x) => x.id === cId); if (!c) return false; return (c.items||[]).every((it) => (products.find((p) => p.id === it.productId)?.stock ?? 0) >= it.qty); }; return ( <Dialog open={open} onOpenChange={onClose}> <DialogContent><DialogHeader><DialogTitle className="font-display">Aplicar Combo</DialogTitle></DialogHeader><div className="space-y-2 max-h-96 overflow-auto">{combos.map((c) => (<Card key={c.id} className="p-3 flex items-center justify-between"><div><p className="font-semibold">{c.name}</p><p className="text-xs text-muted-foreground">{c.hours}h · {(c.items||[]).length} producto(s)</p><p className="text-sm">{fmtUsd(c.price)} <span className="text-muted-foreground">· {fmtBs(c.price, rate)}</span></p></div><Button size="sm" disabled={!canApply(c.id)} onClick={() => { apply(consoleId, c.id); onClose(); }}>{canApply(c.id) ? "Aplicar" : "Sin stock"}</Button></Card>))}</div></DialogContent> </Dialog> ); }
+  const handleStartFixed = () => {
+    const m = parseInt(inputMins);
+    if (!m || m <= 0) return toast.error("Minutos inválidos");
+    store.startSession(c.id, m, customerName);
+    setAction(null); resetForm();
+    toast.success("Sesión por tiempo iniciada");
+  };
 
-function TransferDialog({ consoleId, open, onClose }: any) { const consoles = useStore((s) => s.consoles || []); const transferSession = useStore((s) => s.transferSession); const available = consoles.filter((c) => c && !c.session && c.id !== consoleId); return ( <Dialog open={open} onOpenChange={onClose}> <DialogContent className="max-w-xs"><DialogHeader><DialogTitle className="font-display">Mover a otra consola</DialogTitle></DialogHeader><div className="space-y-3"><p className="text-sm text-muted-foreground">El tiempo jugado y los snacks se sumarán automáticamente a la nueva consola.</p><div className="grid grid-cols-2 gap-2">{available.map((c) => (<Button key={c.id} variant="outline" className={c.type === "PS5" ? "border-gold/50 text-gold hover:bg-gold/10" : "border-primary/50 text-primary hover:bg-primary/10"} onClick={() => { if (confirm(`¿Estás seguro de mover la sesión a la ${c.name}?`)) { transferSession(consoleId, c.id); toast.success(`Sesión movida exitosamente a ${c.name}`); onClose(); } }}>{c.name}</Button>))}{available.length === 0 && <p className="col-span-2 text-sm text-center text-muted-foreground mt-4">Todas las demás consolas están ocupadas.</p>}</div></div></DialogContent> </Dialog> ); }
+  const handlePrepay = () => {
+    const m = parseInt(inputMins);
+    if (!m || m <= 0) return toast.error("Minutos inválidos");
+    const total = (m / 60) * c.ratePerHour;
+    const payload = processPayment(total);
+    store.prepaySession(c.id, m, { ...payload, customerInfo: { name: customerName } });
+    setAction(null); resetForm();
+    toast.success("Sesión prepagada registrada");
+  };
 
-function Checkout({ open, onClose, consoleObj, now }: any) {
-  const rate = useStore((s) => s.rate); const finalize = useStore((s) => s.finalizeConsole); 
-  const { minutes, amount: timeAmount } = useMemo(() => computeTimeAmount(consoleObj, now), [consoleObj, now]);
-  const extrasAmount = (consoleObj?.charges || []).reduce((a: number, c: any) => a + (c?.amount||0), 0); const total = timeAmount + extrasAmount;
-  const [method, setMethod] = useState<"full" | "mixed" | "credit">("full"); const [fullPayMode, setFullPayMode] = useState<"cash" | "mobile" | "cash_bs">("cash"); const [cashUsd, setCashUsd] = useState(""); const [mobileBs, setMobileBs] = useState(""); const [cashBs, setCashBs] = useState(""); const [mobileBank, setMobileBank] = useState(""); const [billReceived, setBillReceived] = useState(""); const [name, setName] = useState(""); const [idDoc, setIdDoc] = useState(""); const [phone, setPhone] = useState(""); const [receipt, setReceipt] = useState<ReceiptData | null>(null); const [pendingFinalize, setPendingFinalize] = useState(false);
-  useEffect(() => { if (open) { setMethod("full"); setFullPayMode("cash"); setCashUsd(""); setMobileBs(""); setCashBs(""); setMobileBank(""); setBillReceived(""); setName(consoleObj?.session?.customerName || ""); setIdDoc(""); setPhone(""); setReceipt(null); setPendingFinalize(false); } }, [open, consoleObj?.session?.customerName]);
-  const cashUsdN = parseFloat(cashUsd) || 0; const mobileBsN = parseFloat(mobileBs) || 0; const cashBsN = parseFloat(cashBs) || 0; const mobileUsd = rate > 0 ? mobileBsN / rate : 0; const cashBsUsd = rate > 0 ? cashBsN / rate : 0; const paid = method === "full" ? total : method === "mixed" ? (cashUsdN + mobileUsd + cashBsUsd) : 0; const remaining = total - paid;
-  const resolvedCashUsd = method === "full" ? (fullPayMode === "cash" ? total : 0) : method === "mixed" ? cashUsdN : 0; const resolvedMobileBs = method === "full" ? (fullPayMode === "mobile" ? total * rate : 0) : method === "mixed" ? mobileBsN : 0; const resolvedCashBs = method === "full" ? (fullPayMode === "cash_bs" ? total * rate : 0) : method === "mixed" ? cashBsN : 0; const finalMethod = method === "full" && fullPayMode === "cash_bs" ? "cash_bs" : method;
-  const billN = parseFloat(billReceived) || 0; const cashTarget = method === "full" && fullPayMode === "cash" ? total : method === "mixed" ? cashUsdN : 0; const rawChange = billN - cashTarget; const showBill = (method === "full" && fullPayMode === "cash") || (method === "mixed" && cashTarget > 0); const changeDisplay = rawChange < 1 ? "$0" : fmtUsd(rawChange);
-  
-  const needsRef = (method === "full" && fullPayMode === "mobile") || (method === "mixed" && mobileBsN > 0); 
-  const isValidRef = !needsRef || mobileBank !== "";
+  const handleExtend = () => {
+    const m = parseInt(inputMins);
+    if (!m || m <= 0) return toast.error("Minutos inválidos");
+    
+    if (isPrepaid) {
+      const total = (m / 60) * c.ratePerHour;
+      const payload = processPayment(total);
+      store.extendPaidSession(c.id, m, { ...payload, customer: c.session?.customerName });
+      toast.success("Tiempo extendido y cobrado");
+    } else {
+      store.extendSession(c.id, m);
+      toast.success("Tiempo extendido");
+    }
+    setAction(null); resetForm();
+  };
 
-  const buildReceipt = (): ReceiptData => ({ ts: Date.now(), rate, consoleName: consoleObj?.name || "Consola", minutes, timeAmount, items: [ ...(timeAmount > 0 ? [{ name: `Tiempo ${consoleObj?.name || "Consola"} (${minutes} min)`, qty: 1, price: timeAmount }] : []), ...(consoleObj?.charges || []).map((ch: any) => ({ name: ch.label, qty: 1, price: ch.amount })) ], total, method: finalMethod as any, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, cashBs: resolvedCashBs, customer: { name: name.trim() || "Consumidor Final", idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined } });
-  const doFinalize = () => { finalize(consoleObj.id, { method: finalMethod as any, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, cashBs: resolvedCashBs, mobileBank: needsRef ? mobileBank : undefined, customer: method === "credit" ? name.trim() : undefined, customerInfo: name.trim() ? { name: name.trim(), idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined } : undefined, total, timeAmount, extrasAmount, minutes }); };
-  const submit = () => { if (method === "credit" && !name.trim()) return; if (method === "mixed" && remaining > 0.01) return; if (!isValidRef) return; setReceipt(buildReceipt()); setPendingFinalize(true); };
-  const handleReceiptClose = () => { setReceipt(null); if (pendingFinalize) { doFinalize(); setPendingFinalize(false); onClose(); } };
+  const handleFinalize = () => {
+    if (isPrepaid) {
+      store.releaseConsole(c.id);
+      toast.success("Consola liberada");
+    } else {
+      const payload = processPayment(amount);
+      store.finalizeConsole(c.id, {
+        ...payload,
+        timeAmount: amount,
+        extrasAmount: 0,
+        minutes,
+        customerInfo: { name: c.session?.customerName }
+      });
+      toast.success("Sesión finalizada y cobrada");
+    }
+    setAction(null); resetForm();
+  };
 
-  return (
-    <>
-    <Dialog open={open && !receipt} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle className="font-display">Cobrar · {consoleObj?.name || "Consola"}</DialogTitle></DialogHeader>
-        <div className="space-y-3">
-          <Card className="p-3 bg-secondary/40"><div className="flex justify-between text-sm"><span>Tiempo ({minutes} min)</span><span>{fmtUsd(timeAmount)}</span></div><div className="flex justify-between text-sm"><span>Extras</span><span>{fmtUsd(extrasAmount)}</span></div><div className="border-t border-border my-2" /><div className="flex justify-between font-display text-lg"><span>TOTAL</span><span>{fmtUsd(total)}</span></div><div className="flex justify-between text-sm text-accent"><span>En Bs</span><span>{fmtBs(total, rate)}</span></div></Card>
-          <CustomerSearch name={name} idDoc={idDoc} phone={phone} setName={setName} setIdDoc={setIdDoc} setPhone={setPhone} />
-          {total === 0 ? (
-            <div className="text-center p-4 bg-green-500/10 text-green-400 font-bold border border-green-500/30 rounded-md"><p>Monto a cobrar: $0.00</p><p className="text-xs text-muted-foreground font-normal">Pulsa "Confirmar Pago" para liberar la consola.</p></div>
-          ) : (
-            <>
-              <div className="grid grid-cols-3 gap-2"><Button variant={method === "full" ? "default" : "outline"} onClick={() => setMethod("full")}>Completo</Button><Button variant={method === "mixed" ? "default" : "outline"} onClick={() => setMethod("mixed")}>Mixto</Button><Button variant={method === "credit" ? "default" : "outline"} onClick={() => setMethod("credit")}>Fiado</Button></div>
-              {method === "full" && (
-                <div className="space-y-2 border border-border rounded-md p-3 bg-background/40">
-                  <Label className="text-xs uppercase tracking-wider text-accent font-semibold">¿Cómo pagó?</Label>
-                  <RadioGroup value={fullPayMode} onValueChange={(v) => setFullPayMode(v as any)} className="grid grid-cols-1 gap-2"><label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "cash" ? "border-primary bg-primary/10" : "border-border"}`}><RadioGroupItem value="cash" /><div><p className="text-sm font-semibold">Efectivo $</p></div></label><label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "mobile" ? "border-primary bg-primary/10" : "border-border"}`}><RadioGroupItem value="mobile" /><div><p className="text-sm font-semibold">Pago Móvil Bs</p></div></label><label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "cash_bs" ? "border-primary bg-primary/10" : "border-border"}`}><RadioGroupItem value="cash_bs" /><div><p className="text-sm font-semibold">Efectivo Bs 💵</p></div></label></RadioGroup>
-                  {fullPayMode === "mobile" && ( 
-                    <div className="mt-3 p-4 bg-primary/10 rounded-md border border-primary/20">
-                      <Label className="text-[10px] uppercase font-bold text-primary tracking-wider block mb-1">Banco Emisor *</Label>
-                      <select className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:ring-1 focus:ring-primary" value={mobileBank} onChange={(e) => setMobileBank(e.target.value)}><option value="">Seleccione banco...</option><option value="Banesco">Banesco</option><option value="Mercantil">Mercantil</option><option value="Venezuela">Venezuela</option><option value="Provincial">Provincial</option><option value="BNC">BNC</option><option value="Bancamiga">Bancamiga</option><option value="Tesoro">Tesoro</option><option value="Otro">Otro</option></select>
-                    </div> 
-                  )}
-                </div>
-              )}
-              {method === "mixed" && ( <MixedPaymentInputs total={total} cashUsd={cashUsd} mobileBs={mobileBs} cashBs={cashBs} mobileBank={mobileBank} setCashUsd={setCashUsd} setMobileBs={setMobileBs} setCashBs={setCashBs} setMobileBank={setMobileBank} /> )}
-              {showBill && cashTarget > 0 && (<div className="space-y-1 border border-border rounded-md p-3 bg-background/40"><Label className="text-xs">Billete recibido ($)</Label><Input type="number" step="0.01" value={billReceived} onChange={(e) => setBillReceived(e.target.value)} placeholder={cashTarget.toFixed(2)} />{billN > 0 && ( <p className={`text-sm ${rawChange < 1 ? "text-muted-foreground" : "text-accent"}`}> Vuelto a entregar: <span className="font-display">{changeDisplay}</span> </p> )}</div>)}
-            </>
-          )}
-          {method === "credit" && !name.trim() && <p className="text-xs text-destructive">Debes seleccionar un cliente para fiar.</p>}
-          {!isValidRef && total > 0 && <p className="text-xs text-destructive animate-pulse text-center font-bold mt-2">⚠️ REQUERIDO: Selecciona el Banco</p>}
+  const handleCancel = () => {
+    if (confirm("¿Seguro que deseas cancelar esta sesión? No se registrarán cobros.")) {
+      store.cancelSession(c.id);
+      toast.success("Sesión cancelada");
+    }
+  };
+
+  // RENDERIZADO DEL FORMULARIO DE PAGO
+  const renderPaymentForm = (totalAmount: number) => {
+    const cashUsdN = parseFloat(cashUsd) || 0;
+    const mobileBsN = parseFloat(mobileBs) || 0;
+    const cashBsN = parseFloat(cashBs) || 0;
+    
+    const mobileUsd = store.rate > 0 ? mobileBsN / store.rate : 0;
+    const cashBsUsd = store.rate > 0 ? cashBsN / store.rate : 0;
+    const paid = method === "full" ? totalAmount : cashUsdN + mobileUsd + cashBsUsd;
+    const remaining = totalAmount - paid;
+    
+    const needsRef = (method === "full" && fullPayMode === "mobile") || (method === "mixed" && mobileBsN > 0);
+    const isValidRef = !needsRef || mobileBank !== ""; // Solo valida el banco, CERO NÚMEROS DE REFERENCIA
+
+    return (
+      <div className="space-y-4 mt-4">
+        <Card className="p-3 bg-secondary/40">
+          <div className="flex justify-between font-display text-lg">
+            <span>TOTAL A PAGAR</span>
+            <span className="text-green-400">{fmtUsd(totalAmount)}</span>
+          </div>
+        </Card>
+        
+        <div className="grid grid-cols-2 gap-2">
+          <Button variant={method === "full" ? "default" : "outline"} onClick={() => setMethod("full")}>Completo</Button>
+          <Button variant={method === "mixed" ? "default" : "outline"} onClick={() => setMethod("mixed")}>Mixto</Button>
         </div>
-        <DialogFooter className="flex-wrap gap-2"><Button variant="outline" onClick={onClose}>Cancelar</Button><Button onClick={submit} disabled={(total > 0 && method === "mixed" && remaining > 0.01) || (total > 0 && method === "credit" && !name.trim()) || (total > 0 && !isValidRef)} className="bg-gradient-to-r from-primary to-accent"><Receipt className="h-4 w-4 mr-1" />Confirmar Pago</Button></DialogFooter>
-      </DialogContent>
-    </Dialog>
-    <ReceiptDialog open={!!receipt} onClose={handleReceiptClose} data={receipt} />
-    </>
-  );
-}
 
-function PrepayCheckout({ open, onClose, consoleObj }: any) {
-  const rate = useStore((s) => s.rate); const combos = useStore((s) => s.combos || []); const products = useStore((s) => s.products || []); const prepay = useStore((s) => s.prepaySession);
-  const [step, setStep] = useState<"type" | "time" | "combo" | "pay">("type"); const [chosenMinutes, setChosenMinutes] = useState<number>(60); const [chosenCombo, setChosenCombo] = useState<Combo | null>(null); const [method, setMethod] = useState<"full" | "mixed">("full"); const [fullPayMode, setFullPayMode] = useState<"cash" | "mobile" | "cash_bs">("cash"); const [cashUsd, setCashUsd] = useState(""); const [mobileBs, setMobileBs] = useState(""); const [cashBs, setCashBs] = useState(""); const [mobileBank, setMobileBank] = useState(""); const [name, setName] = useState(""); const [idDoc, setIdDoc] = useState(""); const [phone, setPhone] = useState(""); const [receipt, setReceipt] = useState<ReceiptData | null>(null); const [pending, setPending] = useState(false);
-  useEffect(() => { if (open) { setStep("type"); setChosenMinutes(60); setChosenCombo(null); setMethod("full"); setFullPayMode("cash"); setCashUsd(""); setMobileBs(""); setCashBs(""); setMobileBank(""); setName(""); setIdDoc(""); setPhone(""); setReceipt(null); setPending(false); } }, [open]);
-  const isCombo = !!chosenCombo; const minutes = isCombo ? Math.round((chosenCombo?.hours||0) * 60) : chosenMinutes; const total = isCombo ? (chosenCombo?.price||0) : +((consoleObj?.ratePerHour||0) * (chosenMinutes / 60)).toFixed(2);
-  const cashUsdN = parseFloat(cashUsd) || 0; const mobileBsN = parseFloat(mobileBs) || 0; const cashBsN = parseFloat(cashBs) || 0; const mobileUsd = rate > 0 ? mobileBsN / rate : 0; const cashBsUsd = rate > 0 ? cashBsN / rate : 0; const paid = method === "full" ? total : cashUsdN + mobileUsd + cashBsUsd; const remaining = total - paid;
-  const resolvedCashUsd = method === "full" ? (fullPayMode === "cash" ? total : 0) : cashUsdN; const resolvedMobileBs = method === "full" ? (fullPayMode === "mobile" ? total * rate : 0) : mobileBsN; const resolvedCashBs = method === "full" ? (fullPayMode === "cash_bs" ? total * rate : 0) : cashBsN; const finalMethod = method === "full" && fullPayMode === "cash_bs" ? "cash_bs" : method;
-  
-  const needsRef = (method === "full" && fullPayMode === "mobile") || (method === "mixed" && mobileBsN > 0); 
-  const isValidRef = !needsRef || mobileBank !== "";
+        {method === "full" && (
+          <div className="space-y-2 border border-border rounded-md p-3 bg-background/40">
+            <Label className="text-xs uppercase tracking-wider text-accent font-semibold">¿Cómo paga?</Label>
+            <RadioGroup value={fullPayMode} onValueChange={(v:any) => setFullPayMode(v)} className="grid grid-cols-1 gap-2">
+              <label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "cash" ? "border-primary bg-primary/10" : "border-border"}`}>
+                <RadioGroupItem value="cash" />
+                <p className="text-sm font-semibold">Efectivo $</p>
+              </label>
+              <label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "mobile" ? "border-primary bg-primary/10" : "border-border"}`}>
+                <RadioGroupItem value="mobile" />
+                <p className="text-sm font-semibold">Pago Móvil Bs</p>
+              </label>
+              <label className={`flex items-center gap-2 border rounded-md p-2 cursor-pointer ${fullPayMode === "cash_bs" ? "border-primary bg-primary/10" : "border-border"}`}>
+                <RadioGroupItem value="cash_bs" />
+                <p className="text-sm font-semibold">Efectivo Bs 💵</p>
+              </label>
+            </RadioGroup>
 
-  const buildReceipt = () => { const items = isCombo ? [ { name: `Combo: ${chosenCombo!.name}`, qty: 1, price: total }, ...(chosenCombo?.items||[]).map((it) => { const p = products.find((pp) => pp.id === it.productId); return { name: `  · ${p?.name || "Item"}`, qty: it.qty, price: 0 }; }) ] : [{ name: `Prepago ${consoleObj?.name || "Consola"} (${minutes} min)`, qty: 1, price: total }]; return { ts: Date.now(), rate, consoleName: consoleObj?.name || "Consola", minutes, timeAmount: total, items, total, method: finalMethod, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, cashBs: resolvedCashBs, customer: { name: name.trim() || "Consumidor Final", idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined } }; };
-  const doPrepay = () => { prepay(consoleObj.id, minutes, { method: finalMethod as any, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, cashBs: resolvedCashBs, mobileBank: needsRef ? mobileBank : undefined, total, customerInfo: name.trim() ? { name: name.trim(), idDoc: idDoc.trim() || undefined, phone: phone.trim() || undefined } : undefined, comboId: chosenCombo?.id }); };
-  const submit = () => { if (method === "mixed" && remaining > 0.01) return; if (!isValidRef) return; setReceipt(buildReceipt() as any); setPending(true); };
-  const handleReceiptClose = () => { setReceipt(null); if (pending) { doPrepay(); setPending(false); onClose(); } };
-  return (
-    <>
-      <Dialog open={open && !receipt} onOpenChange={(o) => { if (!o) onClose(); }}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle className="font-display">Prepago · {consoleObj?.name || "Consola"}</DialogTitle></DialogHeader>
-          {step === "type" && (<div className="space-y-3"><div className="grid grid-cols-1 gap-2"><Button variant="outline" className="h-auto py-4 flex-col items-start" onClick={() => { setChosenCombo(null); setStep("time"); }}><span className="font-semibold">Tiempo Libre / Manual</span></Button><Button variant="outline" className="h-auto py-4 flex-col items-start" onClick={() => setStep("combo")} disabled={combos.length === 0}><span className="font-semibold">Seleccionar un Combo</span></Button></div></div>)}
-          {step === "combo" && (<div className="space-y-2"><div className="space-y-2 max-h-96 overflow-auto">{combos.map((c) => { const ok = (c.items||[]).every((it) => (products.find((p) => p.id === it.productId)?.stock ?? 0) >= it.qty); return (<Card key={c.id} className="p-3 flex justify-between"><div><p className="font-semibold">{c.name}</p><p className="text-sm">{fmtUsd(c.price)}</p></div><Button size="sm" disabled={!ok} onClick={() => { setChosenCombo(c); setStep("pay"); }}>{ok ? "Elegir" : "Sin stock"}</Button></Card>); })}</div></div>)}
-          
-          {step === "time" && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {[60, 120, 180, 240].map((m) => ( 
-                  <Button key={m} variant={chosenMinutes === m ? "default" : "outline"} className="px-1 text-xs" onClick={() => setChosenMinutes(m)}>
-                    {m >= 60 ? `${m / 60}h` : `${m} min`} · {fmtUsd(+((consoleObj?.ratePerHour||0) * (m / 60)).toFixed(2))}
-                  </Button> 
-                ))}
+            {fullPayMode === "mobile" && (
+              <div className="mt-3 p-4 bg-primary/10 rounded-md border border-primary/20">
+                <Label className="text-[10px] uppercase font-bold text-primary tracking-wider block mb-1">Banco Emisor *</Label>
+                <select className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:ring-1 focus:ring-primary" value={mobileBank} onChange={(e) => setMobileBank(e.target.value)}>
+                  <option value="Banesco">Banesco</option>
+                  <option value="Mercantil">Mercantil</option>
+                  <option value="Venezuela">Venezuela</option>
+                  <option value="Provincial">Provincial</option>
+                  <option value="BNC">BNC</option>
+                  <option value="Bancamiga">Bancamiga</option>
+                </select>
               </div>
-              <div className="bg-secondary/40 p-3 rounded-md border border-border/50">
-                <Label className="text-xs uppercase tracking-wider mb-2 block font-semibold text-primary">Personalizado (Horas)</Label>
-                <Input 
-                  type="number" 
-                  min={0.5} 
-                  step={0.5} 
-                  placeholder="Ej: 4.5"
-                  value={chosenMinutes / 60} 
-                  onChange={(e) => setChosenMinutes(Math.max(0.5, parseFloat(e.target.value.replace(',', '.')) || 0) * 60)} 
-                  className="h-10 text-base font-bold"
-                />
-                <p className="text-[10px] text-muted-foreground mt-1">Escribe las horas (Ej: 1.5 es una hora y media).</p>
-              </div>
-              <Button className="w-full bg-gradient-to-r from-accent to-primary shadow-md" onClick={() => setStep("pay")} disabled={chosenMinutes < 5}>Continuar al pago</Button>
-            </div>
-          )}
-
-          {step === "pay" && (
-            <div className="space-y-3">
-              <Card className="p-3 bg-secondary/40"><div className="flex justify-between font-display text-lg"><span>TOTAL</span><span>{fmtUsd(total)}</span></div></Card>
-              <CustomerSearch name={name} idDoc={idDoc} phone={phone} setName={setName} setIdDoc={setIdDoc} setPhone={setPhone} />
-              <div className="grid grid-cols-2 gap-2"><Button variant={method === "full" ? "default" : "outline"} onClick={() => setMethod("full")}>Completo</Button><Button variant={method === "mixed" ? "default" : "outline"} onClick={() => setMethod("mixed")}>Mixto</Button></div>
-              {method === "full" && ( <> <div className="grid grid-cols-3 gap-2"><Button size="sm" variant={fullPayMode === "cash" ? "default" : "outline"} onClick={() => setFullPayMode("cash")}>Efectivo $</Button><Button size="sm" variant={fullPayMode === "mobile" ? "default" : "outline"} onClick={() => setFullPayMode("mobile")}>Pago Móvil</Button><Button size="sm" variant={fullPayMode === "cash_bs" ? "default" : "outline"} onClick={() => setFullPayMode("cash_bs")}>Efectivo Bs</Button></div> 
-                {fullPayMode === "mobile" && (
-                  <div className="mt-3 p-4 bg-primary/10 rounded-md border border-primary/20">
-                    <Label className="text-[10px] uppercase font-bold text-primary tracking-wider block mb-1">Banco Emisor *</Label><select className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:ring-1 focus:ring-primary" value={mobileBank} onChange={(e) => setMobileBank(e.target.value)}><option value="">Seleccione banco...</option><option value="Banesco">Banesco</option><option value="Mercantil">Mercantil</option><option value="Venezuela">Venezuela</option><option value="Provincial">Provincial</option><option value="BNC">BNC</option><option value="Bancamiga">Bancamiga</option><option value="Tesoro">Tesoro</option><option value="Otro">Otro</option></select>
-                  </div>
-                )} 
-              </> )}
-              {method === "mixed" && (<MixedPaymentInputs total={total} cashUsd={cashUsd} mobileBs={mobileBs} cashBs={cashBs} mobileBank={mobileBank} setCashUsd={setCashUsd} setMobileBs={setMobileBs} setCashBs={setCashBs} setMobileBank={setMobileBank} />)}
-              {!isValidRef && <p className="text-xs text-destructive animate-pulse text-center font-bold mt-2">⚠️ REQUERIDO: Selecciona el Banco</p>}
-              <DialogFooter><Button onClick={submit} disabled={method === "mixed" && remaining > 0.01 || !isValidRef} className="bg-gradient-to-r from-primary to-accent"><Receipt className="h-4 w-4 mr-1" /> Cobrar y arrancar</Button></DialogFooter>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-      <ReceiptDialog open={!!receipt} onClose={handleReceiptClose} data={receipt} />
-    </>
-  );
-}
-
-function PayExtrasDialog({ open, onClose, consoleObj }: any) {
-  const rate = useStore((s) => s.rate); const payExtras = useStore((s) => s.payExtras); const total = (consoleObj?.charges || []).reduce((a: number, c: any) => a + (c?.amount||0), 0);
-  const [method, setMethod] = useState<"full" | "mixed" | "credit">("full"); const [fullPayMode, setFullPayMode] = useState<"cash" | "mobile" | "cash_bs">("cash"); const [cashUsd, setCashUsd] = useState(""); const [mobileBs, setMobileBs] = useState(""); const [cashBs, setCashBs] = useState(""); const [mobileBank, setMobileBank] = useState(""); const [name, setName] = useState(""); const [receipt, setReceipt] = useState<ReceiptData | null>(null); const [pending, setPending] = useState(false);
-  useEffect(() => { if (open) { setMethod("full"); setFullPayMode("cash"); setCashUsd(""); setMobileBs(""); setCashBs(""); setMobileBank(""); setName(consoleObj?.session?.customerName || ""); setReceipt(null); setPending(false); } }, [open, consoleObj?.session?.customerName]);
-  const cashUsdN = parseFloat(cashUsd) || 0; const mobileBsN = parseFloat(mobileBs) || 0; const cashBsN = parseFloat(cashBs) || 0; const mobileUsd = rate > 0 ? mobileBsN / rate : 0; const cashBsUsd = rate > 0 ? cashBsN / rate : 0; const paid = method === "full" ? total : method === "mixed" ? (cashUsdN + mobileUsd + cashBsUsd) : 0; const remaining = total - paid;
-  const resolvedCashUsd = method === "full" ? (fullPayMode === "cash" ? total : 0) : method === "mixed" ? cashUsdN : 0; const resolvedMobileBs = method === "full" ? (fullPayMode === "mobile" ? total * rate : 0) : method === "mixed" ? mobileBsN : 0; const finalMethod = method === "full" && fullPayMode === "cash_bs" ? "cash_bs" : method;
-  
-  const needsRef = (method === "full" && fullPayMode === "mobile") || (method === "mixed" && mobileBsN > 0); 
-  const isValidRef = !needsRef || mobileBank !== "";
-
-  const submit = () => { if (method === "mixed" && remaining > 0.01) return; if (method === "credit" && !name.trim()) return; if (!isValidRef) return; setReceipt({ ts: Date.now(), rate, consoleName: consoleObj?.name || "Consola", minutes: 0, timeAmount: 0, items: (consoleObj?.charges || []).map((ch: any) => ({ name: ch.label, qty: 1, price: ch.amount })), total, method: finalMethod as any, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, cashBs: 0, customer: { name: name.trim() || "Consumidor Final" } }); setPending(true); };
-  const handleReceiptClose = () => { setReceipt(null); if (pending) { payExtras(consoleObj.id, { method: finalMethod as any, cashUsd: resolvedCashUsd, mobileBs: resolvedMobileBs, mobileBank: needsRef ? mobileBank : undefined, total, customer: name.trim() || undefined }); setPending(false); onClose(); toast.success("Adicionales cobrados."); } };
-
-  return (
-    <>
-      <Dialog open={open && !receipt} onOpenChange={(o) => { if (!o) onClose(); }}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle className="font-display">Cobrar Adicional</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <Card className="p-3 bg-secondary/40"><div className="flex justify-between font-display text-lg"><span>TOTAL</span><span>{fmtUsd(total)}</span></div></Card>
-            <div><Label className="text-xs">Cliente</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
-            <div className="grid grid-cols-3 gap-2"> <Button variant={method === "full" ? "default" : "outline"} onClick={() => setMethod("full")}>Completo</Button> <Button variant={method === "mixed" ? "default" : "outline"} onClick={() => setMethod("mixed")}>Mixto</Button> <Button variant={method === "credit" ? "default" : "outline"} onClick={() => setMethod("credit")}>Fiado</Button> </div>
-            {method === "full" && ( <> <div className="grid grid-cols-3 gap-2"><Button size="sm" variant={fullPayMode === "cash" ? "default" : "outline"} onClick={() => setFullPayMode("cash")}>Efectivo $</Button><Button size="sm" variant={fullPayMode === "mobile" ? "default" : "outline"} onClick={() => setFullPayMode("mobile")}>Pago Móvil</Button><Button size="sm" variant={fullPayMode === "cash_bs" ? "default" : "outline"} onClick={() => setFullPayMode("cash_bs")}>Efectivo Bs</Button></div> 
-              {fullPayMode === "mobile" && (
-                <div className="mt-3 p-4 bg-primary/10 rounded-md border border-primary/20">
-                  <Label className="text-[10px] uppercase font-bold text-primary tracking-wider block mb-1">Banco Emisor *</Label><select className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:ring-1 focus:ring-primary" value={mobileBank} onChange={(e) => setMobileBank(e.target.value)}><option value="">Seleccione banco...</option><option value="Banesco">Banesco</option><option value="Mercantil">Mercantil</option><option value="Venezuela">Venezuela</option><option value="Provincial">Provincial</option><option value="BNC">BNC</option><option value="Bancamiga">Bancamiga</option><option value="Tesoro">Tesoro</option><option value="Otro">Otro</option></select>
-                </div>
-              )} 
-            </> )}
-            {method === "mixed" && (<MixedPaymentInputs total={total} cashUsd={cashUsd} mobileBs={mobileBs} cashBs={cashBs} mobileBank={mobileBank} setCashUsd={setCashUsd} setMobileBs={setMobileBs} setCashBs={setCashBs} setMobileBank={setMobileBank} />)}
-            {!isValidRef && <p className="text-xs text-destructive animate-pulse text-center font-bold mt-2">⚠️ REQUERIDO: Selecciona el Banco</p>}
-          </div>
-          <DialogFooter><Button onClick={submit} disabled={(method === "mixed" && remaining > 0.01) || !isValidRef} className="bg-gradient-to-r from-primary to-accent"><Receipt className="h-4 w-4 mr-1" />Confirmar</Button></DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <ReceiptDialog open={!!receipt} onClose={handleReceiptClose} data={receipt} />
-    </>
-  );
-}
-
-export function ConsoleCard({ consoleObj, suggested }: { consoleObj: ConsoleState; suggested: boolean; }) {
-  const [snackOpen, setSnackOpen] = useState(false); 
-  const [comboOpen, setComboOpen] = useState(false); 
-  const [checkoutOpen, setCheckoutOpen] = useState(false); 
-  const [prepayOpen, setPrepayOpen] = useState(false); 
-  const [extendOpen, setExtendOpen] = useState<null | number>(null); 
-  const [transferOpen, setTransferOpen] = useState(false); 
-  const [payExtrasOpen, setPayExtrasOpen] = useState(false);
-
-  const rate = useStore((s) => s.rate); 
-  const soundOn = useStore((s) => s.soundOn); 
-  const startSession = useStore((s) => s.startSession); 
-  const extendSession = useStore((s) => s.extendSession); 
-  const markAlerted = useStore((s) => s.markAlerted); 
-  const markPreAlerted = useStore((s) => s.markPreAlerted); 
-  const pauseSession = useStore((s) => s.pauseSession); 
-  const resumeSession = useStore((s) => s.resumeSession); 
-  const cancelSession = useStore((s) => (s as any).cancelSession); 
-  const addExtraController = useStore((s) => (s as any).addExtraController); 
-  const releaseConsole = useStore((s) => s.releaseConsole);
-  const updateSessionCustomer = useStore((s) => s.updateSessionCustomer); 
-  
-  const now = useNow();
-
-  const isPS5 = consoleObj?.type === "PS5"; 
-  const session = consoleObj?.session; 
-  const occupied = !!session; 
-  const paused = !!session?.pausedAt; 
-  const isFixed = session?.mode === "fixed"; 
-  const refNow = paused ? session!.pausedAt! : now; 
-  const remainingMs = session?.endsAt ? session.endsAt - refNow : 0; 
-  const expired = isFixed && remainingMs <= 0 && !paused; 
-  const elapsedMs = session ? refNow - (session.startedAt || refNow) : 0; 
-  const preAlertActive = isFixed && !paused && !expired && remainingMs > 0 && remainingMs <= 5 * 60_000;
-
-  useEffect(() => { 
-     if (expired && session && !session.alerted && consoleObj?.id) { 
-        if (soundOn) playAlert(); 
-        markAlerted(consoleObj.id); 
-     } 
-  }, [expired, session, soundOn, markAlerted, consoleObj?.id]);
-
-  useEffect(() => { 
-     if (preAlertActive && session && !session.preAlerted && consoleObj?.id) { 
-        if (soundOn) playPreAlert(); 
-        markPreAlerted(consoleObj.id); 
-     } 
-  }, [preAlertActive, session, soundOn, markPreAlerted, consoleObj?.id]);
-
-  if (!consoleObj) return null;
-
-  const { amount: timeAmount, minutes } = computeTimeAmount(consoleObj, now); 
-  const extras = (consoleObj.charges || []).reduce((a, c) => a + (c?.amount||0), 0); 
-  const total = timeAmount + extras;
-
-  const statusBg = !occupied ? "border-success/50" : paused ? "border-warning animate-pulse" : expired ? "border-destructive animate-blink" : preAlertActive ? "border-warning animate-blink" : "border-primary/60";
-  const statusDot = !occupied ? "bg-success" : paused ? "bg-warning" : expired ? "bg-destructive" : preAlertActive ? "bg-warning" : "bg-primary";
-  const statusText = !occupied ? "LIBRE" : paused ? "EN PAUSA" : expired ? "TIEMPO AGOTADO" : preAlertActive ? "ÚLTIMOS 5 MIN" : "OCUPADO";
-  const customerName = session?.customerName?.trim(); 
-  const pendingExtras = (consoleObj.charges || []).reduce((a, c) => a + (c?.amount||0), 0); 
-  const isPrepaid = !!session?.prepaid; 
-  const blockedRelease = isPrepaid && expired && pendingExtras > 0.001; 
-  const isTournament = !!session?.isTournament;
-
-  const tryRelease = () => { const ok = releaseConsole(consoleObj.id); if (!ok) toast.error("Hay saldo adicional pendiente. Cóbralo antes de liberar."); };
-
-  return (
-    <Card className={`relative p-3 sm:p-4 border-2 ${statusBg} ${isPS5 ? "border-gold/70 ring-1 ring-gold/30" : ""} bg-card transition-all flex flex-col h-full`}>
-      {isPS5 && <div className="absolute inset-0 rounded-xl pointer-events-none glow-gold opacity-30" />}
-      <div className="relative space-y-3 flex-1">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-2">
-            {isPS5 ? <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-gold" /> : <Gamepad2 className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />}
-            <div><h3 className={`font-display text-base sm:text-lg leading-tight ${isPS5 ? "text-gold" : ""}`}>{consoleObj.name}</h3><p className="text-[10px] sm:text-xs text-muted-foreground">{fmtUsd(consoleObj.ratePerHour)}/h</p></div>
-          </div>
-          <div className="flex flex-col items-end gap-1"><Badge className={`${statusDot} text-foreground text-[10px] px-1.5`}>{statusText}</Badge>{suggested && <Badge variant="outline" className="border-gold text-gold text-[10px] px-1.5"><Star className="h-3 w-3 mr-1 fill-current hidden sm:block" /> Sugerida</Badge>}</div>
-        </div>
-
-        <div 
-          className={`flex items-center justify-between gap-2 rounded-md px-2 sm:px-3 py-1.5 sm:py-2 border transition-all ${occupied ? "cursor-pointer hover:bg-primary/20" : ""} ${occupied && customerName ? "bg-primary/15 border-primary/40" : "bg-secondary/30 border-border/40"}`}
-          onClick={() => {
-            if (occupied) {
-              const newName = prompt("Asigna o cambia el nombre del cliente para esta consola:", customerName || "");
-              if (newName !== null && newName.trim() !== "") {
-                updateSessionCustomer(consoleObj.id, newName.trim());
-              }
-            }
-          }}
-          title={occupied ? "Toca para asignar el nombre del cliente" : ""}
-        >
-          <div className="flex items-center gap-2 overflow-hidden">
-            <User className={`h-3 w-3 sm:h-4 sm:w-4 shrink-0 ${occupied && customerName ? "text-primary" : "text-muted-foreground"}`} />
-            <span className={`text-xs sm:text-sm font-semibold truncate ${occupied && customerName ? "text-foreground" : "text-muted-foreground italic"}`}>
-              {!occupied ? "Disponible" : customerName || "Cliente sin registrar"}
-            </span>
-          </div>
-          {occupied && <Edit2 className="h-3 w-3 text-muted-foreground shrink-0" />}
-        </div>
-
-        <div className={`rounded-lg p-2 sm:p-3 text-center ${isTournament ? 'bg-purple-500/20 border border-purple-500/30' : 'bg-secondary/40'}`}>
-          {!occupied ? ( <p className="text-xs sm:text-sm text-muted-foreground">Sin sesión</p> ) : isFixed ? ( <><p className="text-[10px] sm:text-xs text-muted-foreground">Restante</p><p className={`font-display text-2xl sm:text-3xl tabular-nums notranslate ${expired ? "text-destructive" : ""}`}>{formatDuration(remainingMs)}</p></> ) : ( <><p className="text-[10px] sm:text-xs text-muted-foreground">Tiempo libre</p><p className="font-display text-2xl sm:text-3xl tabular-nums notranslate">{formatDuration(elapsedMs)}</p></> )}
-          {occupied && !isPrepaid && !isTournament && <p className="text-xs sm:text-sm mt-1 notranslate"><span className="text-accent font-semibold">{fmtUsd(total)}</span> <span className="text-muted-foreground text-[10px] sm:text-sm">· {fmtBs(total, rate)}</span></p>}
-          {occupied && isTournament && <p className="text-[10px] sm:text-sm mt-1 text-purple-400 font-bold uppercase tracking-widest animate-pulse flex items-center justify-center gap-1"><Trophy className="h-3 w-3 sm:h-4 sm:w-4"/> Partida de Torneo</p>}
-        </div>
-
-        {occupied && pendingExtras > 0 && ( <div className="rounded-md p-1.5 sm:p-2 border bg-warning/10 border-warning/40"><div className="flex justify-between items-center"><span className="text-[9px] sm:text-xs uppercase tracking-wider text-muted-foreground">Adicional Pendiente</span><span className="font-display text-sm sm:text-base text-warning notranslate">{fmtUsd(pendingExtras)}</span></div></div> )}
-        {blockedRelease && ( <div className="rounded-md p-1.5 sm:p-2 border border-destructive bg-destructive/10 flex items-start gap-2"><AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4 text-destructive shrink-0 mt-0.5" /><p className="text-[9px] sm:text-xs text-destructive leading-tight">Tiempo agotado con saldo pendiente.</p></div> )}
-
-        {!occupied ? (
-          <div className="space-y-2 mt-auto">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <Button size="sm" variant="outline" className="text-[10px] sm:text-xs h-8 sm:h-9 px-1" onClick={() => startSession(consoleObj.id)}>Libre</Button>
-              <Button size="sm" className="text-[10px] sm:text-xs h-8 sm:h-9 px-1" onClick={() => startSession(consoleObj.id, 60)}>1 hora</Button>
-              <Button size="sm" className="text-[10px] sm:text-xs h-8 sm:h-9 px-1" onClick={() => startSession(consoleObj.id, 120)}>2 horas</Button>
-              <Button size="sm" variant="secondary" className="text-[10px] sm:text-xs h-8 sm:h-9 px-1 bg-secondary/50 border border-border/50" onClick={() => { 
-                const val = prompt("¿Cuántas horas jugará? (Ej: 1.5, 4, 5)"); 
-                if (val) { 
-                  const hrs = parseFloat(val.replace(',', '.')); 
-                  if (!isNaN(hrs) && hrs > 0) startSession(consoleObj.id, Math.round(hrs * 60)); 
-                } 
-              }}>Otra...</Button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <Button size="sm" className="bg-gradient-to-r from-accent to-primary text-xs sm:text-sm h-8 sm:h-9 px-1" onClick={() => setPrepayOpen(true)}><Coins className="h-3 w-3 sm:h-4 sm:w-4 mr-1 shrink-0" /> Prepago</Button>
-              <Button size="sm" variant="outline" className="border-purple-500/50 text-purple-400 hover:bg-purple-500/10 text-xs sm:text-sm h-8 sm:h-9 px-1" onClick={() => { 
-                const p1 = prompt("Escribe el nombre del Jugador 1 (Opcional):"); 
-                if (p1 === null) return; 
-                const p2 = prompt("Escribe el nombre del Jugador 2 (Opcional):"); 
-                startSession(consoleObj.id, undefined, (p1 && p2) ? `${p1} vs ${p2}` : (p1 || p2 || "Partida de Torneo"), true); 
-                toast.success("Consola iniciada en Modo Torneo (Costo $0)");
-              }}><Trophy className="h-3 w-3 sm:h-4 sm:w-4 mr-1 shrink-0" /> Torneo</Button>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-2 mt-auto">
-            <div className="grid grid-cols-3 gap-2">
-              {isPrepaid ? ( 
-                <>
-                  <Button size="sm" variant="secondary" className="text-[10px] sm:text-xs h-8 px-1" onClick={() => setExtendOpen(60)}>+1h (cobrar)</Button>
-                  <Button size="sm" variant="secondary" className="text-[10px] sm:text-xs h-8 px-1" onClick={() => setExtendOpen(120)}>+2h (cobrar)</Button>
-                  <Button size="sm" variant="secondary" className="text-[10px] sm:text-xs h-8 px-1" onClick={() => {
-                    const val = prompt("¿Cuántas horas adicionales desea pagar? (Ej: 1.5, 2)");
-                    if (val) {
-                      const hrs = parseFloat(val.replace(',', '.'));
-                      if (!isNaN(hrs) && hrs > 0) setExtendOpen(Math.round(hrs * 60));
-                    }
-                  }}>+Otra...</Button>
-                </> 
-              ) : ( 
-                <>
-                  <Button size="sm" variant="secondary" className="text-[10px] sm:text-xs h-8 px-1" onClick={() => extendSession(consoleObj.id, 60)}>+1 hora</Button>
-                  <Button size="sm" variant="secondary" className="text-[10px] sm:text-xs h-8 px-1" onClick={() => extendSession(consoleObj.id, 120)}>+2 horas</Button>
-                  <Button size="sm" variant="secondary" className="text-[10px] sm:text-xs h-8 px-1" onClick={() => {
-                    const val = prompt("¿Cuántas horas adicionales jugará? (Ej: 1.5, 2)");
-                    if (val) {
-                      const hrs = parseFloat(val.replace(',', '.'));
-                      if (!isNaN(hrs) && hrs > 0) extendSession(consoleObj.id, Math.round(hrs * 60));
-                    }
-                  }}>+Otra...</Button>
-                </> 
-              )}
-            </div>
-            
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              <Button size="sm" variant="outline" className="text-xs h-8 px-1" onClick={() => setSnackOpen(true)}><ShoppingBag className="h-3 w-3 mr-1 shrink-0" />Snack</Button>
-              <Button size="sm" variant="outline" className="text-xs h-8 px-1" onClick={() => setComboOpen(true)}><Package className="h-3 w-3 mr-1 shrink-0" />Combo</Button>
-              <Button size="sm" variant="outline" className="border-primary/30 text-primary hover:bg-primary/10 text-xs h-8 px-1" onClick={() => { if (confirm(`¿Añadir 1 Control Adicional por $1 a ${consoleObj.name}?`)) { addExtraController(consoleObj.id); toast.success("Control añadido"); } }}><Gamepad2 className="h-3 w-3 mr-1 shrink-0" />Ctrl +$1</Button>
-              <Button size="sm" variant="outline" onClick={() => setTransferOpen(true)} className="border-white/20 hover:bg-white/10 text-xs h-8 px-1"><ArrowRightLeft className="h-3 w-3 mr-1 shrink-0" />Mover</Button>
-              {paused ? ( <Button size="sm" variant="default" className="col-span-2 sm:col-span-2 bg-warning text-foreground hover:bg-warning/90 text-xs h-8" onClick={() => resumeSession(consoleObj.id)}><Play className="h-3 w-3 mr-1" />Reanudar</Button> ) : ( <Button size="sm" variant="outline" className="col-span-2 sm:col-span-2 text-xs h-8" onClick={() => pauseSession(consoleObj.id)}><Pause className="h-3 w-3 mr-1" />Pausar</Button> )}
-            </div>
-
-            {isPrepaid && pendingExtras > 0.001 && ( <Button className="w-full h-8 sm:h-9 text-xs sm:text-sm" variant="default" onClick={() => setPayExtrasOpen(true)}><Coins className="h-3 w-3 sm:h-4 sm:w-4 mr-2" /> Cobrar Adicional <span className="notranslate ml-1">{fmtUsd(pendingExtras)}</span></Button> )}
-            <div className="flex gap-2">
-              {isPrepaid ? ( <Button className="flex-1 h-8 sm:h-9 text-xs sm:text-sm" variant="secondary" onClick={tryRelease} disabled={pendingExtras > 0.001}><Coins className="h-3 w-3 sm:h-4 sm:w-4 mr-2" /> Liberar</Button> ) : ( 
-                <Button className="flex-1 glow-primary h-8 sm:h-9 text-xs sm:text-sm" onClick={() => { 
-                  if (!paused) pauseSession(consoleObj.id); 
-                  setCheckoutOpen(true); 
-                }}><Coins className="h-3 w-3 sm:h-4 sm:w-4 mr-2" /> Cobrar <span className="notranslate ml-1">{fmtUsd(total)}</span></Button> 
-              )}
-              <Button variant="outline" className="px-2 sm:px-3 border-red-500/40 text-red-400 hover:bg-red-500/15 h-8 sm:h-9" onClick={() => { if (confirm(`⚠️ ¿CANCELAR sesión sin cobrar?`)) cancelSession(consoleObj.id); }}><Trash2 className="h-3 w-3 sm:h-4 sm:w-4" /></Button>
-            </div>
+            )}
           </div>
         )}
-      </div>
 
-      <SnackPicker consoleId={consoleObj.id} open={snackOpen} onClose={() => setSnackOpen(false)} />
-      <ComboPicker consoleId={consoleObj.id} open={comboOpen} onClose={() => setComboOpen(false)} />
-      {checkoutOpen && <Checkout open={checkoutOpen} onClose={() => setCheckoutOpen(false)} consoleObj={consoleObj} now={now} />}
-      <PrepayCheckout open={prepayOpen} onClose={() => setPrepayOpen(false)} consoleObj={consoleObj} />
-      <PayExtrasDialog open={payExtrasOpen} onClose={() => setPayExtrasOpen(false)} consoleObj={consoleObj} />
-      <TransferDialog consoleId={consoleObj.id} open={transferOpen} onClose={() => setTransferOpen(false)} />
-      {extendOpen !== null && ( <ExtendCheckoutDialog open={true} onClose={() => setExtendOpen(null)} consoleObj={consoleObj} addMinutes={extendOpen} /> )}
-    </Card>
+        {method === "mixed" && (
+          <MixedPaymentInputs total={totalAmount} cashUsd={cashUsd} mobileBs={mobileBs} cashBs={cashBs} mobileBank={mobileBank} setCashUsd={setCashUsd} setMobileBs={setMobileBs} setCashBs={setCashBs} setMobileBank={setMobileBank} />
+        )}
+
+        <div className="flex justify-end pt-2">
+          <Button 
+             className="w-full h-12 text-lg bg-green-600 hover:bg-green-700 text-white" 
+             disabled={(method === "mixed" && remaining > 0.01) || !isValidRef} 
+             onClick={action === "prepay" ? handlePrepay : action === "extend" ? handleExtend : handleFinalize}
+          >
+            Confirmar Pago
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
+  // DISEÑO DE LA TARJETA
+  return (
+    <>
+      <Card className={`p-4 border-2 transition-all duration-200 flex flex-col justify-between ${!c.session ? 'border-green-500/50 bg-green-950/10' : c.session.pausedAt ? 'border-yellow-500/50 bg-yellow-950/10' : 'border-blue-500/50 bg-blue-950/10'}`}>
+        <div>
+          <div className="flex justify-between items-start mb-2">
+            <div>
+              <h3 className="font-bold text-lg text-white flex items-center gap-2"><Gamepad2 className="h-5 w-5" /> {c.name}</h3>
+              <span className="text-xs font-semibold px-2 py-0.5 rounded bg-secondary text-muted-foreground">{c.type}</span>
+            </div>
+            <span className="text-sm font-bold text-primary">{fmtUsd(c.ratePerHour)}/h</span>
+          </div>
+
+          {!c.session ? (
+            <div className="my-6 text-center"><span className="text-sm font-medium text-green-400 bg-green-500/10 px-3 py-1 rounded-full border border-green-500/20">• Disponible</span></div>
+          ) : (
+            <div className="my-3 space-y-1 bg-black/40 p-3 rounded-lg border border-white/5">
+              <div className="flex justify-between text-xs text-muted-foreground"><span>Cliente:</span><span className="font-medium text-white truncate max-w-[120px]">{c.session.customerName || "General"}</span></div>
+              <div className="flex justify-between text-xs text-muted-foreground"><span>Tiempo Jugado:</span><span className="text-white font-medium">{minutes} min</span></div>
+              <div className="flex justify-between text-xs text-muted-foreground"><span>Monto:</span><span className={isPrepaid ? "text-green-400 font-bold" : "text-amber-400 font-bold"}>{isPrepaid ? "PREPAGADO" : fmtUsd(amount)}</span></div>
+
+              {isTournament && <div className="mt-2 text-center text-xs font-bold text-purple-400 bg-purple-500/10 rounded py-1 border border-purple-500/20">🏆 MODO TORNEO</div>}
+            </div>
+          )}
+        </div>
+
+        {/* BOTONES DE LA TARJETA */}
+        <div className="mt-4 flex flex-wrap gap-2">
+          {!c.session ? (
+            <>
+              <Button className="flex-1 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/50" onClick={() => setAction("start")}><Play className="h-4 w-4 mr-1" /> Libre</Button>
+              <Button className="flex-1 bg-green-600 hover:bg-green-700 text-white" onClick={() => setAction("prepay")}><Clock className="h-4 w-4 mr-1" /> Prepago</Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" size="sm" className="flex-1" onClick={() => c.session?.pausedAt ? store.resumeSession(c.id) : store.pauseSession(c.id)}>
+                {c.session?.pausedAt ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+              </Button>
+              {!isTournament && <Button variant="outline" size="sm" className="flex-1 text-blue-400 border-blue-500/30" onClick={() => setAction("extend")}><Plus className="h-4 w-4 mr-1" /> Extender</Button>}
+              <Button size="sm" className={`w-full ${isPrepaid ? 'bg-primary hover:bg-primary/90' : 'bg-amber-600 hover:bg-amber-700'} text-white font-bold`} onClick={() => isPrepaid ? handleFinalize() : setAction("finalize")}>
+                <Square className="h-4 w-4 mr-1" /> {isPrepaid ? "Liberar Consola" : `Cobrar ${fmtUsd(amount)}`}
+              </Button>
+              <Button variant="ghost" size="sm" className="w-full text-xs text-red-400 hover:bg-red-500/10 mt-1" onClick={handleCancel}>Cancelar Sesión (Anular)</Button>
+            </>
+          )}
+        </div>
+      </Card>
+
+      {/* MODAL UNIFICADO PARA TODAS LAS ACCIONES */}
+      <Dialog open={!!action} onOpenChange={(open) => { if(!open){ setAction(null); resetForm(); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display">
+              {action === "start" ? "Iniciar Tiempo Libre" : action === "prepay" ? "Iniciar Prepago" : action === "extend" ? "Extender Tiempo" : "Finalizar y Cobrar"}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {(action === "start" || action === "prepay") && (
+              <div><Label>Nombre del Cliente</Label><Input placeholder="Ej: Juan Pérez" value={customerName} onChange={e => setCustomerName(e.target.value)} /></div>
+            )}
+            
+            {(action === "prepay" || action === "extend") && (
+              <div>
+                <Label>Minutos a jugar/extender</Label>
+                <div className="grid grid-cols-4 gap-2 mt-2 mb-2">
+                  <Button variant="outline" type="button" onClick={() => setInputMins("30")}>30m</Button>
+                  <Button variant="outline" type="button" onClick={() => setInputMins("60")}>1h</Button>
+                  <Button variant="outline" type="button" onClick={() => setInputMins("120")}>2h</Button>
+                  <Button variant="outline" type="button" onClick={() => setInputMins("180")}>3h</Button>
+                </div>
+                <Input type="number" min="5" step="5" value={inputMins} onChange={e => setInputMins(e.target.value)} />
+              </div>
+            )}
+
+            {action === "start" && <Button className="w-full h-12" onClick={inputMins ? handleStartFixed : handleStartFree}>Comenzar a Jugar</Button>}
+            
+            {/* RENDERIZA EL FORMULARIO DE PAGO PARA PREPAGOS, EXTENSIONES PAGADAS O COBROS FINALES */}
+            {(action === "prepay") && renderPaymentForm((parseInt(inputMins||"0") / 60) * c.ratePerHour)}
+            {(action === "extend" && isPrepaid) && renderPaymentForm((parseInt(inputMins||"0") / 60) * c.ratePerHour)}
+            {(action === "extend" && !isPrepaid) && <Button className="w-full h-12 mt-4 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleExtend}>Añadir Tiempo a la Cuenta</Button>}
+            {(action === "finalize" && !isPrepaid) && renderPaymentForm(amount)}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
-
-export { useNow, formatDuration };
