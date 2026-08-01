@@ -52,16 +52,22 @@ const defaultConsoles: ConsoleState[] = [ { id: "ps4-1", name: "PS4 #3", type: "
 
 const vaccinateZustandPayload = (payload: any) => { 
   if (payload && payload.state) { 
-    // 🔥 SEGURO ANTI-BORRADO DE CONSOLAS 🔥
-    // Si la base de datos devuelve un array vacío, forzamos las 6 consolas por defecto.
-    if (Array.isArray(payload.state.consoles) && payload.state.consoles.length > 0) { 
-      payload.state.consoles = payload.state.consoles.map((c: any) => { 
-        if (!c) return null;
+    
+    // 🔥 FILTRO EXTREMO PARA LAS CONSOLAS 🔥
+    let procesadas = [];
+    if (Array.isArray(payload.state.consoles)) {
+      procesadas = payload.state.consoles.map((c: any) => { 
+        if (!c || !c.id) return null; // Si viene basura, la volamos
         if (c.id === "ps4-1") c.name = "PS4 #3"; if (c.id === "ps4-2") c.name = "PS4 #4"; if (c.id === "ps4-3") c.name = "PS4 #5"; if (c.id === "ps4-4") c.name = "PS4 #6"; 
         return { ...c, charges: Array.isArray(c.charges) ? c.charges : [] }; 
-      }).filter(Boolean); 
-    } else { 
-      payload.state.consoles = JSON.parse(JSON.stringify(defaultConsoles)); 
+      }).filter(Boolean);
+    }
+    
+    // Si después de limpiar todo resulta que nos quedamos en 0 consolas, metemos las 6 a la fuerza
+    if (procesadas.length === 0) {
+      payload.state.consoles = JSON.parse(JSON.stringify(defaultConsoles));
+    } else {
+      payload.state.consoles = procesadas;
     }
     
     payload.state.sales = Array.isArray(payload.state.sales) ? payload.state.sales : []; 
@@ -115,3 +121,9 @@ export const computeTimeAmount = (consoleObj: ConsoleState, nowMs: number): { mi
 const resyncFromCloud = async () => { if ((window as any).pausarDescarga) return; (window as any).pausarSubida = true; try { const { data, error } = await supabase.from('app_state').select('state').eq('id', 'gamerzone-store-v1').maybeSingle(); if ((window as any).pausarDescarga) return; if (!error && data && data.state) { const safeData = vaccinateZustandPayload(data.state); const estadoActual = JSON.stringify(useStore.getState()); if (safeData?.state && estadoActual !== JSON.stringify(safeData.state)) { useStore.setState(safeData.state); localStorage.setItem("gamerzone-store-v1", JSON.stringify(safeData)); } } } catch (e) { } finally { setTimeout(() => { (window as any).pausarSubida = false; }, 500); } };
 const channel = supabase.channel('escuchar-nube'); channel.on('postgres_changes', { event: '*', schema: 'public', table: 'app_state' }, () => { resyncFromCloud(); }).subscribe();
 window.addEventListener('online', resyncFromCloud); window.addEventListener('focus', resyncFromCloud); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') resyncFromCloud(); });
+
+// 🔥 COMANDO DE RESCATE (Para usar desde la consola F12 si ocurre una emergencia) 🔥
+(window as any).recuperarConsolas = () => {
+  useStore.setState({ consoles: JSON.parse(JSON.stringify(defaultConsoles)) });
+  console.log("¡Misión cumplida! Las 6 consolas han sido recuperadas y guardadas en la base de datos.");
+};
