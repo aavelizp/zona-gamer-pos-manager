@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Trophy, Users, Play, Plus, Gamepad2, DollarSign, CheckCircle2, AlertCircle, Tv } from "lucide-react";
 import { toast } from "sonner";
 
-export function Tournaments() {
+export function TournamentTab() {
   const store = useStore();
   const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(null);
   
