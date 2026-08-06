@@ -26,8 +26,18 @@ export const EXPENSE_CATEGORIES: ExpenseCategory[] = ["Servicios", "Compras", "M
 export interface Expense { id: string; ts: number; createdAt?: number; description: string; amount: number; method: "cash" | "mobile"; amountBs?: number; rate: number; category?: ExpenseCategory; }
 export interface PastClosure { id: string; date: number; totalSales: number; totalExpenses: number; sales: SaleRecord[]; expenses: Expense[]; }
 
+// ==========================================
+// 🏆 NUEVAS ESTRUCTURAS AISLADAS DE TORNEOS 🏆
+// ==========================================
+export interface Tournament { id: string; name: string; game: string; maxPlayers: number; entryFee: number; prizePercentage: number; format: string; dateRange: string; status: "registering" | "active" | "completed"; }
+export interface TournamentParticipant { id: string; tournamentId: string; memberName: string; phone?: string; paymentStatus: "paid" | "pending"; enrollSaleId?: string; }
+export interface TournamentMatch { id: string; tournamentId: string; round: number; matchIndex: number; player1Id?: string; player2Id?: string; winnerId?: string; isDraw?: boolean; score1?: number; score2?: number; nextMatchId?: string; assignedConsoleId?: string; }
+
 interface State {
   rate: number; soundOn: boolean; products: Product[]; combos: Combo[]; consoles: ConsoleState[]; sales: SaleRecord[]; credits: Credit[]; queue: QueueEntry[]; members: Member[]; maintenanceLogs: MaintenanceLog[]; sessionHistory: SessionHistoryEntry[]; expenses: Expense[]; pastClosures: PastClosure[];
+  
+  // 🏆 ESTADOS DE TORNEOS
+  tournaments: Tournament[]; participants: TournamentParticipant[]; matches: TournamentMatch[];
 
   setRate: (n: number) => void; toggleSound: () => void;
   addProduct: (p: Omit<Product, "id">) => void; updateProduct: (id: string, p: Partial<Product>) => void; removeProduct: (id: string) => void;
@@ -45,6 +55,17 @@ interface State {
   closeDay: () => void; registerMaintenance: (consoleId: string, description: string, date: number) => void; deleteMaintenanceLog: (logId: string) => void;
   prepaySession: (consoleId: string, minutes: number, payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; cashBs?: number; total: number; customerInfo?: CustomerInfo; comboId?: string }) => void; releaseConsole: (consoleId: string) => boolean; payExtras: (consoleId: string, payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; total: number; customer?: string }) => void; extendPaidSession: (consoleId: string, addMinutes: number, payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; total: number; customer?: string }) => void;
   addExpense: (e: { description: string; amount: number; method: "cash" | "mobile"; amountBs?: number; category?: ExpenseCategory; ts?: number }) => void; setConsoleRate: (type: ConsoleType, ratePerHour: number) => void; deleteSale: (saleId: string) => void; resetConsoleStats: (consoleId: string) => void;
+  
+  // 🏆 FUNCIONES PARA TORNEOS
+  createTournament: (t: Omit<Tournament, "id">) => void;
+  updateTournament: (id: string, data: Partial<Tournament>) => void;
+  deleteTournament: (id: string) => void;
+  enrollParticipant: (tournamentId: string, memberName: string, phone: string | undefined, isPaid: boolean, paymentPayload?: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; cashBs?: number; total: number }) => void;
+  removeParticipant: (id: string) => void;
+  payEnrollment: (participantId: string, payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; cashBs?: number; total: number }) => void;
+  generateBracket: (tournamentId: string) => void;
+  setMatchScore: (matchId: string, score1: number, score2: number) => void;
+  assignConsoleToMatch: (matchId: string, consoleId?: string) => void;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -74,6 +95,11 @@ const vaccinateZustandPayload = (payload: any) => {
     payload.state.sessionHistory = Array.isArray(payload.state.sessionHistory) ? payload.state.sessionHistory : []; 
     payload.state.expenses = Array.isArray(payload.state.expenses) ? payload.state.expenses : [];
     payload.state.pastClosures = Array.isArray(payload.state.pastClosures) ? payload.state.pastClosures : [];
+    
+    // 🏆 INICIALIZADOR SEGURO DE TORNEOS
+    payload.state.tournaments = Array.isArray(payload.state.tournaments) ? payload.state.tournaments : [];
+    payload.state.participants = Array.isArray(payload.state.participants) ? payload.state.participants : [];
+    payload.state.matches = Array.isArray(payload.state.matches) ? payload.state.matches : [];
   } 
   return payload; 
 };
@@ -82,6 +108,7 @@ export const useStore = create<State>()(
   persist(
     (set, get) => ({
       rate: 40, soundOn: true, products: [{ id: uid(), name: "Pepsi 355ml", price: 1, stock: 24 }], combos: [], consoles: defaultConsoles, sales: [], credits: [], queue: [], members: [], maintenanceLogs: [], sessionHistory: [], expenses: [], pastClosures: [],
+      tournaments: [], participants: [], matches: [],
       
       setRate: (n) => set({ rate: Math.max(0, n) }), toggleSound: () => set((s) => ({ soundOn: !s.soundOn })),
       addProduct: (p) => set((s) => ({ products: [...(s.products||[]), { ...p, id: uid() }] })), updateProduct: (id, p) => set((s) => ({ products: (s.products||[]).map((x) => (x?.id === id ? { ...x, ...p } : x)) })), removeProduct: (id) => set((s) => ({ products: (s.products||[]).filter((p) => p?.id !== id) })),
@@ -167,10 +194,181 @@ export const useStore = create<State>()(
       addExpense: ({ ts, ...rest }) => set((s) => ({ expenses: [ { id: uid(), ts: ts ?? Date.now(), createdAt: Date.now(), rate: s.rate, ...rest }, ...(s.expenses||[]) ] })),
       setConsoleRate: (type, ratePerHour) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.type === type ? { ...c, ratePerHour: Math.max(0, ratePerHour) } : c ) })),
       deleteSale: (id) => set((s) => ({ sales: (s.sales||[]).filter((x) => x?.id !== id) })),
-      resetConsoleStats: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId ? { ...c, totalMinutes: 0, maintenanceMinutes: 0 } : c), sessionHistory: (s.sessionHistory||[]).filter((h) => h?.consoleId !== consoleId) }))
+      resetConsoleStats: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId ? { ...c, totalMinutes: 0, maintenanceMinutes: 0 } : c), sessionHistory: (s.sessionHistory||[]).filter((h) => h?.consoleId !== consoleId) })),
+      
+      // ==========================================
+      // 🏆 IMPLEMENTACIÓN LÓGICA DE TORNEOS 🏆
+      // ==========================================
+      createTournament: (t) => set((s) => ({
+        tournaments: [...(s.tournaments || []), { ...t, id: uid(), status: "registering" }]
+      })),
+
+      updateTournament: (id, data) => set((s) => ({
+        tournaments: (s.tournaments || []).map((t) => t.id === id ? { ...t, ...data } : t)
+      })),
+
+      deleteTournament: (id) => set((s) => ({
+        tournaments: (s.tournaments || []).filter((t) => t.id !== id),
+        participants: (s.participants || []).filter((p) => p.tournamentId !== id),
+        matches: (s.matches || []).filter((m) => m.tournamentId !== id)
+      })),
+
+      enrollParticipant: (tournamentId, memberName, phone, isPaid, paymentPayload) => set((s) => {
+        const tournament = (s.tournaments || []).find((t) => t.id === tournamentId);
+        if (!tournament) return s;
+
+        let saleId = undefined;
+        let newSales = s.sales || [];
+
+        if (isPaid && paymentPayload) {
+          saleId = uid();
+          const sale: SaleRecord = {
+            id: saleId,
+            ts: Date.now(),
+            timeAmount: 0,
+            extrasAmount: paymentPayload.total,
+            total: paymentPayload.total,
+            cashUsd: paymentPayload.cashUsd,
+            mobileBs: paymentPayload.mobileBs,
+            mobileBank: paymentPayload.mobileBank,
+            mobileRef: paymentPayload.mobileRef,
+            cashBs: paymentPayload.cashBs || 0,
+            rate: s.rate,
+            method: paymentPayload.method,
+            customer: memberName,
+            concept: "Inscripción Torneo",
+            items: [{ name: `Torneo ${tournament.name} (${memberName})`, qty: 1, price: paymentPayload.total }]
+          };
+          newSales = [sale, ...newSales];
+        }
+
+        const newParticipant: TournamentParticipant = {
+          id: uid(),
+          tournamentId,
+          memberName,
+          phone,
+          paymentStatus: isPaid ? "paid" : "pending",
+          enrollSaleId: saleId
+        };
+
+        return {
+          participants: [...(s.participants || []), newParticipant],
+          sales: newSales
+        };
+      }),
+
+      removeParticipant: (id) => set((s) => ({
+        participants: (s.participants || []).filter((p) => p.id !== id)
+      })),
+
+      payEnrollment: (participantId, payload) => set((s) => {
+        const p = (s.participants || []).find((part) => part.id === participantId);
+        if (!p || p.paymentStatus === "paid") return s;
+        const tournament = (s.tournaments || []).find((t) => t.id === p.tournamentId);
+        const saleId = uid();
+
+        const sale: SaleRecord = {
+          id: saleId,
+          ts: Date.now(),
+          timeAmount: 0,
+          extrasAmount: payload.total,
+          total: payload.total,
+          cashUsd: payload.cashUsd,
+          mobileBs: payload.mobileBs,
+          mobileBank: payload.mobileBank,
+          mobileRef: payload.mobileRef,
+          cashBs: payload.cashBs || 0,
+          rate: s.rate,
+          method: payload.method,
+          customer: p.memberName,
+          concept: "Inscripción Torneo",
+          items: [{ name: `Torneo ${tournament?.name || ""} (${p.memberName})`, qty: 1, price: payload.total }]
+        };
+
+        return {
+          participants: (s.participants || []).map((part) => part.id === participantId ? { ...part, paymentStatus: "paid", enrollSaleId: saleId } : part),
+          sales: [sale, ...(s.sales || [])]
+        };
+      }),
+
+      generateBracket: (tournamentId) => set((s) => {
+        const t = (s.tournaments || []).find((x) => x.id === tournamentId);
+        if (!t) return s;
+        const enrolled = (s.participants || []).filter((p) => p.tournamentId === tournamentId);
+        if (enrolled.length < 2) return s;
+
+        const cleanMatches = (s.matches || []).filter((m) => m.tournamentId !== tournamentId);
+        const shuffled = [...enrolled].sort(() => Math.random() - 0.5);
+        const newMatches: TournamentMatch[] = [];
+        let matchIndex = 1;
+
+        for (let i = 0; i < shuffled.length; i += 2) {
+          const p1 = shuffled[i];
+          const p2 = shuffled[i + 1];
+          newMatches.push({
+            id: uid(),
+            tournamentId,
+            round: 1,
+            matchIndex: matchIndex++,
+            player1Id: p1?.id,
+            player2Id: p2?.id,
+            winnerId: !p2 ? p1?.id : undefined 
+          });
+        }
+
+        return {
+          tournaments: (s.tournaments || []).map((x) => x.id === tournamentId ? { ...x, status: "active" } : x),
+          matches: [...cleanMatches, ...newMatches]
+        };
+      }),
+
+      setMatchScore: (matchId, score1, score2) => set((s) => {
+        const match = (s.matches || []).find((m) => m.id === matchId);
+        if (!match) return s;
+
+        let winnerId = undefined;
+        if (score1 > score2) winnerId = match.player1Id;
+        if (score2 > score1) winnerId = match.player2Id;
+
+        return {
+          matches: (s.matches || []).map((m) => m.id === matchId ? { ...m, score1, score2, winnerId, isDraw: score1 === score2 } : m)
+        };
+      }),
+
+      assignConsoleToMatch: (matchId, consoleId) => set((s) => {
+        const match = (s.matches || []).find((m) => m.id === matchId);
+        if (!match || !consoleId) {
+          return {
+            matches: (s.matches || []).map((m) => m.id === matchId ? { ...m, assignedConsoleId: undefined } : m)
+          };
+        }
+
+        const p1 = (s.participants || []).find((p) => p.id === match.player1Id)?.memberName || "Jugador 1";
+        const p2 = (s.participants || []).find((p) => p.id === match.player2Id)?.memberName || "Jugador 2";
+        const customerTitle = `🏆 Torneo: ${p1} vs ${p2}`;
+
+        const updatedConsoles = (s.consoles || []).map((c) => {
+          if (c.id === consoleId) {
+            return {
+              ...c,
+              session: {
+                mode: "free" as SessionMode,
+                startedAt: Date.now(),
+                customerName: customerTitle
+              }
+            };
+          }
+          return c;
+        });
+
+        return {
+          matches: (s.matches || []).map((m) => m.id === matchId ? { ...m, assignedConsoleId: consoleId } : m),
+          consoles: updatedConsoles
+        };
+      })
     }),
     {
-      name: "gamerzone-store-v1",
+      name: "gamerzone-store", // 🚨 AQUÍ ESTÁ EL CAMBIO CLAVE, AHORA APUNTA A TU BÓVEDA ORIGINAL 🚨
       storage: {
         getItem: async (name) => { try { const { data, error } = await supabase.from('app_state').select('state').eq('id', name).maybeSingle(); if (!error && data && data.state) { const safeData = vaccinateZustandPayload(data.state); localStorage.setItem(name, JSON.stringify(safeData)); return safeData; } } catch (err) {} const local = localStorage.getItem(name); if (local) { try { return vaccinateZustandPayload(JSON.parse(local)); } catch(e) {} } return null; },
         setItem: async (name, value) => { localStorage.setItem(name, typeof value === 'string' ? value : JSON.stringify(value)); if ((window as any).pausarSubida) return; (window as any).pausarDescarga = true; if ((window as any).relojBloqueo) clearTimeout((window as any).relojBloqueo); (window as any).relojBloqueo = setTimeout(() => { (window as any).pausarDescarga = false; }, 3500); (window as any).estadoPendiente = value; if ((window as any).relojSubida) clearTimeout((window as any).relojSubida); (window as any).relojSubida = setTimeout(async () => { if ((window as any).pausarSubida) return; try { await supabase.from('app_state').upsert({ id: name, state: typeof (window as any).estadoPendiente === 'string' ? JSON.parse((window as any).estadoPendiente) : (window as any).estadoPendiente }); } catch (err) {} }, 800); },
@@ -184,6 +382,6 @@ export const fmtUsd = (n: number) => { if (isNaN(n)) return "$0.00"; return `$${
 export const fmtBs = (usd: number, rate: number) => { if (isNaN(usd) || isNaN(rate)) return "Bs 0.00"; return `Bs ${((usd || 0) * rate).toLocaleString("es-VE", { maximumFractionDigits: 2 })}`; };
 export const computeTimeAmount = (consoleObj: ConsoleState, nowMs: number): { minutes: number; amount: number } => { if (!consoleObj || !consoleObj.session) return { minutes: 0, amount: 0 }; const ref = consoleObj.session.pausedAt ?? nowMs; const elapsedMs = Math.max(0, ref - (consoleObj.session.startedAt || ref)); const minutes = Math.ceil(elapsedMs / 60_000); return { minutes, amount: (minutes / 60) * (consoleObj.ratePerHour || 0) }; };
 
-const resyncFromCloud = async () => { if ((window as any).pausarDescarga) return; (window as any).pausarSubida = true; try { const { data, error } = await supabase.from('app_state').select('state').eq('id', 'gamerzone-store-v1').maybeSingle(); if ((window as any).pausarDescarga) return; if (!error && data && data.state) { const safeData = vaccinateZustandPayload(data.state); const estadoActual = JSON.stringify(useStore.getState()); if (safeData?.state && estadoActual !== JSON.stringify(safeData.state)) { useStore.setState(safeData.state); localStorage.setItem("gamerzone-store-v1", JSON.stringify(safeData)); } } } catch (e) { } finally { setTimeout(() => { (window as any).pausarSubida = false; }, 500); } };
+const resyncFromCloud = async () => { if ((window as any).pausarDescarga) return; (window as any).pausarSubida = true; try { const { data, error } = await supabase.from('app_state').select('state').eq('id', 'gamerzone-store').maybeSingle(); if ((window as any).pausarDescarga) return; if (!error && data && data.state) { const safeData = vaccinateZustandPayload(data.state); const estadoActual = JSON.stringify(useStore.getState()); if (safeData?.state && estadoActual !== JSON.stringify(safeData.state)) { useStore.setState(safeData.state); localStorage.setItem("gamerzone-store", JSON.stringify(safeData)); } } } catch (e) { } finally { setTimeout(() => { (window as any).pausarSubida = false; }, 500); } }; // 🚨 SEGUNDO CAMBIO CLAVE AQUÍ 🚨
 const channel = supabase.channel('escuchar-nube'); channel.on('postgres_changes', { event: '*', schema: 'public', table: 'app_state' }, () => { resyncFromCloud(); }).subscribe((status) => { if (status === 'CLOSED' || status === 'CHANNEL_ERROR') { setTimeout(() => supabase.channel('escuchar-nube').subscribe(), 5000); } });
 window.addEventListener('online', resyncFromCloud); window.addEventListener('focus', resyncFromCloud); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { resyncFromCloud(); } }); setInterval(() => { if (document.visibilityState === 'visible') resyncFromCloud(); }, 15000);
