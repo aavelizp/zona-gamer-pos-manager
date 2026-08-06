@@ -1,33 +1,39 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useStore, fmtUsd, fmtBs, type Tournament, type PaymentMethod } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Trophy, Users, Play, Plus, Gamepad2, DollarSign, CheckCircle2, AlertCircle, Tv } from "lucide-react";
+import { Trophy, Users, Play, Plus, CheckCircle2, AlertCircle, Tv } from "lucide-react";
 import { toast } from "sonner";
 
 export function TournamentTab() {
   const store = useStore();
-  const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(null);
   
-  // Modales
+  // 🔥 ESCUDO CONTRA EL ERROR #419 (PANTALLA EN BLANCO) 🔥
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(null);
   const [isNewTournamentOpen, setIsNewTournamentOpen] = useState(false);
   const [isEnrollOpen, setIsEnrollOpen] = useState(false);
 
-  // Formulario Nuevo Torneo
   const [name, setName] = useState("");
   const [game, setGame] = useState("FC 25 (FIFA)");
   const [entryFee, setEntryFee] = useState("5");
   const [maxPlayers, setMaxPlayers] = useState("16");
 
-  // Formulario de Inscripción
   const [playerName, setPlayerName] = useState("");
   const [playerPhone, setPlayerPhone] = useState("");
   const [isPaidNow, setIsPaidNow] = useState(true);
   const [payMethod, setPayMethod] = useState<PaymentMethod>("mobile");
   const [mobileRef, setMobileRef] = useState("");
+
+  // Si React no ha terminado de cargar, no renderizamos nada para evitar el choque #419
+  if (!isMounted) return null;
 
   const activeTournament = (store.tournaments || []).find((t) => t.id === selectedTournamentId);
   const participants = (store.participants || []).filter((p) => p.tournamentId === selectedTournamentId);
@@ -90,20 +96,18 @@ export function TournamentTab() {
 
   return (
     <div className="space-y-6">
-      {/* Cabecera y Botón Nuevo Torneo */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold font-display tracking-wide text-white flex items-center gap-2">
             <Trophy className="h-7 w-7 text-yellow-500" /> GESTIÓN DE TORNEOS
           </h1>
-          <p className="text-sm text-muted-foreground">Crea torneos, inscribe miembros y organiza partidos por consola</p>
+          <p className="text-sm text-muted-foreground">Crea torneos, inscribe miembros y organiza partidos</p>
         </div>
         <Button className="bg-purple-600 hover:bg-purple-700 text-white font-bold" onClick={() => setIsNewTournamentOpen(true)}>
           <Plus className="h-4 w-4 mr-1" /> Nuevo Torneo
         </Button>
       </div>
 
-      {/* Lista de Torneos Creados */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {(store.tournaments || []).map((t) => (
           <Card
@@ -132,36 +136,23 @@ export function TournamentTab() {
         ))}
       </div>
 
-      {/* Detalle del Torneo Seleccionado */}
       {activeTournament && (
         <Card className="p-6 border-purple-500/30 bg-card/80 space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-white/10 pb-4 gap-4">
             <div>
-              <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                🏆 {activeTournament.name}
-              </h2>
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">🏆 {activeTournament.name}</h2>
               <p className="text-xs text-muted-foreground">Juego: {activeTournament.game} | Formato: Eliminación Directa</p>
             </div>
             <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                className="border-green-500/50 text-green-400 hover:bg-green-500/10"
-                onClick={() => setIsEnrollOpen(true)}
-              >
+              <Button size="sm" variant="outline" className="border-green-500/50 text-green-400 hover:bg-green-500/10" onClick={() => setIsEnrollOpen(true)}>
                 <Users className="h-4 w-4 mr-1" /> Inscribir Jugador
               </Button>
-              <Button
-                size="sm"
-                className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold"
-                onClick={handleGenerateBracket}
-              >
+              <Button size="sm" className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold" onClick={handleGenerateBracket}>
                 <Play className="h-4 w-4 mr-1" /> Generar Partidos
               </Button>
             </div>
           </div>
 
-          {/* Lista de Inscritos */}
           <div>
             <h3 className="font-bold text-sm text-muted-foreground uppercase mb-3">Jugadores Inscritos ({participants.length})</h3>
             {participants.length === 0 ? (
@@ -189,7 +180,6 @@ export function TournamentTab() {
             )}
           </div>
 
-          {/* Partidos Generados (Brackets) */}
           {matches.length > 0 && (
             <div className="border-t border-white/10 pt-4">
               <h3 className="font-bold text-sm text-yellow-500 uppercase mb-3">⚔️ Llaves de Partidos - Ronda 1</h3>
@@ -201,7 +191,6 @@ export function TournamentTab() {
                     <Card key={m.id} className="p-4 bg-background/50 border border-purple-500/20 space-y-3">
                       <div className="flex justify-between items-center">
                         <span className="text-xs font-bold text-purple-400">Partido #{m.matchIndex}</span>
-                        {/* Selector para mandar a consola */}
                         <div className="flex items-center gap-1">
                           <Tv className="h-4 w-4 text-muted-foreground" />
                           <select
@@ -214,14 +203,11 @@ export function TournamentTab() {
                           >
                             <option value="">Sin consola</option>
                             {(store.consoles || []).map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.name} ({c.type})
-                              </option>
+                              <option key={c.id} value={c.id}>{c.name} ({c.type})</option>
                             ))}
                           </select>
                         </div>
                       </div>
-
                       <div className="grid grid-cols-2 gap-2 text-center">
                         <div className={`p-2 rounded ${m.winnerId === p1?.id ? "bg-green-600/20 border border-green-500/40" : "bg-secondary/40"}`}>
                           <p className="font-bold text-white">{p1?.memberName || "N/A"}</p>
@@ -239,36 +225,31 @@ export function TournamentTab() {
         </Card>
       )}
 
-      {/* Modal: Crear Torneo */}
+      {/* 🔥 ARREGLO DEL WARNING: aria-describedby={undefined} agregado a todos los DialogContent 🔥 */}
       <Dialog open={isNewTournamentOpen} onOpenChange={setIsNewTournamentOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-sm" aria-describedby={undefined}>
           <DialogHeader><DialogTitle>Nuevo Torneo Gamer</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
-            <div><Label>Nombre del Torneo *</Label><Input placeholder="Ej: Copa Relámpago FIFA" value={name} onChange={(e) => setName(e.target.value)} /></div>
+            <div><Label>Nombre del Torneo *</Label><Input placeholder="Ej: Copa Relámpago" value={name} onChange={(e) => setName(e.target.value)} /></div>
             <div>
               <Label>Juego</Label>
               <select className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm" value={game} onChange={(e) => setGame(e.target.value)}>
                 <option value="FC 25 (FIFA)">FC 25 (FIFA)</option>
                 <option value="Mortal Kombat 1">Mortal Kombat 1</option>
-                <option value="Street Fighter 6">Street Fighter 6</option>
-                <option value="Call of Duty">Call of Duty</option>
               </select>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div><Label>Costo Inscripción ($)</Label><Input type="number" value={entryFee} onChange={(e) => setEntryFee(e.target.value)} /></div>
               <div><Label>Máx. Jugadores</Label><Input type="number" value={maxPlayers} onChange={(e) => setMaxPlayers(e.target.value)} /></div>
             </div>
-            <Button className="w-full h-11 bg-purple-600 hover:bg-purple-700 text-white font-bold" onClick={handleCreateTournament}>
-              Crear y Abrir Inscripciones
-            </Button>
+            <Button className="w-full h-11 bg-purple-600 hover:bg-purple-700 text-white font-bold" onClick={handleCreateTournament}>Crear Torneo</Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Modal: Inscribir Jugador */}
       <Dialog open={isEnrollOpen} onOpenChange={setIsEnrollOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Inscribir Jugador en {activeTournament?.name}</DialogTitle></DialogHeader>
+        <DialogContent className="max-w-sm" aria-describedby={undefined}>
+          <DialogHeader><DialogTitle>Inscribir Jugador</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div><Label>Nombre / Gamertag *</Label><Input placeholder="Ej: Carlos 'Sniper'" value={playerName} onChange={(e) => setPlayerName(e.target.value)} /></div>
             <div><Label>Teléfono (Opcional)</Label><Input placeholder="Ej: 0414-1234567" value={playerPhone} onChange={(e) => setPlayerPhone(e.target.value)} /></div>
@@ -279,22 +260,9 @@ export function TournamentTab() {
                   <span>Pagar Ahora ({fmtUsd(activeTournament.entryFee)})</span>
                   <input type="checkbox" checked={isPaidNow} onChange={(e) => setIsPaidNow(e.target.checked)} className="w-4 h-4" />
                 </div>
-                {isPaidNow && (
-                  <div>
-                    <Label className="text-xs">Método de Pago</Label>
-                    <select className="w-full h-9 rounded bg-background border border-input px-2 text-xs mt-1" value={payMethod} onChange={(e: any) => setPayMethod(e.target.value)}>
-                      <option value="mobile">Pago Móvil Bs ({fmtBs(activeTournament.entryFee, store.rate)})</option>
-                      <option value="cash">Efectivo $ ({fmtUsd(activeTournament.entryFee)})</option>
-                      <option value="cash_bs">Efectivo Bs ({fmtBs(activeTournament.entryFee, store.rate)})</option>
-                    </select>
-                  </div>
-                )}
               </div>
             )}
-
-            <Button className="w-full h-11 bg-green-600 hover:bg-green-700 text-white font-bold" onClick={handleEnroll}>
-              Confirmar Inscripción
-            </Button>
+            <Button className="w-full h-11 bg-green-600 hover:bg-green-700 text-white font-bold" onClick={handleEnroll}>Confirmar Inscripción</Button>
           </div>
         </DialogContent>
       </Dialog>
