@@ -368,7 +368,7 @@ export const useStore = create<State>()(
       })
     }),
     {
-      name: "gamerzone-store", // 🚨 AQUÍ ESTÁ EL CAMBIO CLAVE, AHORA APUNTA A TU BÓVEDA ORIGINAL 🚨
+      name: "gamerzone-store-v1", // 🚨 AQUÍ ESTÁ EL CAMBIO CLAVE, AHORA APUNTA A TU BÓVEDA ORIGINAL 🚨
       storage: {
         getItem: async (name) => { try { const { data, error } = await supabase.from('app_state').select('state').eq('id', name).maybeSingle(); if (!error && data && data.state) { const safeData = vaccinateZustandPayload(data.state); localStorage.setItem(name, JSON.stringify(safeData)); return safeData; } } catch (err) {} const local = localStorage.getItem(name); if (local) { try { return vaccinateZustandPayload(JSON.parse(local)); } catch(e) {} } return null; },
         setItem: async (name, value) => { localStorage.setItem(name, typeof value === 'string' ? value : JSON.stringify(value)); if ((window as any).pausarSubida) return; (window as any).pausarDescarga = true; if ((window as any).relojBloqueo) clearTimeout((window as any).relojBloqueo); (window as any).relojBloqueo = setTimeout(() => { (window as any).pausarDescarga = false; }, 3500); (window as any).estadoPendiente = value; if ((window as any).relojSubida) clearTimeout((window as any).relojSubida); (window as any).relojSubida = setTimeout(async () => { if ((window as any).pausarSubida) return; try { await supabase.from('app_state').upsert({ id: name, state: typeof (window as any).estadoPendiente === 'string' ? JSON.parse((window as any).estadoPendiente) : (window as any).estadoPendiente }); } catch (err) {} }, 800); },
