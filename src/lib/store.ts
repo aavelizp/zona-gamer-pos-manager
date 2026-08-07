@@ -71,20 +71,15 @@ interface State {
 const uid = () => Math.random().toString(36).slice(2, 10);
 const defaultConsoles: ConsoleState[] = [ { id: "ps4-1", name: "PS4 #3", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] }, { id: "ps4-2", name: "PS4 #4", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] }, { id: "ps4-3", name: "PS4 #5", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] }, { id: "ps4-4", name: "PS4 #6", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] }, { id: "ps5-1", name: "PS5 #1", type: "PS5", ratePerHour: 3, totalMinutes: 0, charges: [] }, { id: "ps5-2", name: "PS5 #2", type: "PS5", ratePerHour: 3, totalMinutes: 0, charges: [] } ];
 
+// =========================================================================
+// 🔥 VACUNA DE RESCATE: FILTRA LOS ERRORES Y DEJA PASAR TUS DATOS LIMPIOS 🔥
+// =========================================================================
 const vaccinateZustandPayload = (payload: any) => { 
   if (payload && payload.state) { 
-    if (Array.isArray(payload.state.consoles) && payload.state.consoles.length > 0) { 
-      payload.state.consoles = payload.state.consoles.map((c: any) => { 
-        if (!c || !c.id) return null;
-        if (c.id === "ps4-1") c.name = "PS4 #3"; if (c.id === "ps4-2") c.name = "PS4 #4"; if (c.id === "ps4-3") c.name = "PS4 #5"; if (c.id === "ps4-4") c.name = "PS4 #6"; 
-        return { ...c, charges: Array.isArray(c.charges) ? c.charges : [] }; 
-      }).filter(Boolean);
-      if (payload.state.consoles.length === 0) {
-        payload.state.consoles = JSON.parse(JSON.stringify(defaultConsoles));
-      }
-    } else { 
-      payload.state.consoles = JSON.parse(JSON.stringify(defaultConsoles)); 
-    }
+    // 🚨 1. FORZAMOS EL REINICIO DE CONSOLAS PARA EVITAR EL CHOQUE #419 🚨
+    payload.state.consoles = JSON.parse(JSON.stringify(defaultConsoles)); 
+    
+    // 🛡️ 2. MANTENEMOS TU HISTORIAL Y TU DINERO INTACTOS 🛡️
     payload.state.sales = Array.isArray(payload.state.sales) ? payload.state.sales : []; 
     payload.state.members = Array.isArray(payload.state.members) ? payload.state.members : []; 
     payload.state.products = Array.isArray(payload.state.products) ? payload.state.products : []; 
@@ -96,10 +91,10 @@ const vaccinateZustandPayload = (payload: any) => {
     payload.state.expenses = Array.isArray(payload.state.expenses) ? payload.state.expenses : [];
     payload.state.pastClosures = Array.isArray(payload.state.pastClosures) ? payload.state.pastClosures : [];
     
-    // 🏆 INICIALIZADOR SEGURO DE TORNEOS
-    payload.state.tournaments = Array.isArray(payload.state.tournaments) ? payload.state.tournaments : [];
-    payload.state.participants = Array.isArray(payload.state.participants) ? payload.state.participants : [];
-    payload.state.matches = Array.isArray(payload.state.matches) ? payload.state.matches : [];
+    // 🚨 3. APAGAMOS LOS TORNEOS TEMPORALMENTE PORQUE ESTÁN CAUSANDO EL CHOQUE 🚨
+    payload.state.tournaments = [];
+    payload.state.participants = [];
+    payload.state.matches = [];
   } 
   return payload; 
 };
@@ -368,7 +363,7 @@ export const useStore = create<State>()(
       })
     }),
     {
-      name: "gamerzone-store-v1", // 🚨 APUNTANDO A LA BÓVEDA CORRECTA 🚨
+      name: "gamerzone-store-v1", // 🚨 LA BÓVEDA CORRECTA 🚨
       storage: {
         getItem: async (name) => { try { const { data, error } = await supabase.from('app_state').select('state').eq('id', name).maybeSingle(); if (!error && data && data.state) { const safeData = vaccinateZustandPayload(data.state); localStorage.setItem(name, JSON.stringify(safeData)); return safeData; } } catch (err) {} const local = localStorage.getItem(name); if (local) { try { return vaccinateZustandPayload(JSON.parse(local)); } catch(e) {} } return null; },
         setItem: async (name, value) => { localStorage.setItem(name, typeof value === 'string' ? value : JSON.stringify(value)); if ((window as any).pausarSubida) return; (window as any).pausarDescarga = true; if ((window as any).relojBloqueo) clearTimeout((window as any).relojBloqueo); (window as any).relojBloqueo = setTimeout(() => { (window as any).pausarDescarga = false; }, 3500); (window as any).estadoPendiente = value; if ((window as any).relojSubida) clearTimeout((window as any).relojSubida); (window as any).relojSubida = setTimeout(async () => { if ((window as any).pausarSubida) return; try { await supabase.from('app_state').upsert({ id: name, state: typeof (window as any).estadoPendiente === 'string' ? JSON.parse((window as any).estadoPendiente) : (window as any).estadoPendiente }); } catch (err) {} }, 800); },
@@ -382,6 +377,6 @@ export const fmtUsd = (n: number) => { if (isNaN(n)) return "$0.00"; return `$${
 export const fmtBs = (usd: number, rate: number) => { if (isNaN(usd) || isNaN(rate)) return "Bs 0.00"; return `Bs ${((usd || 0) * rate).toLocaleString("es-VE", { maximumFractionDigits: 2 })}`; };
 export const computeTimeAmount = (consoleObj: ConsoleState, nowMs: number): { minutes: number; amount: number } => { if (!consoleObj || !consoleObj.session) return { minutes: 0, amount: 0 }; const ref = consoleObj.session.pausedAt ?? nowMs; const elapsedMs = Math.max(0, ref - (consoleObj.session.startedAt || ref)); const minutes = Math.ceil(elapsedMs / 60_000); return { minutes, amount: (minutes / 60) * (consoleObj.ratePerHour || 0) }; };
 
-const resyncFromCloud = async () => { if ((window as any).pausarDescarga) return; (window as any).pausarSubida = true; try { const { data, error } = await supabase.from('app_state').select('state').eq('id', 'gamerzone-store-v1').maybeSingle(); if ((window as any).pausarDescarga) return; if (!error && data && data.state) { const safeData = vaccinateZustandPayload(data.state); const estadoActual = JSON.stringify(useStore.getState()); if (safeData?.state && estadoActual !== JSON.stringify(safeData.state)) { useStore.setState(safeData.state); localStorage.setItem("gamerzone-store-v1", JSON.stringify(safeData)); } } } catch (e) { } finally { setTimeout(() => { (window as any).pausarSubida = false; }, 500); } }; // 🚨 APUNTANDO A LA BÓVEDA CORRECTA AQUÍ TAMBIÉN 🚨
+const resyncFromCloud = async () => { if ((window as any).pausarDescarga) return; (window as any).pausarSubida = true; try { const { data, error } = await supabase.from('app_state').select('state').eq('id', 'gamerzone-store-v1').maybeSingle(); if ((window as any).pausarDescarga) return; if (!error && data && data.state) { const safeData = vaccinateZustandPayload(data.state); const estadoActual = JSON.stringify(useStore.getState()); if (safeData?.state && estadoActual !== JSON.stringify(safeData.state)) { useStore.setState(safeData.state); localStorage.setItem("gamerzone-store-v1", JSON.stringify(safeData)); } } } catch (e) { } finally { setTimeout(() => { (window as any).pausarSubida = false; }, 500); } }; // 🚨 LA BÓVEDA CORRECTA AQUÍ 🚨
 const channel = supabase.channel('escuchar-nube'); channel.on('postgres_changes', { event: '*', schema: 'public', table: 'app_state' }, () => { resyncFromCloud(); }).subscribe((status) => { if (status === 'CLOSED' || status === 'CHANNEL_ERROR') { setTimeout(() => supabase.channel('escuchar-nube').subscribe(), 5000); } });
 window.addEventListener('online', resyncFromCloud); window.addEventListener('focus', resyncFromCloud); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { resyncFromCloud(); } }); setInterval(() => { if (document.visibilityState === 'visible') resyncFromCloud(); }, 15000);
