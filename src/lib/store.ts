@@ -70,7 +70,7 @@ interface State {
 const uid = () => Math.random().toString(36).slice(2, 10);
 const defaultConsoles: ConsoleState[] = [ { id: "ps4-1", name: "PS4 #3", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] }, { id: "ps4-2", name: "PS4 #4", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] }, { id: "ps4-3", name: "PS4 #5", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] }, { id: "ps4-4", name: "PS4 #6", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] }, { id: "ps5-1", name: "PS5 #1", type: "PS5", ratePerHour: 3, totalMinutes: 0, charges: [] }, { id: "ps5-2", name: "PS5 #2", type: "PS5", ratePerHour: 3, totalMinutes: 0, charges: [] } ];
 
-// 👇 EL VACUNADOR DEL CÓDIGO ANTIGUO (PROTEGE CONTRA DATOS CORRUPTOS) 👇
+// 👇 EL VACUNADOR DEL CÓDIGO ANTIGUO 👇
 const vaccinateZustandPayload = (payload: any) => { 
   if (payload && payload.state) { 
     if (Array.isArray(payload.state.consoles)) { 
@@ -154,7 +154,7 @@ export const useStore = create<State>()(
       revertTournamentToRegistering: (tournamentId) => set((s) => { return { tournaments: (s.tournaments||[]).map(t => t?.id === tournamentId ? { ...t, status: "registering" as "registering" } : t), matches: (s.matches||[]).filter(m => m?.tournamentId !== tournamentId) }; })
     }),
     {
-      name: "gamerzone-store-v2", // 🛡️ Apuntamos a la base de datos libre de errores de caché
+      name: "gamerzone-store-v2",
       storage: {
         getItem: async (name) => { 
           const local = localStorage.getItem(name); 
@@ -174,14 +174,6 @@ export const useStore = create<State>()(
         },
         setItem: async (name, value) => { 
           localStorage.setItem(name, typeof value === 'string' ? value : JSON.stringify(value)); 
-          
-          // 🛡️ ESCUDO ANTI-BORRADO (SUBIDA)
-          const valObj = typeof value === 'string' ? JSON.parse(value) : value;
-          const stateObj = valObj.state || valObj;
-          const currentLocalMembers = useStore.getState().members?.length || 0;
-          if (stateObj && Array.isArray(stateObj.members) && stateObj.members.length === 0 && currentLocalMembers > 0) {
-              return; 
-          }
 
           if ((window as any).pausarSubida) return; 
           (window as any).pausarDescarga = true; 
@@ -212,7 +204,7 @@ export const fmtBs = (usd: number, rate: number) => { if (isNaN(usd) || isNaN(ra
 export const computeTimeAmount = (consoleObj: ConsoleState, nowMs: number): { minutes: number; amount: number } => { if (!consoleObj || !consoleObj.session) return { minutes: 0, amount: 0 }; const ref = consoleObj.session.pausedAt ?? nowMs; const elapsedMs = Math.max(0, ref - (consoleObj.session.startedAt || ref)); const minutes = Math.ceil(elapsedMs / 60_000); if (consoleObj.session.isTournament) return { minutes, amount: 0 }; return { minutes, amount: (minutes / 60) * (consoleObj.ratePerHour || 0) }; };
 
 // =======================================================================
-// 📡 ANTENAS DE SINCRONIZACIÓN (CON ESCUDO ANTI-BORRADO)
+// 📡 ESCUDO INTELIGENTE DE SINCRONIZACIÓN
 // =======================================================================
 const resyncFromCloud = async () => { 
   if ((window as any).pausarDescarga) return; 
@@ -225,11 +217,17 @@ const resyncFromCloud = async () => {
       const nubeState = vaccinateZustandPayload(data.state.state || data.state);
       const localState = useStore.getState(); 
       
-      // 🛡️ ESCUDO ANTI-BORRADO (DESCARGA)
+      // Contamos cuántos datos hay en la Nube vs Tu Dispositivo
       const nubeMembers = Array.isArray(nubeState?.state?.members) ? nubeState.state.members.length : (Array.isArray(nubeState.members) ? nubeState.members.length : 0);
       const localMembers = Array.isArray(localState.members) ? localState.members.length : 0;
       
-      if (nubeMembers === 0 && localMembers > 0) {
+      const nubeSales = Array.isArray(nubeState?.state?.sales) ? nubeState.state.sales.length : (Array.isArray(nubeState.sales) ? nubeState.sales.length : 0);
+      const localSales = Array.isArray(localState.sales) ? localState.sales.length : 0;
+      
+      // 🛡️ ESCUDO INTELIGENTE: Si la Nube tiene MENOS datos que tu dispositivo, la bloqueamos.
+      if (nubeMembers < localMembers || nubeSales < localSales) {
+          // En lugar de borrar lo tuyo, forzamos a la nube a que se actualice de inmediato
+          await supabase.from('app_state').upsert({ id: 'gamerzone-store-v2', state: localState });
           return; 
       }
 
