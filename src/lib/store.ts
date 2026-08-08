@@ -9,6 +9,7 @@ export interface Combo { id: string; name: string; price: number; hours: number;
 export type ConsoleType = "PS4" | "PS5";
 export type SessionMode = "free" | "fixed" | "tournament"; 
 
+// 👇 NUEVO: 'prepaidSaleIds' agregado para rastrear las ventas prepagadas 👇
 export interface ConsoleSession { mode: SessionMode; startedAt: number; endsAt?: number; alerted?: boolean; preAlerted?: boolean; prepaid?: boolean; prepaidMinutes?: number; customerName?: string; pausedAt?: number; isTournament?: boolean; prepaidSaleIds?: string[]; }
 export interface ExtraCharge { label: string; amount: number; ts: number; productId?: ProductId; qty?: number; }
 export interface ConsoleState { id: string; name: string; type: ConsoleType; ratePerHour: number; totalMinutes: number; maintenanceMinutes?: number; session?: ConsoleSession; charges: ExtraCharge[]; }
@@ -25,14 +26,17 @@ export type ExpenseCategory = "Servicios" | "Compras" | "Mantenimiento" | "Sueld
 export const EXPENSE_CATEGORIES: ExpenseCategory[] = ["Servicios", "Compras", "Mantenimiento", "Sueldos", "Limpieza", "Impuestos", "Otros"];
 export interface Expense { id: string; ts: number; createdAt?: number; description: string; amount: number; method: "cash" | "mobile"; amountBs?: number; rate: number; category?: ExpenseCategory; }
 
-export type TournamentFormat = "single_elimination" | "double_elimination" | "league" | "groups";
-export interface Tournament { id: string; name: string; game: string; maxPlayers: number; entryFee: number; prizePercentage: number; format: TournamentFormat; groupCount?: number; dateRange: string; status: "registering" | "active" | "completed"; createdAt: number; defaultMatchFormat?: "FT2" | "FT3" | "FT5"; } 
+export type TournamentFormat = "single_elimination" | "league" | "groups";
+export interface Tournament { id: string; name: string; game: string; maxPlayers: number; entryFee: number; prizePercentage: number; format: TournamentFormat; groupCount?: number; dateRange: string; status: "registering" | "active" | "completed"; createdAt: number; } 
 export interface TournamentParticipant { id: string; tournamentId: string; memberId?: string; memberName: string; phone?: string; groupName?: string; paymentStatus: "paid" | "pending"; enrolledAt: number; enrollSaleId?: string; }
-export interface TournamentMatch { id: string; tournamentId: string; round: number; matchIndex: number; player1Id?: string; player2Id?: string; winnerId?: string; isDraw?: boolean; score1?: number; score2?: number; nextMatchId?: string; phase?: "groups" | "knockout"; groupName?: string; bracket?: "winners" | "losers" | "grand_finals"; matchFormat?: "FT2" | "FT3" | "FT5"; assignedConsoleId?: string; loserGoesToMatchId?: string; }
+
+export interface TournamentMatch { id: string; tournamentId: string; round: number; matchIndex: number; player1Id?: string; player2Id?: string; winnerId?: string; isDraw?: boolean; score1?: number; score2?: number; nextMatchId?: string; phase?: "groups" | "knockout"; groupName?: string; }
+
 export interface PastClosure { id: string; date: number; totalSales: number; totalExpenses: number; sales: SaleRecord[]; expenses: Expense[]; }
 
 interface State {
   rate: number; soundOn: boolean; products: Product[]; combos: Combo[]; consoles: ConsoleState[]; sales: SaleRecord[]; credits: Credit[]; queue: QueueEntry[]; members: Member[]; maintenanceLogs: MaintenanceLog[]; sessionHistory: SessionHistoryEntry[]; expenses: Expense[]; tournaments: Tournament[]; participants: TournamentParticipant[]; matches: TournamentMatch[]; pastClosures: PastClosure[];
+
   setRate: (n: number) => void; toggleSound: () => void;
   addProduct: (p: Omit<Product, "id">) => void; updateProduct: (id: string, p: Partial<Product>) => void; removeProduct: (id: string) => void;
   addCombo: (c: Omit<Combo, "id">) => void; removeCombo: (id: string) => void;
@@ -49,6 +53,7 @@ interface State {
   closeDay: () => void; registerMaintenance: (consoleId: string, description: string, date: number) => void; deleteMaintenanceLog: (logId: string) => void;
   prepaySession: (consoleId: string, minutes: number, payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; cashBs?: number; total: number; customerInfo?: CustomerInfo; comboId?: string }) => void; releaseConsole: (consoleId: string) => boolean; payExtras: (consoleId: string, payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; total: number; customer?: string }) => void; extendPaidSession: (consoleId: string, addMinutes: number, payload: { method: PaymentMethod; cashUsd: number; mobileBs: number; mobileBank?: string; mobileRef?: string; total: number; customer?: string }) => void;
   addExpense: (e: { description: string; amount: number; method: "cash" | "mobile"; amountBs?: number; category?: ExpenseCategory; ts?: number }) => void; setConsoleRate: (type: ConsoleType, ratePerHour: number) => void; deleteSale: (saleId: string) => void; resetConsoleStats: (consoleId: string) => void;
+  
   createTournament: (t: Omit<Tournament, "id" | "createdAt" | "status">) => void; 
   updateTournament: (id: string, data: Partial<Tournament>) => void;
   deleteTournament: (id: string) => void; 
@@ -58,50 +63,81 @@ interface State {
   payEnrollment: (participantId: string, payload: any) => void; 
   generateBracket: (tournamentId: string) => void; 
   generateKnockoutFromGroups: (tournamentId: string) => void; 
+  
   setMatchScore: (matchId: string, score1: number, score2: number) => void; 
   setMatchWinner: (matchId: string, winnerId: string) => void; 
   setMatchDraw: (matchId: string) => void; 
   revertMatchWinner: (matchId: string) => void; 
   revertTournamentToRegistering: (tournamentId: string) => void;
-  assignConsoleToMatch: (matchId: string, consoleId?: string) => void;
-  updateMatchFormat: (matchId: string, matchFormat: "FT2" | "FT3" | "FT5") => void;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 const defaultConsoles: ConsoleState[] = [ { id: "ps4-1", name: "PS4 #3", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] }, { id: "ps4-2", name: "PS4 #4", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] }, { id: "ps4-3", name: "PS4 #5", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] }, { id: "ps4-4", name: "PS4 #6", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] }, { id: "ps5-1", name: "PS5 #1", type: "PS5", ratePerHour: 3, totalMinutes: 0, charges: [] }, { id: "ps5-2", name: "PS5 #2", type: "PS5", ratePerHour: 3, totalMinutes: 0, charges: [] } ];
 
-// Función silenciosa que ordena la data si vino mal empaquetada de Supabase
-const extractCoreState = (raw: any) => {
-  if (!raw) return null;
-  let core = raw;
-  while (core && core.state !== undefined) {
-    if (Array.isArray(core.state.sales) || Array.isArray(core.state.consoles) || core.state.rate !== undefined) {
-      core = core.state;
-    } else break;
-  }
-  return { state: core, version: 0 };
+const vaccinateZustandPayload = (payload: any) => { 
+  if (payload && payload.state) { 
+    if (Array.isArray(payload.state.consoles)) { 
+      payload.state.consoles = payload.state.consoles.map((c: any) => { 
+        if (!c) return null;
+        if (c.id === "ps4-1") c.name = "PS4 #3"; if (c.id === "ps4-2") c.name = "PS4 #4"; if (c.id === "ps4-3") c.name = "PS4 #5"; if (c.id === "ps4-4") c.name = "PS4 #6"; 
+        return { ...c, charges: Array.isArray(c.charges) ? c.charges : [] }; 
+      }).filter(Boolean); 
+    } else { payload.state.consoles = JSON.parse(JSON.stringify(defaultConsoles)); }
+    payload.state.sales = Array.isArray(payload.state.sales) ? payload.state.sales : []; 
+    payload.state.members = Array.isArray(payload.state.members) ? payload.state.members : []; 
+    payload.state.products = Array.isArray(payload.state.products) ? payload.state.products : []; 
+    payload.state.combos = Array.isArray(payload.state.combos) ? payload.state.combos : []; 
+    payload.state.credits = Array.isArray(payload.state.credits) ? payload.state.credits : []; 
+    payload.state.tournaments = Array.isArray(payload.state.tournaments) ? payload.state.tournaments : []; 
+    payload.state.participants = Array.isArray(payload.state.participants) ? payload.state.participants : []; 
+    payload.state.matches = Array.isArray(payload.state.matches) ? payload.state.matches : []; 
+    payload.state.maintenanceLogs = Array.isArray(payload.state.maintenanceLogs) ? payload.state.maintenanceLogs : []; 
+    payload.state.queue = Array.isArray(payload.state.queue) ? payload.state.queue : []; 
+    payload.state.sessionHistory = Array.isArray(payload.state.sessionHistory) ? payload.state.sessionHistory : []; 
+    payload.state.expenses = Array.isArray(payload.state.expenses) ? payload.state.expenses : [];
+    payload.state.pastClosures = Array.isArray(payload.state.pastClosures) ? payload.state.pastClosures : [];
+  } 
+  return payload; 
 };
 
 export const useStore = create<State>()(
   persist(
     (set, get) => ({
-      rate: 40, soundOn: true, products: [], combos: [], consoles: defaultConsoles, sales: [], credits: [], queue: [], members: [], maintenanceLogs: [], sessionHistory: [], expenses: [], tournaments: [], participants: [], matches: [], pastClosures: [],
+      rate: 40, soundOn: true, products: [{ id: uid(), name: "Pepsi 355ml", price: 1, stock: 24 }, { id: uid(), name: "Doritos", price: 1.5, stock: 12 }, { id: uid(), name: "Agua 500ml", price: 0.75, stock: 30 }], combos: [], consoles: defaultConsoles, sales: [], credits: [], queue: [], members: [], maintenanceLogs: [], sessionHistory: [], expenses: [], tournaments: [], participants: [], matches: [], pastClosures: [],
       
       setRate: (n) => set({ rate: Math.max(0, n) }), toggleSound: () => set((s) => ({ soundOn: !s.soundOn })),
       addProduct: (p) => set((s) => ({ products: [...(s.products||[]), { ...p, id: uid() }] })), updateProduct: (id, p) => set((s) => ({ products: (s.products||[]).map((x) => (x?.id === id ? { ...x, ...p } : x)) })), removeProduct: (id) => set((s) => ({ products: (s.products||[]).filter((p) => p?.id !== id) })),
       addCombo: (c) => set((s) => ({ combos: [...(s.combos||[]), { ...c, id: uid() }] })), removeCombo: (id) => set((s) => ({ combos: (s.combos||[]).filter((c) => c?.id !== id) })),
+      
       startSession: (consoleId, minutes, customerName, isTournament) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId ? { ...c, session: { mode: isTournament ? "tournament" : (minutes ? "fixed" : "free"), startedAt: Date.now(), endsAt: minutes ? Date.now() + minutes * 60_000 : undefined, customerName, isTournament } } : c ) })),
       extendSession: (consoleId, addMinutes) => set((s) => ({ consoles: (s.consoles||[]).map((c) => { if (c?.id !== consoleId || !c.session) return c; const base = c.session.endsAt && c.session.endsAt > Date.now() ? c.session.endsAt : Date.now(); return { ...c, session: { ...c.session, mode: "fixed", endsAt: base + addMinutes * 60_000, alerted: false } }; }) })),
       markAlerted: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId && c.session ? { ...c, session: { ...c.session, alerted: true } } : c ) })), 
       markPreAlerted: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId && c.session ? { ...c, session: { ...c.session, preAlerted: true } } : c ) })), 
       pauseSession: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId && c.session && !c.session.pausedAt ? { ...c, session: { ...c.session, pausedAt: Date.now() } } : c ) })), 
       resumeSession: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => { if (c?.id !== consoleId || !c.session || !c.session.pausedAt) return c; const delta = Date.now() - c.session.pausedAt; return { ...c, session: { ...c.session, startedAt: c.session.startedAt + delta, endsAt: c.session.endsAt ? c.session.endsAt + delta : undefined, pausedAt: undefined, alerted: false, preAlerted: false } }; }) })), 
-      cancelSession: (consoleId) => set((s) => { const c = (s.consoles||[]).find((x) => x?.id === consoleId); if (!c) return s; let newSales = s.sales || []; if (c.session?.prepaidSaleIds && c.session.prepaidSaleIds.length > 0) { newSales = newSales.filter(sale => !c.session!.prepaidSaleIds!.includes(sale.id)); } return { consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, session: undefined, charges: [] } : x ), sales: newSales }; }),
+      
+      // 👇 SE ACTUALIZÓ PARA BORRAR VENTAS PREPAGADAS AUTOMÁTICAMENTE 👇
+      cancelSession: (consoleId) => set((s) => { 
+        const c = (s.consoles||[]).find((x) => x?.id === consoleId); 
+        if (!c) return s; 
+        
+        let newSales = s.sales || []; 
+        if (c.session?.prepaidSaleIds && c.session.prepaidSaleIds.length > 0) { 
+          newSales = newSales.filter(sale => !c.session!.prepaidSaleIds!.includes(sale.id)); 
+        } 
+        
+        return { 
+          consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, session: undefined, charges: [] } : x ), 
+          sales: newSales 
+        }; 
+      }),
+      
       updateSessionCustomer: (consoleId, customerName) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId && c.session ? { ...c, session: { ...c.session, customerName } } : c ) })),
       addSnackToConsole: (consoleId, productId, qty) => set((s) => { const product = (s.products||[]).find((p) => p?.id === productId); if (!product || product.stock < qty) return s; return { products: (s.products||[]).map((p) => (p?.id === productId ? { ...p, stock: p.stock - qty } : p)), consoles: (s.consoles||[]).map((c) => c?.id === consoleId ? { ...c, charges: [ ...(c.charges || []), { label: `${product.name} x${qty}`, amount: product.price * qty, ts: Date.now(), productId, qty } ] } : c ), }; }),
       applyComboToConsole: (consoleId, comboId) => set((s) => { const combo = (s.combos||[]).find((c) => c?.id === comboId); if (!combo) return s; for (const it of combo.items || []) { const p = (s.products||[]).find((pp) => pp?.id === it.productId); if (!p || p.stock < it.qty) return s; } const consoleObj = (s.consoles||[]).find((c) => c?.id === consoleId); if (!consoleObj) return s; const newProducts = (s.products||[]).map((p) => { const it = (combo.items||[]).find((i) => i.productId === p?.id); return it ? { ...p, stock: p.stock - it.qty } : p; }); const addMs = combo.hours * 60 * 60_000; const newSession: ConsoleSession = consoleObj.session ? { ...consoleObj.session, mode: "fixed", endsAt: (consoleObj.session.endsAt && consoleObj.session.endsAt > Date.now() ? consoleObj.session.endsAt : Date.now()) + addMs, alerted: false } : { mode: "fixed", startedAt: Date.now(), endsAt: Date.now() + addMs }; return { products: newProducts, consoles: (s.consoles||[]).map((c) => c?.id === consoleId ? { ...c, session: combo.hours > 0 ? newSession : c.session, charges: [ ...(c.charges || []), { label: `Combo: ${combo.name}`, amount: combo.price, ts: Date.now() } ] } : c ) }; }),
       addExtraController: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId ? { ...c, charges: [ ...(c.charges || []), { label: "Control Adicional", amount: 1, ts: Date.now() } ] } : c ) })),
       transferSession: (originId, destId) => set((s) => { const origin = (s.consoles||[]).find(c => c?.id === originId); const dest = (s.consoles||[]).find(c => c?.id === destId); if (!origin || !origin.session || !dest || dest.session) return s; const nowMs = Date.now(); const ref = origin.session.pausedAt ?? nowMs; const elapsedMs = Math.max(0, ref - origin.session.startedAt); const minutes = Math.ceil(elapsedMs / 60_000); const amount = (minutes / 60) * origin.ratePerHour; const newCharges = [...(dest.charges || []), ...(origin.charges || [])]; if (!origin.session.prepaid && amount > 0.01) { newCharges.push({ label: `Tiempo ${origin.name} (${minutes} min)`, amount: +(amount.toFixed(2)), ts: nowMs }); } let newEndsAt = undefined; let newStartedAt = nowMs; let newPausedAt = origin.session.pausedAt ? nowMs : undefined; if (origin.session.mode === "fixed" && origin.session.endsAt) { const remainingMs = Math.max(0, origin.session.endsAt - ref); newEndsAt = nowMs + remainingMs; } const newSession: ConsoleSession = { ...origin.session, startedAt: newStartedAt, endsAt: newEndsAt, pausedAt: newPausedAt }; return { consoles: (s.consoles||[]).map(c => { if (c?.id === originId) return { ...c, session: undefined, charges: [], totalMinutes: (c.totalMinutes||0) + minutes, maintenanceMinutes: (c.maintenanceMinutes || 0) + minutes }; if (c?.id === destId) return { ...c, session: newSession, charges: newCharges }; return c; }) }; }),
+      
       finalizeConsole: (consoleId, payload) => set((s) => { const c = (s.consoles||[]).find((x) => x?.id === consoleId); if (!c) return s; const sale: SaleRecord = { id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, minutes: payload.minutes, timeAmount: payload.timeAmount, extrasAmount: payload.extrasAmount, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, cashBs: payload.cashBs || 0, rate: s.rate, method: payload.method, customer: payload.customerInfo?.name || payload.customer, concept: "Consola", items: [ ...(payload.timeAmount > 0 ? [{ name: `Tiempo ${c.name} (${payload.minutes} min)`, qty: 1, price: payload.timeAmount }] : []), ...(c.charges || []).map((ch) => ({ name: ch.label, qty: 1, price: ch.amount })) ] }; const newCredits = payload.method === "credit" ? [ ... (s.credits||[]), { id: uid(), customer: payload.customerInfo?.name || payload.customer || "Sin nombre", phone: payload.customerInfo?.phone || undefined, amount: payload.total, createdAt: Date.now(), note: c.name } ] : (s.credits||[]); let newMembers = s.members || []; const ci = payload.customerInfo; if (ci && ci.name?.trim() && ci.phone?.trim() && !c.session?.isTournament) { const key = ci.phone.trim(); const existing = newMembers.find((m) => m?.phone === key); if (existing) { const newReward = (existing.rewardMinutes||0) + payload.minutes; const earned = Math.floor(newReward / 600); newMembers = newMembers.map((m) => m?.id === existing.id ? { ...m, name: ci.name.trim(), idDoc: ci.idDoc?.trim() || m.idDoc, totalMinutes: (m.totalMinutes||0) + payload.minutes, rewardMinutes: newReward - earned * 600, pendingRewards: (m.pendingRewards||0) + earned, lastVisit: Date.now() } : m ); } else { const earned = Math.floor(payload.minutes / 600); newMembers = [ ...newMembers, { id: uid(), name: ci.name.trim(), idDoc: ci.idDoc?.trim(), phone: key, totalMinutes: payload.minutes, rewardMinutes: payload.minutes - earned * 600, pendingRewards: earned, createdAt: Date.now(), lastVisit: Date.now() } ]; } } const histEntry: SessionHistoryEntry = { id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, customer: payload.customerInfo?.name || payload.customer, minutes: payload.minutes, amount: payload.total, prepaid: false }; return { consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, session: undefined, charges: [], totalMinutes: (x.totalMinutes||0) + payload.minutes, maintenanceMinutes: (x.maintenanceMinutes || 0) + payload.minutes } : x ), sales: payload.method === "credit" ? (s.sales||[]) : [...(s.sales||[]), sale], credits: newCredits, members: newMembers, sessionHistory: [histEntry, ... (s.sessionHistory||[])] }; }),
       finalizeMultipleConsoles: (consoleIds, payload) => set((s) => { const involved = (s.consoles||[]).filter((c) => c && consoleIds.includes(c.id)); if (involved.length === 0) return s; const sale: SaleRecord = { id: uid(), ts: Date.now(), consoleName: involved.map(c => c.name).join(" + "), minutes: payload.totalMinutes, timeAmount: payload.timeAmount, extrasAmount: payload.extrasAmount, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, cashBs: payload.cashBs || 0, rate: s.rate, method: payload.method, customer: payload.customerInfo?.name || payload.customer, concept: "Cobro Múltiple", items: payload.items, }; const newCredits = payload.method === "credit" ? [ ... (s.credits||[]), { id: uid(), customer: payload.customerInfo?.name || payload.customer || "Sin nombre", phone: payload.customerInfo?.phone || undefined, amount: payload.total, createdAt: Date.now(), note: sale.consoleName } ] : (s.credits||[]); let clubMinutesToAdd = 0; involved.forEach(c => { if (!c.session?.isTournament) { const ref = c.session?.pausedAt ?? Date.now(); const elapsedMs = Math.max(0, ref - (c.session?.startedAt ?? ref)); clubMinutesToAdd += Math.ceil(elapsedMs / 60_000); } }); let newMembers = s.members || []; const ci = payload.customerInfo; if (ci && ci.name?.trim() && ci.phone?.trim() && clubMinutesToAdd > 0) { const key = ci.phone.trim(); const existing = newMembers.find((m) => m?.phone === key); if (existing) { const newReward = (existing.rewardMinutes||0) + clubMinutesToAdd; const earned = Math.floor(newReward / 600); newMembers = newMembers.map((m) => m?.id === existing.id ? { ...m, name: ci.name.trim(), idDoc: ci.idDoc?.trim() || m.idDoc, totalMinutes: (m.totalMinutes||0) + clubMinutesToAdd, rewardMinutes: newReward - earned * 600, pendingRewards: (m.pendingRewards||0) + earned, lastVisit: Date.now() } : m ); } else { const earned = Math.floor(clubMinutesToAdd / 600); newMembers = [ ...newMembers, { id: uid(), name: ci.name.trim(), idDoc: ci.idDoc?.trim(), phone: key, totalMinutes: clubMinutesToAdd, rewardMinutes: clubMinutesToAdd - earned * 600, pendingRewards: earned, createdAt: Date.now(), lastVisit: Date.now() } ]; } } const newHistEntries: SessionHistoryEntry[] = involved.map((c) => { const ref = c.session?.pausedAt ?? Date.now(); const elapsedMs = Math.max(0, ref - (c.session?.startedAt ?? ref)); const mins = Math.ceil(elapsedMs / 60_000); return { id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, customer: payload.customerInfo?.name || payload.customer, minutes: mins, amount: 0, prepaid: !!c.session?.prepaid }; }); return { consoles: (s.consoles||[]).map((c) => { if (c && consoleIds.includes(c.id)) { const ref = c.session?.pausedAt ?? Date.now(); const elapsedMs = Math.max(0, ref - (c.session?.startedAt ?? ref)); const mins = Math.ceil(elapsedMs / 60_000); return { ...c, session: undefined, charges: [], totalMinutes: (c.totalMinutes||0) + mins, maintenanceMinutes: (c.maintenanceMinutes || 0) + mins }; } return c; }), sales: payload.method === "credit" ? (s.sales||[]) : [...(s.sales||[]), sale], credits: newCredits, members: newMembers, sessionHistory: [...newHistEntries, ... (s.sessionHistory||[])] }; }),
       directSale: (payload) => set((s) => { let newProducts = s.products || []; for (const it of payload.items) { newProducts = newProducts.map((p) => p?.id === it.productId ? { ...p, stock: p.stock - it.qty } : p ); } const sale: SaleRecord = { id: uid(), ts: Date.now(), timeAmount: 0, extrasAmount: payload.total, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, cashBs: payload.cashBs || 0, rate: s.rate, method: payload.method, customer: payload.customer, concept: "Venta Directa", items: payload.items.map((it) => ({ name: it.name, qty: it.qty, price: it.price })) }; const newCredits = payload.method === "credit" ? [ ... (s.credits||[]), { id: uid(), customer: payload.customer || "Sin nombre", amount: payload.total, createdAt: Date.now(), note: "Venta Directa" } ] : (s.credits||[]); return { products: newProducts, sales: [...(s.sales||[]), sale], credits: newCredits }; }),
@@ -112,10 +148,68 @@ export const useStore = create<State>()(
       closeDay: () => set((s) => { const totalSales = (s.sales || []).reduce((acc, x) => acc + (x?.total || 0), 0); const totalExpenses = (s.expenses || []).reduce((acc, x) => acc + (x?.amount || 0), 0); const snapshot: PastClosure = { id: uid(), date: Date.now(), totalSales, totalExpenses, sales: [...(s.sales || [])], expenses: [...(s.expenses || [])] }; return { pastClosures: [snapshot, ...(s.pastClosures || [])], sales: [], sessionHistory: [], consoles: (s.consoles||[]).map((c) => ({ ...c, session: undefined, charges: [] })) }; }),
       registerMaintenance: (consoleId, description, date) => set((s) => { const c = (s.consoles||[]).find((x) => x?.id === consoleId); if (!c) return s; const log: MaintenanceLog = { id: uid(), consoleId: c.id, consoleName: c.name, description, date, minutesAtService: c.maintenanceMinutes || 0 }; return { consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, maintenanceMinutes: 0 } : x ), maintenanceLogs: [log, ...(s.maintenanceLogs||[])] }; }),
       deleteMaintenanceLog: (logId) => set((s) => { const log = (s.maintenanceLogs||[]).find(l => l?.id === logId); if (!log) return s; const consoles = (s.consoles||[]).map(c => { if (c?.id === log.consoleId) { return { ...c, maintenanceMinutes: (c.maintenanceMinutes || 0) + log.minutesAtService }; } return c; }); return { maintenanceLogs: (s.maintenanceLogs||[]).filter(l => l?.id !== logId), consoles }; }),
-      prepaySession: (consoleId, minutes, payload) => set((s) => { const c = (s.consoles||[]).find((x) => x?.id === consoleId); if (!c) return s; const combo = payload.comboId ? (s.combos||[]).find((cm) => cm?.id === payload.comboId) : undefined; let newProducts = s.products || []; const items: SaleRecord["items"] = []; if (combo) { for (const it of combo.items || []) { const p = (s.products||[]).find((pp) => pp?.id === it.productId); if (!p || p.stock < it.qty) return s; } newProducts = (s.products||[]).map((p) => { const it = (combo.items||[]).find((i) => i.productId === p?.id); return it ? { ...p, stock: p.stock - it.qty } : p; }); items.push({ name: `Combo: ${combo.name} - ${c.name} (${minutes} min)`, qty: 1, price: payload.total }); for (const it of combo.items || []) { const p = (s.products||[]).find((pp) => pp?.id === it.productId); if (p) items.push({ name: `  · ${p.name}`, qty: it.qty, price: 0 }); } } else { items.push({ name: `Prepago ${c.name} (${minutes} min)`, qty: 1, price: payload.total }); } const saleId = uid(); const sale: SaleRecord = { id: saleId, ts: Date.now(), consoleId: c.id, consoleName: c.name, minutes, timeAmount: payload.total, extrasAmount: 0, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, cashBs: payload.cashBs || 0, rate: s.rate, method: payload.method, customer: payload.customerInfo?.name, concept: "Consola", items }; let newMembers = s.members || []; const ci = payload.customerInfo; if (ci && ci.name?.trim() && ci.phone?.trim()) { const key = ci.phone.trim(); const existing = newMembers.find((m) => m?.phone === key); if (existing) { const newReward = (existing.rewardMinutes||0) + minutes; const earned = Math.floor(newReward / 600); newMembers = newMembers.map((m) => m?.id === existing.id ? { ...m, name: ci.name.trim(), idDoc: ci.idDoc?.trim() || m.idDoc, totalMinutes: (m.totalMinutes||0) + minutes, rewardMinutes: newReward - earned * 600, pendingRewards: (m.pendingRewards||0) + earned, lastVisit: Date.now() } : m ); } else { const earned = Math.floor(minutes / 600); newMembers = [...newMembers, { id: uid(), name: ci.name.trim(), idDoc: ci.idDoc?.trim(), phone: key, totalMinutes: minutes, rewardMinutes: minutes - earned * 600, pendingRewards: earned, createdAt: Date.now(), lastVisit: Date.now() }]; } } return { products: newProducts, consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, session: { mode: "fixed", startedAt: Date.now(), endsAt: Date.now() + minutes * 60_000, prepaid: true, prepaidMinutes: minutes, customerName: ci?.name?.trim(), prepaidSaleIds: [saleId] } } : x ), sales: [...(s.sales||[]), sale], members: newMembers }; }),
+      
+      // 👇 SE ACTUALIZÓ PARA GUARDAR EL ID DE LA VENTA 👇
+      prepaySession: (consoleId, minutes, payload) => set((s) => { 
+        const c = (s.consoles||[]).find((x) => x?.id === consoleId); 
+        if (!c) return s; 
+        const combo = payload.comboId ? (s.combos||[]).find((cm) => cm?.id === payload.comboId) : undefined; 
+        let newProducts = s.products || []; 
+        const items: SaleRecord["items"] = []; 
+        if (combo) { 
+          for (const it of combo.items || []) { const p = (s.products||[]).find((pp) => pp?.id === it.productId); if (!p || p.stock < it.qty) return s; } 
+          newProducts = (s.products||[]).map((p) => { const it = (combo.items||[]).find((i) => i.productId === p?.id); return it ? { ...p, stock: p.stock - it.qty } : p; }); 
+          items.push({ name: `Combo: ${combo.name} - ${c.name} (${minutes} min)`, qty: 1, price: payload.total }); 
+          for (const it of combo.items || []) { const p = (s.products||[]).find((pp) => pp?.id === it.productId); if (p) items.push({ name: `  · ${p.name}`, qty: it.qty, price: 0 }); } 
+        } else { 
+          items.push({ name: `Prepago ${c.name} (${minutes} min)`, qty: 1, price: payload.total }); 
+        } 
+        
+        const saleId = uid(); // 👈 El ID único para la factura
+        const sale: SaleRecord = { id: saleId, ts: Date.now(), consoleId: c.id, consoleName: c.name, minutes, timeAmount: payload.total, extrasAmount: 0, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, cashBs: payload.cashBs || 0, rate: s.rate, method: payload.method, customer: payload.customerInfo?.name, concept: "Consola", items }; 
+        
+        let newMembers = s.members || []; 
+        const ci = payload.customerInfo; 
+        if (ci && ci.name?.trim() && ci.phone?.trim()) { 
+          const key = ci.phone.trim(); const existing = newMembers.find((m) => m?.phone === key); 
+          if (existing) { 
+            const newReward = (existing.rewardMinutes||0) + minutes; const earned = Math.floor(newReward / 600); 
+            newMembers = newMembers.map((m) => m?.id === existing.id ? { ...m, name: ci.name.trim(), idDoc: ci.idDoc?.trim() || m.idDoc, totalMinutes: (m.totalMinutes||0) + minutes, rewardMinutes: newReward - earned * 600, pendingRewards: (m.pendingRewards||0) + earned, lastVisit: Date.now() } : m ); 
+          } else { 
+            const earned = Math.floor(minutes / 600); 
+            newMembers = [...newMembers, { id: uid(), name: ci.name.trim(), idDoc: ci.idDoc?.trim(), phone: key, totalMinutes: minutes, rewardMinutes: minutes - earned * 600, pendingRewards: earned, createdAt: Date.now(), lastVisit: Date.now() }]; 
+          } 
+        } 
+        
+        return { 
+          products: newProducts, 
+          consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, session: { mode: "fixed", startedAt: Date.now(), endsAt: Date.now() + minutes * 60_000, prepaid: true, prepaidMinutes: minutes, customerName: ci?.name?.trim(), prepaidSaleIds: [saleId] } } : x ), 
+          sales: [...(s.sales||[]), sale], 
+          members: newMembers 
+        }; 
+      }),
+      
       releaseConsole: (consoleId) => { const s = get(); const c = (s.consoles||[]).find((x) => x?.id === consoleId); if (!c || !c.session) return false; const pendingExtras = (c.charges || []).reduce((a, ch) => a + (ch?.amount||0), 0); if (pendingExtras > 0.001) return false; const mins = c.session.prepaidMinutes ?? 0; const histEntry: SessionHistoryEntry = { id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, customer: c.session.customerName, minutes: mins, amount: 0, prepaid: true }; set({ consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, session: undefined, charges: [], totalMinutes: (x.totalMinutes||0) + mins, maintenanceMinutes: (x.maintenanceMinutes || 0) + mins } : x ), sessionHistory: [histEntry, ...(s.sessionHistory||[])] }); return true; },
       payExtras: (consoleId, payload) => set((s) => { const c = (s.consoles||[]).find((x) => x?.id === consoleId); if (!c || (c.charges || []).length === 0) return s; const sale: SaleRecord = { id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, minutes: 0, timeAmount: 0, extrasAmount: payload.total, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, rate: s.rate, method: payload.method, customer: payload.customer, concept: "Adicionales", items: (c.charges || []).map((ch) => ({ name: ch.label, qty: 1, price: ch.amount })) }; const newCredits = payload.method === "credit" ? [...(s.credits||[]), { id: uid(), customer: payload.customer || "Sin nombre", amount: payload.total, createdAt: Date.now(), note: `Adicionales ${c.name}` }] : (s.credits||[]); return { consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, charges: [] } : x), sales: payload.method === "credit" ? (s.sales||[]) : [...(s.sales||[]), sale], credits: newCredits }; }),
-      extendPaidSession: (consoleId, addMinutes, payload) => set((s) => { const c = (s.consoles||[]).find((x) => x?.id === consoleId); if (!c || !c.session) return s; const base = c.session.endsAt && c.session.endsAt > Date.now() ? c.session.endsAt : Date.now(); const newEnds = base + addMinutes * 60_000; const saleId = uid(); const sale: SaleRecord = { id: saleId, ts: Date.now(), consoleId: c.id, consoleName: c.name, minutes: addMinutes, timeAmount: payload.total, extrasAmount: 0, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, rate: s.rate, method: payload.method, customer: payload.customer || c.session.customerName, concept: "Consola", items: [{ name: `Extensión ${c.name} (+${addMinutes} min)`, qty: 1, price: payload.total }] }; const newCredits = payload.method === "credit" ? [...(s.credits||[]), { id: uid(), customer: payload.customer || c.session.customerName || "Sin nombre", amount: payload.total, createdAt: Date.now(), note: `Extensión ${c.name}` }] : (s.credits||[]); return { consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, session: { ...x.session!, mode: "fixed", endsAt: newEnds, prepaidMinutes: (x.session!.prepaidMinutes ?? 0) + addMinutes, alerted: false, preAlerted: false, prepaidSaleIds: [...(x.session!.prepaidSaleIds || []), saleId] } } : x ), sales: payload.method === "credit" ? (s.sales||[]) : [...(s.sales||[]), sale], credits: newCredits }; }),
+      
+      // 👇 SE ACTUALIZÓ PARA ACUMULAR VENTAS SI LE EXTIENDEN EL TIEMPO 👇
+      extendPaidSession: (consoleId, addMinutes, payload) => set((s) => { 
+        const c = (s.consoles||[]).find((x) => x?.id === consoleId); 
+        if (!c || !c.session) return s; 
+        const base = c.session.endsAt && c.session.endsAt > Date.now() ? c.session.endsAt : Date.now(); 
+        const newEnds = base + addMinutes * 60_000; 
+        
+        const saleId = uid(); 
+        const sale: SaleRecord = { id: saleId, ts: Date.now(), consoleId: c.id, consoleName: c.name, minutes: addMinutes, timeAmount: payload.total, extrasAmount: 0, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, rate: s.rate, method: payload.method, customer: payload.customer || c.session.customerName, concept: "Consola", items: [{ name: `Extensión ${c.name} (+${addMinutes} min)`, qty: 1, price: payload.total }] }; 
+        const newCredits = payload.method === "credit" ? [...(s.credits||[]), { id: uid(), customer: payload.customer || c.session.customerName || "Sin nombre", amount: payload.total, createdAt: Date.now(), note: `Extensión ${c.name}` }] : (s.credits||[]); 
+        
+        return { 
+          consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, session: { ...x.session!, mode: "fixed", endsAt: newEnds, prepaidMinutes: (x.session!.prepaidMinutes ?? 0) + addMinutes, alerted: false, preAlerted: false, prepaidSaleIds: [...(x.session!.prepaidSaleIds || []), saleId] } } : x ), 
+          sales: payload.method === "credit" ? (s.sales||[]) : [...(s.sales||[]), sale], 
+          credits: newCredits 
+        }; 
+      }),
+      
       addExpense: ({ ts, ...rest }) => set((s) => ({ expenses: [ { id: uid(), ts: ts ?? Date.now(), createdAt: Date.now(), rate: s.rate, ...rest }, ...(s.expenses||[]) ] })),
       setConsoleRate: (type, ratePerHour) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.type === type ? { ...c, ratePerHour: Math.max(0, ratePerHour) } : c ) })),
       deleteSale: (id) => set((s) => ({ sales: (s.sales||[]).filter((x) => x?.id !== id) })),
@@ -128,45 +222,220 @@ export const useStore = create<State>()(
       updateParticipant: (id, data) => set((s) => ({ participants: (s.participants||[]).map(p => p?.id === id ? { ...p, ...data } : p) })),
       removeParticipant: (participantId) => set((s) => { const p = (s.participants||[]).find(x => x?.id === participantId); if (!p) return s; return { participants: (s.participants||[]).filter(x => x?.id !== participantId), sales: p.enrollSaleId ? (s.sales||[]).filter(sale => sale?.id !== p.enrollSaleId) : (s.sales||[]) }; }),
       payEnrollment: (participantId, payload) => set((s) => { const p = (s.participants||[]).find(x => x?.id === participantId); if (!p) return s; const t = (s.tournaments||[]).find(x => x?.id === p.tournamentId); const enrollSaleId = uid(); const sale: SaleRecord = { id: enrollSaleId, ts: Date.now(), timeAmount: 0, extrasAmount: payload.total, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, cashBs: payload.cashBs || 0, rate: s.rate, method: payload.method, customer: p.memberName, concept: `Pago de Inscripción: ${t?.name || 'Torneo'}`, items: [{ name: `Pago Inscripción: ${p.memberName}`, qty: 1, price: payload.total }] }; return { participants: (s.participants||[]).map(x => x?.id === participantId ? { ...x, paymentStatus: "paid" as "paid", enrollSaleId } : x), sales: [...(s.sales||[]), sale] }; }),
-      assignConsoleToMatch: (matchId, consoleId) => set((s) => ({ matches: (s.matches||[]).map(m => m?.id === matchId ? { ...m, assignedConsoleId: consoleId } : m) })),
-      updateMatchFormat: (matchId, matchFormat) => set((s) => ({ matches: (s.matches||[]).map(m => m?.id === matchId ? { ...m, matchFormat } : m) })),
-      generateBracket: (tournamentId) => set((s) => { const t = (s.tournaments||[]).find(x => x?.id === tournamentId); const parts = (s.participants||[]).filter(p => p?.tournamentId === tournamentId); if (!t || parts.length < 2) return s; const matches: TournamentMatch[] = []; const shuffled = [...parts].sort(() => Math.random() - 0.5); if (t.format === "league" || t.format === "groups") { const numGroups = t.format === "groups" ? (t.groupCount || 2) : 1; const groupsList = ["A", "B", "C", "D", "E", "F", "G", "H"].slice(0, numGroups); const newParticipants = (s.participants||[]).map(p => { if(p.tournamentId === tournamentId) { const idx = shuffled.findIndex(x => x.id === p.id); return { ...p, groupName: groupsList[idx % numGroups] }; } return p; }); let matchIndex = 0; for (let g = 0; g < numGroups; g++) { const gName = groupsList[g]; const gParts = newParticipants.filter(p => p.tournamentId === tournamentId && p.groupName === gName); const players = [...gParts]; if (players.length % 2 !== 0) players.push({ id: "bye", memberName: "BYE", groupName: gName } as any); const numRounds = players.length - 1; const half = players.length / 2; for (let r = 0; r < numRounds; r++) { for (let i = 0; i < half; i++) { const p1 = players[i]; const p2 = players[players.length - 1 - i]; if (p1.id !== "bye" && p2.id !== "bye") { matches.push({ id: uid(), tournamentId, round: r + 1, matchIndex: matchIndex++, player1Id: p1.id, player2Id: p2.id, isDraw: false, groupName: gName, phase: "groups", matchFormat: t.defaultMatchFormat || "FT2" }); } } players.splice(1, 0, players.pop()!); } } return { tournaments: (s.tournaments||[]).map(x => x?.id === tournamentId ? { ...x, status: "active" as "active" } : x), participants: newParticipants, matches: [...(s.matches||[]), ...matches] }; } let n = 2; while (n < shuffled.length) n *= 2; const matchNodes: { [key: string]: string } = {}; let totalRounds = Math.log2(n); for(let r = 1; r <= totalRounds; r++) { let matchesInRound = n / Math.pow(2, r); for(let i = 0; i < matchesInRound; i++) { matchNodes[`${r}_${i}`] = uid(); } } for(let r = 1; r <= totalRounds; r++) { let matchesInRound = n / Math.pow(2, r); for(let i = 0; i < matchesInRound; i++) { const matchId = matchNodes[`${r}_${i}`]; const nextRoundMatchId = r < totalRounds ? matchNodes[`${r+1}_${Math.floor(i/2)}`] : undefined; matches.push({ id: matchId, tournamentId, round: r, matchIndex: i, player1Id: undefined, player2Id: undefined, winnerId: undefined, nextMatchId: nextRoundMatchId, bracket: "winners", matchFormat: t.defaultMatchFormat || "FT2" }); } } let pIndex = 0; let r1Matches = matches.filter(m => m.round === 1); r1Matches.forEach(m => { if(pIndex < shuffled.length) m.player1Id = shuffled[pIndex++].id; if(pIndex < shuffled.length) m.player2Id = shuffled[pIndex++].id; }); r1Matches.forEach(m => { if (m.player1Id && !m.player2Id) { m.winnerId = m.player1Id; if (m.nextMatchId) { const nextM = matches.find(x => x?.id === m.nextMatchId); if (nextM) { if (!nextM.player1Id) nextM.player1Id = m.winnerId; else nextM.player2Id = m.winnerId; } } } }); return { tournaments: (s.tournaments||[]).map(x => x?.id === tournamentId ? { ...x, status: "active" as "active" } : x), matches: [...(s.matches||[]), ...matches] }; }),
-      generateKnockoutFromGroups: (tournamentId) => set((s) => { const t = (s.tournaments||[]).find(x => x?.id === tournamentId); if (!t) return s; const tMatches = (s.matches||[]).filter(m => m?.tournamentId === tournamentId && m.phase === "groups"); const tParts = (s.participants||[]).filter(p => p?.tournamentId === tournamentId); const standings: Record<string, any[]> = {}; tParts.forEach(p => { if(!standings[p.groupName!]) standings[p.groupName!] = []; standings[p.groupName!].push({ id: p.id, pts: 0, w: 0, d: 0, l: 0, gf: 0, gc: 0, dg: 0 }); }); tMatches.forEach(m => { if (m.winnerId || m.isDraw) { const p1 = standings[m.groupName!].find(x => x.id === m.player1Id); const p2 = standings[m.groupName!].find(x => x.id === m.player2Id); if (p1 && p2) { p1.gf += m.score1 || 0; p1.gc += m.score2 || 0; p2.gf += m.score2 || 0; p2.gc += m.score1 || 0; if (m.winnerId === m.player1Id) { p1.pts += 3; p1.w += 1; p2.l += 1; } else if (m.winnerId === m.player2Id) { p2.pts += 3; p2.w += 1; p1.l += 1; } else { p1.pts += 1; p2.pts += 1; p1.d += 1; p2.d += 1; } } } }); Object.values(standings).flat().forEach(s => s.dg = s.gf - s.gc); let qualified: string[] = []; const groupsList = ["A", "B", "C", "D", "E", "F", "G", "H"].slice(0, t.groupCount || 2); const topPerGroup: Record<string, any[]> = {}; groupsList.forEach(g => { const sorted = (standings[g] || []).sort((a,b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf); topPerGroup[g] = sorted.slice(0, 2); }); if (t.groupCount === 2) { qualified = [ topPerGroup["A"][0]?.id, topPerGroup["B"][1]?.id, topPerGroup["B"][0]?.id, topPerGroup["A"][1]?.id ]; } else if (t.groupCount === 4) { qualified = [ topPerGroup["A"][0]?.id, topPerGroup["B"][1]?.id, topPerGroup["C"][0]?.id, topPerGroup["D"][1]?.id, topPerGroup["B"][0]?.id, topPerGroup["A"][1]?.id, topPerGroup["D"][0]?.id, topPerGroup["C"][1]?.id ]; } else { groupsList.forEach(g => qualified.push(topPerGroup[g]?.[0]?.id, topPerGroup[g]?.[1]?.id)); } qualified = qualified.filter(Boolean); let n = 2; while (n < qualified.length) n *= 2; const matchNodes: { [key: string]: string } = {}; let totalRounds = Math.log2(n); const koMatches: TournamentMatch[] = []; for(let r = 1; r <= totalRounds; r++) { let matchesInRound = n / Math.pow(2, r); for(let i = 0; i < matchesInRound; i++) { matchNodes[`${r}_${i}`] = uid(); } } for(let r = 1; r <= totalRounds; r++) { let matchesInRound = n / Math.pow(2, r); for(let i = 0; i < matchesInRound; i++) { const matchId = matchNodes[`${r}_${i}`]; const nextRoundMatchId = r < totalRounds ? matchNodes[`${r+1}_${Math.floor(i/2)}`] : undefined; koMatches.push({ id: matchId, tournamentId, round: r, matchIndex: i, player1Id: undefined, player2Id: undefined, winnerId: undefined, nextMatchId: nextRoundMatchId, phase: "knockout", matchFormat: t.defaultMatchFormat || "FT2" }); } } let pIndex = 0; let r1Matches = koMatches.filter(m => m.round === 1); r1Matches.forEach(m => { if(pIndex < qualified.length) m.player1Id = qualified[pIndex++]; if(pIndex < qualified.length) m.player2Id = qualified[pIndex++]; }); r1Matches.forEach(m => { if (m.player1Id && !m.player2Id) { m.winnerId = m.player1Id; if (m.nextMatchId) { const nextM = koMatches.find(x => x?.id === m.nextMatchId); if (nextM) { if (!nextM.player1Id) nextM.player1Id = m.winnerId; else nextM.player2Id = m.winnerId; } } } }); return { matches: [...(s.matches||[]), ...koMatches] }; }),
-      setMatchScore: (matchId, score1, score2) => set((s) => { const m = (s.matches||[]).find(x => x?.id === matchId); if (!m || !m.player1Id || !m.player2Id) return s; let winnerId = undefined; let isDraw = false; if (score1 > score2) winnerId = m.player1Id; else if (score2 > score1) winnerId = m.player2Id; else isDraw = true; const loserId = m.player1Id === winnerId ? m.player2Id : (m.player2Id === winnerId ? m.player1Id : undefined); let newMatches = (s.matches||[]).map(x => x?.id === matchId ? { ...x, score1, score2, winnerId, isDraw } : x); if (m.nextMatchId && winnerId) { newMatches = newMatches.map(x => { if (x?.id === m.nextMatchId) { if (m.matchIndex % 2 === 0) return { ...x, player1Id: winnerId }; else return { ...x, player2Id: winnerId }; } return x; }); } if (m.loserGoesToMatchId && loserId) { newMatches = newMatches.map(x => { if (x?.id === m.loserGoesToMatchId) { if (!x.player1Id) return { ...x, player1Id: loserId }; if (!x.player2Id) return { ...x, player2Id: loserId }; } return x; }); } let newTournaments = s.tournaments || []; if (!m.nextMatchId && (!m.loserGoesToMatchId || m.bracket === "grand_finals")) { const t = newTournaments.find(x => x?.id === m.tournamentId); if (t && (t.format === "league" || t.format === "groups")) { if (m.phase === "knockout") { const allDone = newMatches.filter(x => x.tournamentId === m.tournamentId && x.phase === "knockout").every(x => x.winnerId || x.isDraw); if (allDone) newTournaments = newTournaments.map(x => x?.id === m.tournamentId ? { ...x, status: "completed" as "completed" } : x); } else if (t.format === "league") { const allDone = newMatches.filter(x => x.tournamentId === m.tournamentId).every(x => x.winnerId || x.isDraw); if (allDone) newTournaments = newTournaments.map(x => x?.id === m.tournamentId ? { ...x, status: "completed" as "completed" } : x); } } else if (t) { newTournaments = newTournaments.map(x => x?.id === m.tournamentId ? { ...x, status: "completed" as "completed" } : x); } } return { matches: newMatches, tournaments: newTournaments }; }),
-      setMatchDraw: (matchId) => set((s) => { const m = (s.matches||[]).find(x => x?.id === matchId); if (!m) return s; let newMatches = (s.matches||[]).map(x => x?.id === matchId ? { ...x, isDraw: true, winnerId: undefined, score1: undefined, score2: undefined } : x); let newTournaments = s.tournaments || []; const t = newTournaments.find(x => x?.id === m.tournamentId); if (t && t.format === "league") { const allDone = newMatches.filter(x => x.tournamentId === m.tournamentId).every(x => x.winnerId || x.isDraw); if (allDone) newTournaments = newTournaments.map(x => x?.id === m.tournamentId ? { ...x, status: "completed" as "completed" } : x); } return { matches: newMatches, tournaments: newTournaments }; }),
-      setMatchWinner: (matchId, winnerId) => set((s) => { const m = (s.matches||[]).find(x => x?.id === matchId); if (!m || !winnerId) return s; const loserId = m.player1Id === winnerId ? m.player2Id : (m.player2Id === winnerId ? m.player1Id : undefined); let newMatches = (s.matches||[]).map(x => x?.id === matchId ? { ...x, winnerId, isDraw: false, score1: undefined, score2: undefined } : x); if (m.nextMatchId) { newMatches = newMatches.map(x => { if (x?.id === m.nextMatchId) { if (m.matchIndex % 2 === 0) return { ...x, player1Id: winnerId }; else return { ...x, player2Id: winnerId }; } return x; }); } if (m.loserGoesToMatchId && loserId) { newMatches = newMatches.map(x => { if (x?.id === m.loserGoesToMatchId) { if (!x.player1Id) return { ...x, player1Id: loserId }; if (!x.player2Id) return { ...x, player2Id: loserId }; } return x; }); } let newTournaments = s.tournaments || []; if (!m.nextMatchId && (!m.loserGoesToMatchId || m.bracket === "grand_finals")) { const t = newTournaments.find(x => x?.id === m.tournamentId); if (t && t.format === "league") { const allDone = newMatches.filter(x => x.tournamentId === m.tournamentId).every(x => x.winnerId || x.isDraw); if (allDone) newTournaments = newTournaments.map(x => x?.id === m.tournamentId ? { ...x, status: "completed" as "completed" } : x); } else if (t && t.format === "groups") { if (m.phase === "knockout") { newTournaments = newTournaments.map(x => x?.id === m.tournamentId ? { ...x, status: "completed" as "completed" } : x); } } else if (t) { newTournaments = newTournaments.map(x => x?.id === m.tournamentId ? { ...x, status: "completed" as "completed" } : x); } } return { matches: newMatches, tournaments: newTournaments }; }),
-      revertMatchWinner: (matchId) => set((s) => { const m = (s.matches||[]).find(x => x?.id === matchId); if (!m || (!m.winnerId && !m.isDraw)) return s; const oldWinnerId = m.winnerId; const oldLoserId = m.player1Id === oldWinnerId ? m.player2Id : (m.player2Id === oldWinnerId ? m.player1Id : undefined); let newMatches = (s.matches||[]).map(x => x?.id === matchId ? { ...x, winnerId: undefined, isDraw: false, score1: undefined, score2: undefined } : x); if (m.nextMatchId && oldWinnerId) { newMatches = newMatches.map(x => { if (x?.id === m.nextMatchId) { if (x.player1Id === oldWinnerId) return { ...x, player1Id: undefined }; if (x.player2Id === oldWinnerId) return { ...x, player2Id: undefined }; } return x; }); } if (m.loserGoesToMatchId && oldLoserId) { newMatches = newMatches.map(x => { if (x?.id === m.loserGoesToMatchId) { if (x.player1Id === oldLoserId) return { ...x, player1Id: undefined }; if (x.player2Id === oldLoserId) return { ...x, player2Id: undefined }; } return x; }); } let newTournaments = (s.tournaments||[]).map(t => t?.id === m.tournamentId ? { ...t, status: "active" as "active" } : t); return { matches: newMatches, tournaments: newTournaments }; }),
+      
+      generateBracket: (tournamentId) => set((s) => { 
+        const t = (s.tournaments||[]).find(x => x?.id === tournamentId); 
+        const parts = (s.participants||[]).filter(p => p?.tournamentId === tournamentId); 
+        if (!t || parts.length < 2) return s; 
+        
+        const matches: TournamentMatch[] = []; 
+        const shuffled = [...parts].sort(() => Math.random() - 0.5);
+
+        if (t.format === "league" || t.format === "groups") {
+          const numGroups = t.format === "groups" ? (t.groupCount || 2) : 1;
+          const groupsList = ["A", "B", "C", "D", "E", "F", "G", "H"].slice(0, numGroups);
+          
+          const newParticipants = (s.participants||[]).map(p => {
+             if(p.tournamentId === tournamentId) {
+                 const idx = shuffled.findIndex(x => x.id === p.id);
+                 return { ...p, groupName: groupsList[idx % numGroups] };
+             }
+             return p;
+          });
+
+          let matchIndex = 0;
+          for (let g = 0; g < numGroups; g++) {
+              const gName = groupsList[g];
+              const gParts = newParticipants.filter(p => p.tournamentId === tournamentId && p.groupName === gName);
+              
+              const players = [...gParts];
+              if (players.length % 2 !== 0) players.push({ id: "bye", memberName: "BYE", groupName: gName } as any);
+              const numRounds = players.length - 1;
+              const half = players.length / 2;
+
+              for (let r = 0; r < numRounds; r++) {
+                  for (let i = 0; i < half; i++) {
+                      const p1 = players[i];
+                      const p2 = players[players.length - 1 - i];
+                      if (p1.id !== "bye" && p2.id !== "bye") {
+                          matches.push({ id: uid(), tournamentId, round: r + 1, matchIndex: matchIndex++, player1Id: p1.id, player2Id: p2.id, isDraw: false, groupName: gName, phase: "groups" });
+                      }
+                  }
+                  players.splice(1, 0, players.pop()!);
+              }
+          }
+          return { tournaments: (s.tournaments||[]).map(x => x?.id === tournamentId ? { ...x, status: "active" as "active" } : x), participants: newParticipants, matches: [...(s.matches||[]), ...matches] };
+        }
+
+        let n = 2; while (n < shuffled.length) n *= 2; const matchNodes: { [key: string]: string } = {}; let totalRounds = Math.log2(n); for(let r = 1; r <= totalRounds; r++) { let matchesInRound = n / Math.pow(2, r); for(let i = 0; i < matchesInRound; i++) { matchNodes[`${r}_${i}`] = uid(); } } for(let r = 1; r <= totalRounds; r++) { let matchesInRound = n / Math.pow(2, r); for(let i = 0; i < matchesInRound; i++) { const matchId = matchNodes[`${r}_${i}`]; const nextRoundMatchId = r < totalRounds ? matchNodes[`${r+1}_${Math.floor(i/2)}`] : undefined; matches.push({ id: matchId, tournamentId, round: r, matchIndex: i, player1Id: undefined, player2Id: undefined, winnerId: undefined, nextMatchId: nextRoundMatchId }); } } let pIndex = 0; let r1Matches = matches.filter(m => m.round === 1); r1Matches.forEach(m => { if(pIndex < shuffled.length) m.player1Id = shuffled[pIndex++].id; if(pIndex < shuffled.length) m.player2Id = shuffled[pIndex++].id; }); r1Matches.forEach(m => { if (m.player1Id && !m.player2Id) { m.winnerId = m.player1Id; if (m.nextMatchId) { const nextM = matches.find(x => x?.id === m.nextMatchId); if (nextM) { if (!nextM.player1Id) nextM.player1Id = m.winnerId; else nextM.player2Id = m.winnerId; } } } }); return { tournaments: (s.tournaments||[]).map(x => x?.id === tournamentId ? { ...x, status: "active" as "active" } : x), matches: [...(s.matches||[]), ...matches] }; 
+      }),
+      
+      generateKnockoutFromGroups: (tournamentId) => set((s) => {
+        const t = (s.tournaments||[]).find(x => x?.id === tournamentId);
+        if (!t) return s;
+        
+        const tMatches = (s.matches||[]).filter(m => m?.tournamentId === tournamentId && m.phase === "groups");
+        const tParts = (s.participants||[]).filter(p => p?.tournamentId === tournamentId);
+        
+        const standings: Record<string, any[]> = {};
+        tParts.forEach(p => {
+            if(!standings[p.groupName!]) standings[p.groupName!] = [];
+            standings[p.groupName!].push({ id: p.id, pts: 0, w: 0, d: 0, l: 0, gf: 0, gc: 0, dg: 0 });
+        });
+        
+        tMatches.forEach(m => {
+            if (m.winnerId || m.isDraw) {
+                const p1 = standings[m.groupName!].find(x => x.id === m.player1Id);
+                const p2 = standings[m.groupName!].find(x => x.id === m.player2Id);
+                if (p1 && p2) {
+                    p1.gf += m.score1 || 0; p1.gc += m.score2 || 0;
+                    p2.gf += m.score2 || 0; p2.gc += m.score1 || 0;
+                    if (m.winnerId === m.player1Id) { p1.pts += 3; p1.w += 1; p2.l += 1; }
+                    else if (m.winnerId === m.player2Id) { p2.pts += 3; p2.w += 1; p1.l += 1; }
+                    else { p1.pts += 1; p2.pts += 1; p1.d += 1; p2.d += 1; }
+                }
+            }
+        });
+        
+        Object.values(standings).flat().forEach(s => s.dg = s.gf - s.gc);
+        
+        let qualified: string[] = [];
+        const groupsList = ["A", "B", "C", "D", "E", "F", "G", "H"].slice(0, t.groupCount || 2);
+        
+        const topPerGroup: Record<string, any[]> = {};
+        groupsList.forEach(g => {
+           const sorted = (standings[g] || []).sort((a,b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
+           topPerGroup[g] = sorted.slice(0, 2);
+        });
+        
+        if (t.groupCount === 2) {
+            qualified = [ topPerGroup["A"][0]?.id, topPerGroup["B"][1]?.id, topPerGroup["B"][0]?.id, topPerGroup["A"][1]?.id ];
+        } else if (t.groupCount === 4) {
+            qualified = [ topPerGroup["A"][0]?.id, topPerGroup["B"][1]?.id, topPerGroup["C"][0]?.id, topPerGroup["D"][1]?.id, topPerGroup["B"][0]?.id, topPerGroup["A"][1]?.id, topPerGroup["D"][0]?.id, topPerGroup["C"][1]?.id ];
+        } else {
+            groupsList.forEach(g => qualified.push(topPerGroup[g]?.[0]?.id, topPerGroup[g]?.[1]?.id));
+        }
+        
+        qualified = qualified.filter(Boolean);
+        
+        let n = 2; while (n < qualified.length) n *= 2; 
+        const matchNodes: { [key: string]: string } = {}; 
+        let totalRounds = Math.log2(n); 
+        const koMatches: TournamentMatch[] = [];
+        
+        for(let r = 1; r <= totalRounds; r++) { 
+            let matchesInRound = n / Math.pow(2, r); 
+            for(let i = 0; i < matchesInRound; i++) { matchNodes[`${r}_${i}`] = uid(); } 
+        } 
+        
+        for(let r = 1; r <= totalRounds; r++) { 
+            let matchesInRound = n / Math.pow(2, r); 
+            for(let i = 0; i < matchesInRound; i++) { 
+                const matchId = matchNodes[`${r}_${i}`]; 
+                const nextRoundMatchId = r < totalRounds ? matchNodes[`${r+1}_${Math.floor(i/2)}`] : undefined; 
+                koMatches.push({ id: matchId, tournamentId, round: r, matchIndex: i, player1Id: undefined, player2Id: undefined, winnerId: undefined, nextMatchId: nextRoundMatchId, phase: "knockout" }); 
+            } 
+        } 
+        
+        let pIndex = 0; 
+        let r1Matches = koMatches.filter(m => m.round === 1); 
+        r1Matches.forEach(m => { 
+            if(pIndex < qualified.length) m.player1Id = qualified[pIndex++]; 
+            if(pIndex < qualified.length) m.player2Id = qualified[pIndex++]; 
+        }); 
+        
+        r1Matches.forEach(m => { 
+            if (m.player1Id && !m.player2Id) { 
+                m.winnerId = m.player1Id; 
+                if (m.nextMatchId) { 
+                    const nextM = koMatches.find(x => x?.id === m.nextMatchId); 
+                    if (nextM) { if (!nextM.player1Id) nextM.player1Id = m.winnerId; else nextM.player2Id = m.winnerId; } 
+                } 
+            } 
+        });
+        
+        return { matches: [...(s.matches||[]), ...koMatches] };
+      }),
+
+      setMatchScore: (matchId, score1, score2) => set((s) => {
+        const m = (s.matches||[]).find(x => x?.id === matchId);
+        if (!m || !m.player1Id || !m.player2Id) return s;
+
+        let winnerId = undefined;
+        let isDraw = false;
+        if (score1 > score2) winnerId = m.player1Id;
+        else if (score2 > score1) winnerId = m.player2Id;
+        else isDraw = true;
+
+        let newMatches = (s.matches||[]).map(x => x?.id === matchId ? { ...x, score1, score2, winnerId, isDraw } : x);
+
+        if (m.nextMatchId && winnerId) {
+          newMatches = newMatches.map(x => {
+            if (x?.id === m.nextMatchId) {
+              if (m.matchIndex % 2 === 0) return { ...x, player1Id: winnerId };
+              else return { ...x, player2Id: winnerId };
+            }
+            return x;
+          });
+        }
+
+        let newTournaments = s.tournaments || [];
+        if (!m.nextMatchId) {
+          const t = newTournaments.find(x => x?.id === m.tournamentId);
+          if (t && (t.format === "league" || t.format === "groups")) {
+            if (m.phase === "knockout") {
+              const allDone = newMatches.filter(x => x.tournamentId === m.tournamentId && x.phase === "knockout").every(x => x.winnerId || x.isDraw);
+              if (allDone) newTournaments = newTournaments.map(x => x?.id === m.tournamentId ? { ...x, status: "completed" as "completed" } : x);
+            } else if (t.format === "league") {
+              const allDone = newMatches.filter(x => x.tournamentId === m.tournamentId).every(x => x.winnerId || x.isDraw);
+              if (allDone) newTournaments = newTournaments.map(x => x?.id === m.tournamentId ? { ...x, status: "completed" as "completed" } : x);
+            }
+          } else if (t) {
+            newTournaments = newTournaments.map(x => x?.id === m.tournamentId ? { ...x, status: "completed" as "completed" } : x);
+          }
+        }
+        return { matches: newMatches, tournaments: newTournaments };
+      }),
+
+      setMatchDraw: (matchId) => set((s) => { 
+        const m = (s.matches||[]).find(x => x?.id === matchId); 
+        if (!m) return s; 
+        let newMatches = (s.matches||[]).map(x => x?.id === matchId ? { ...x, isDraw: true, winnerId: undefined, score1: undefined, score2: undefined } : x); 
+        let newTournaments = s.tournaments || []; 
+        const t = newTournaments.find(x => x?.id === m.tournamentId); 
+        if (t && t.format === "league") { 
+          const allDone = newMatches.filter(x => x.tournamentId === m.tournamentId).every(x => x.winnerId || x.isDraw); 
+          if (allDone) newTournaments = newTournaments.map(x => x?.id === m.tournamentId ? { ...x, status: "completed" as "completed" } : x); 
+        } 
+        return { matches: newMatches, tournaments: newTournaments }; 
+      }),
+
+      setMatchWinner: (matchId, winnerId) => set((s) => { const m = (s.matches||[]).find(x => x?.id === matchId); if (!m || !winnerId) return s; let newMatches = (s.matches||[]).map(x => x?.id === matchId ? { ...x, winnerId, isDraw: false, score1: undefined, score2: undefined } : x); if (m.nextMatchId) { newMatches = newMatches.map(x => { if (x?.id === m.nextMatchId) { if (m.matchIndex % 2 === 0) return { ...x, player1Id: winnerId }; else return { ...x, player2Id: winnerId }; } return x; }); } let newTournaments = s.tournaments || []; if (!m.nextMatchId) { const t = newTournaments.find(x => x?.id === m.tournamentId); if (t && t.format === "league") { const allDone = newMatches.filter(x => x.tournamentId === m.tournamentId).every(x => x.winnerId || x.isDraw); if (allDone) newTournaments = newTournaments.map(x => x?.id === m.tournamentId ? { ...x, status: "completed" as "completed" } : x); } else if (t && t.format === "groups") { if (m.phase === "knockout") { newTournaments = newTournaments.map(x => x?.id === m.tournamentId ? { ...x, status: "completed" as "completed" } : x); } } else if (t) { newTournaments = newTournaments.map(x => x?.id === m.tournamentId ? { ...x, status: "completed" as "completed" } : x); } } return { matches: newMatches, tournaments: newTournaments }; }),
+      
+      revertMatchWinner: (matchId) => set((s) => { 
+        const m = (s.matches||[]).find(x => x?.id === matchId); 
+        if (!m || (!m.winnerId && !m.isDraw)) return s; 
+        const oldWinnerId = m.winnerId; 
+        let newMatches = (s.matches||[]).map(x => x?.id === matchId ? { ...x, winnerId: undefined, isDraw: false, score1: undefined, score2: undefined } : x); 
+        if (m.nextMatchId && oldWinnerId) { 
+            newMatches = newMatches.map(x => { 
+                if (x?.id === m.nextMatchId) { 
+                    if (x.player1Id === oldWinnerId) return { ...x, player1Id: undefined }; 
+                    if (x.player2Id === oldWinnerId) return { ...x, player2Id: undefined }; 
+                } 
+                return x; 
+            }); 
+        } 
+        let newTournaments = (s.tournaments||[]).map(t => t?.id === m.tournamentId ? { ...t, status: "active" as "active" } : t); 
+        return { matches: newMatches, tournaments: newTournaments }; 
+      }),
       revertTournamentToRegistering: (tournamentId) => set((s) => { return { tournaments: (s.tournaments||[]).map(t => t?.id === tournamentId ? { ...t, status: "registering" as "registering" } : t), matches: (s.matches||[]).filter(m => m?.tournamentId !== tournamentId) }; })
     }),
     {
-      name: "gamerzone-store", // 🚨 LA MAGIA: Nos mudamos a v2 para evadir el caché corrupto 🚨
+      name: "gamerzone-store-v1",
       storage: {
-        getItem: async (name) => { 
-          try { 
-            const { data, error } = await supabase.from('app_state').select('state').eq('id', name).maybeSingle(); 
-            if (!error && data && data.state) { 
-              const paquete = extractCoreState(data.state);
-              localStorage.setItem(name, JSON.stringify(paquete)); 
-              return paquete; 
-            } 
-          } catch (err) {} 
-          const local = localStorage.getItem(name); 
-          if (local) { try { return extractCoreState(JSON.parse(local)); } catch(e) {} } 
-          return null; 
-        },
-        setItem: async (name, value) => { 
-          localStorage.setItem(name, typeof value === 'string' ? value : JSON.stringify(value)); 
-          if ((window as any).pausarSubida) return; 
-          (window as any).pausarDescarga = true; 
-          if ((window as any).relojBloqueo) clearTimeout((window as any).relojBloqueo); 
-          (window as any).relojBloqueo = setTimeout(() => { (window as any).pausarDescarga = false; }, 3500); 
-          (window as any).estadoPendiente = value; 
-          if ((window as any).relojSubida) clearTimeout((window as any).relojSubida); 
-          (window as any).relojSubida = setTimeout(async () => { 
-            if ((window as any).pausarSubida) return; 
-            try { await supabase.from('app_state').upsert({ id: name, state: typeof (window as any).estadoPendiente === 'string' ? JSON.parse((window as any).estadoPendiente) : (window as any).estadoPendiente }); } catch (err) {} 
-          }, 800); 
-        },
+        getItem: async (name) => { try { const { data, error } = await supabase.from('app_state').select('state').eq('id', name).maybeSingle(); if (!error && data && data.state) { const safeData = vaccinateZustandPayload(data.state); localStorage.setItem(name, JSON.stringify(safeData)); return safeData; } } catch (err) {} const local = localStorage.getItem(name); if (local) { try { return vaccinateZustandPayload(JSON.parse(local)); } catch(e) {} } return null; },
+        setItem: async (name, value) => { localStorage.setItem(name, typeof value === 'string' ? value : JSON.stringify(value)); if ((window as any).pausarSubida) return; (window as any).pausarDescarga = true; if ((window as any).relojBloqueo) clearTimeout((window as any).relojBloqueo); (window as any).relojBloqueo = setTimeout(() => { (window as any).pausarDescarga = false; }, 3500); (window as any).estadoPendiente = value; if ((window as any).relojSubida) clearTimeout((window as any).relojSubida); (window as any).relojSubida = setTimeout(async () => { if ((window as any).pausarSubida) return; try { await supabase.from('app_state').upsert({ id: name, state: typeof (window as any).estadoPendiente === 'string' ? JSON.parse((window as any).estadoPendiente) : (window as any).estadoPendiente }); } catch (err) {} }, 800); },
         removeItem: async (name) => { localStorage.removeItem(name); try { await supabase.from('app_state').delete().eq('id', name); } catch (err) {} }
       }
     }
@@ -176,22 +445,6 @@ export const useStore = create<State>()(
 export const fmtUsd = (n: number) => { if (isNaN(n)) return "$0.00"; return `$${(n || 0).toFixed(2)}`; };
 export const fmtBs = (usd: number, rate: number) => { if (isNaN(usd) || isNaN(rate)) return "Bs 0.00"; return `Bs ${((usd || 0) * rate).toLocaleString("es-VE", { maximumFractionDigits: 2 })}`; };
 export const computeTimeAmount = (consoleObj: ConsoleState, nowMs: number): { minutes: number; amount: number } => { if (!consoleObj || !consoleObj.session) return { minutes: 0, amount: 0 }; const ref = consoleObj.session.pausedAt ?? nowMs; const elapsedMs = Math.max(0, ref - (consoleObj.session.startedAt || ref)); const minutes = Math.ceil(elapsedMs / 60_000); if (consoleObj.session.isTournament) return { minutes, amount: 0 }; return { minutes, amount: (minutes / 60) * (consoleObj.ratePerHour || 0) }; };
-
-const resyncFromCloud = async () => { 
-  if ((window as any).pausarDescarga) return; 
-  (window as any).pausarSubida = true; 
-  try { 
-    const { data, error } = await supabase.from('app_state').select('state').eq('id', 'gamerzone-store-v2').maybeSingle(); 
-    if ((window as any).pausarDescarga) return; 
-    if (!error && data && data.state) { 
-      const paquete = extractCoreState(data.state);
-      const estadoActual = JSON.stringify(useStore.getState()); 
-      if (paquete && estadoActual !== JSON.stringify(paquete.state)) { 
-        useStore.setState(paquete.state); 
-        localStorage.setItem("gamerzone-store-v2", JSON.stringify(paquete)); 
-      } 
-    } 
-  } catch (e) { } finally { setTimeout(() => { (window as any).pausarSubida = false; }, 500); } 
-};
+const resyncFromCloud = async () => { if ((window as any).pausarDescarga) return; (window as any).pausarSubida = true; try { const { data, error } = await supabase.from('app_state').select('state').eq('id', 'gamerzone-store-v1').maybeSingle(); if ((window as any).pausarDescarga) return; if (!error && data && data.state) { const safeData = vaccinateZustandPayload(data.state); const estadoActual = JSON.stringify(useStore.getState()); if (safeData?.state && estadoActual !== JSON.stringify(safeData.state)) { useStore.setState(safeData.state); localStorage.setItem("gamerzone-store-v1", JSON.stringify(safeData)); } } } catch (e) { } finally { setTimeout(() => { (window as any).pausarSubida = false; }, 500); } };
 const channel = supabase.channel('escuchar-nube'); channel.on('postgres_changes', { event: '*', schema: 'public', table: 'app_state' }, () => { resyncFromCloud(); }).subscribe((status) => { if (status === 'CLOSED' || status === 'CHANNEL_ERROR') { setTimeout(() => supabase.channel('escuchar-nube').subscribe(), 5000); } });
 window.addEventListener('online', resyncFromCloud); window.addEventListener('focus', resyncFromCloud); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { resyncFromCloud(); } }); setInterval(() => { if (document.visibilityState === 'visible') resyncFromCloud(); }, 15000);
