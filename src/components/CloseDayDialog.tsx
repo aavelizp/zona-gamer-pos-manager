@@ -22,7 +22,6 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     }
   }, [open]);
 
-  // Reloj comercial para cierres nocturnos
   const businessDate = useMemo(() => {
     const d = new Date(now);
     if (d.getHours() < 6) d.setDate(d.getDate() - 1);
@@ -36,7 +35,6 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     return d;
   }, [open]);
 
-  // 👇 1. MATEMÁTICA ACTUALIZADA (AHORA SUMA EL EFECTIVO EN BS) 👇
   const stats = useMemo(() => {
     const tSales = sales.filter(s => s.ts >= shiftStart.getTime());
     let totalFacturadoUsd = 0; let horasUsd = 0; let snacksUsd = 0;
@@ -55,7 +53,9 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     return { totalFacturadoUsd, horasUsd, snacksUsd, cashUsd, mobileBs, cashBs, fiadoUsd, deudasRecuperadasUsd };
   }, [sales, shiftStart]);
 
-  // 👇 2. FUNCIÓN PARA DESCARGAR EXCEL MULTI-PESTAÑA 👇
+  // =======================================================================
+  // 🟢 DESCARGA DE EXCEL MEJORADA (AHORA INCLUYE HISTORIAL HISTÓRICO)
+  // =======================================================================
   const descargarExcel = () => {
     const storeData = useStore.getState();
     const fecha = new Date().toISOString().split('T')[0];
@@ -80,7 +80,7 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
 
     let xml = `<?xml version="1.0"?>\n<?mso-application progid="Excel.Sheet"?>\n<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">`;
 
-    // Pestaña 1: Ventas
+    // Pestaña 1: Ventas del día (Sin cerrar)
     const salesRows = [["Concepto", "Cliente", "Total USD", "Efectivo USD", "Pago Movil BS", "Efectivo Físico BS", "Metodo"]];
     (storeData.sales || []).forEach(s => salesRows.push([s.concept, s.customer || "General", s.total, s.cashUsd || 0, s.mobileBs || 0, s.cashBs || 0, s.method]));
     xml += createSheet("Ventas de Hoy", salesRows);
@@ -100,6 +100,29 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     (storeData.expenses || []).forEach(e => expRows.push([e.description, e.amount, e.category || "N/A"]));
     xml += createSheet("Gastos", expRows);
 
+    // 👇 PESTAÑA 5 NUEVA: HISTORIAL COMPLETO DE DÍAS ANTERIORES 👇
+    const historyRows = [["Fecha y Hora", "Día Contable (Cierre)", "Concepto", "Cliente", "Total USD", "Efectivo USD", "Pago Movil BS", "Efectivo Físico BS", "Metodo"]];
+    
+    (storeData.pastClosures || []).forEach(closure => {
+      const fechaCierre = new Date(closure.date).toLocaleDateString('es-VE'); // Fecha en que se cerró la caja
+      
+      (closure.sales || []).forEach(s => {
+        const fechaVenta = new Date(s.ts).toLocaleString('es-VE'); // Fecha y hora exacta de la venta
+        historyRows.push([
+          fechaVenta, 
+          fechaCierre, 
+          s.concept, 
+          s.customer || "General", 
+          s.total, 
+          s.cashUsd || 0, 
+          s.mobileBs || 0, 
+          s.cashBs || 0, 
+          s.method
+        ]);
+      });
+    });
+    xml += createSheet("Historial Completo", historyRows);
+
     xml += `</Workbook>`;
 
     const blobExcel = new Blob([xml], { type: 'application/vnd.ms-excel' });
@@ -109,10 +132,9 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     aExcel.download = `Reporte_TwinsGamer_${fecha}.xls`;
     aExcel.click();
     URL.revokeObjectURL(urlExcel);
-    toast.success("✅ Reporte Excel Multi-pestaña descargado");
+    toast.success("✅ Reporte Excel descargado (Incluye Historial)");
   };
 
-  // 👇 3. FUNCIÓN PARA DESCARGAR BACKUP JSON MANUALMENTE 👇
   const descargarRespaldoJson = () => {
     const storeData = useStore.getState();
     const fecha = new Date().toISOString().split('T')[0];
@@ -215,7 +237,6 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                 <p className="font-display text-xl text-blue-600">Bs {stats.mobileBs.toLocaleString('es-VE', {minimumFractionDigits: 2})}</p>
               </div>
 
-              {/* 👇 NUEVO RECUADRO DE EFECTIVO FÍSICO BS 👇 */}
               <div className="bg-yellow-50/50 border border-yellow-200 rounded-2xl p-4">
                 <p className="text-[10px] sm:text-xs text-slate-700 font-bold mb-1">🇻🇪 Efectivo (Bs)</p>
                 <p className="font-display text-xl text-yellow-700">Bs {stats.cashBs.toLocaleString('es-VE', {minimumFractionDigits: 2})}</p>
@@ -234,7 +255,6 @@ export function CloseDayDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           </div>
         </div>
 
-        {/* 👇 ZONA DE BOTONES RENOVADA 👇 */}
         <div className="p-4 bg-slate-50 border-t border-slate-200 space-y-3 rounded-b-lg">
           <div className="flex items-start gap-2 bg-amber-100/50 text-amber-800 p-3 rounded-lg border border-amber-200 text-xs">
             <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
