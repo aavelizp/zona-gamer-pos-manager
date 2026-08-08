@@ -1,8 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { supabase } from "./supabase";
-// 🚨 IMPORTAMOS TU HISTORIAL DIRECTAMENTE DESDE EL CÓDIGO 🚨
-import { historial } from "./rescate"; 
 
 export type ProductId = string;
 export interface Product { id: ProductId; name: string; price: number; stock: number; }
@@ -72,45 +70,26 @@ interface State {
 const uid = () => Math.random().toString(36).slice(2, 10);
 const defaultConsoles: ConsoleState[] = [ { id: "ps4-1", name: "PS4 #3", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] }, { id: "ps4-2", name: "PS4 #4", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] }, { id: "ps4-3", name: "PS4 #5", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] }, { id: "ps4-4", name: "PS4 #6", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] }, { id: "ps5-1", name: "PS5 #1", type: "PS5", ratePerHour: 3, totalMinutes: 0, charges: [] }, { id: "ps5-2", name: "PS5 #2", type: "PS5", ratePerHour: 3, totalMinutes: 0, charges: [] } ];
 
-// =========================================================================
-// 🛡️ MOTOR BLINDADO QUE ACEPTA TUS DATOS SIN IMPORTAR EL FORMATO
-// =========================================================================
-const safeFormatData = (rawPayload: any) => {
-  if (!rawPayload) return null;
-  let core = rawPayload;
+// Función silenciosa que ordena la data si vino mal empaquetada de Supabase
+const extractCoreState = (raw: any) => {
+  if (!raw) return null;
+  let core = raw;
   while (core && core.state !== undefined) {
     if (Array.isArray(core.state.sales) || Array.isArray(core.state.consoles) || core.state.rate !== undefined) {
       core = core.state;
-    } else {
-      break;
-    }
+    } else break;
   }
-  core.consoles = Array.isArray(core.consoles) && core.consoles.length > 0 ? core.consoles : JSON.parse(JSON.stringify(defaultConsoles));
-  core.sales = Array.isArray(core.sales) ? core.sales : [];
-  core.members = Array.isArray(core.members) ? core.members : [];
-  core.products = Array.isArray(core.products) ? core.products : [];
-  core.combos = Array.isArray(core.combos) ? core.combos : [];
-  core.credits = Array.isArray(core.credits) ? core.credits : [];
-  core.queue = Array.isArray(core.queue) ? core.queue : [];
-  core.sessionHistory = Array.isArray(core.sessionHistory) ? core.sessionHistory : [];
-  core.expenses = Array.isArray(core.expenses) ? core.expenses : [];
-  core.pastClosures = Array.isArray(core.pastClosures) ? core.pastClosures : [];
-  core.tournaments = Array.isArray(core.tournaments) ? core.tournaments : [];
-  core.participants = Array.isArray(core.participants) ? core.participants : [];
-  core.matches = Array.isArray(core.matches) ? core.matches : [];
-  core.maintenanceLogs = Array.isArray(core.maintenanceLogs) ? core.maintenanceLogs : [];
   return { state: core, version: 0 };
 };
 
 export const useStore = create<State>()(
   persist(
     (set, get) => ({
-      rate: 40, soundOn: true, products: [{ id: uid(), name: "Pepsi 355ml", price: 1, stock: 24 }, { id: uid(), name: "Doritos", price: 1.5, stock: 12 }, { id: uid(), name: "Agua 500ml", price: 0.75, stock: 30 }], combos: [], consoles: defaultConsoles, sales: [], credits: [], queue: [], members: [], maintenanceLogs: [], sessionHistory: [], expenses: [], tournaments: [], participants: [], matches: [], pastClosures: [],
+      rate: 40, soundOn: true, products: [], combos: [], consoles: defaultConsoles, sales: [], credits: [], queue: [], members: [], maintenanceLogs: [], sessionHistory: [], expenses: [], tournaments: [], participants: [], matches: [], pastClosures: [],
       
       setRate: (n) => set({ rate: Math.max(0, n) }), toggleSound: () => set((s) => ({ soundOn: !s.soundOn })),
       addProduct: (p) => set((s) => ({ products: [...(s.products||[]), { ...p, id: uid() }] })), updateProduct: (id, p) => set((s) => ({ products: (s.products||[]).map((x) => (x?.id === id ? { ...x, ...p } : x)) })), removeProduct: (id) => set((s) => ({ products: (s.products||[]).filter((p) => p?.id !== id) })),
       addCombo: (c) => set((s) => ({ combos: [...(s.combos||[]), { ...c, id: uid() }] })), removeCombo: (id) => set((s) => ({ combos: (s.combos||[]).filter((c) => c?.id !== id) })),
-      
       startSession: (consoleId, minutes, customerName, isTournament) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId ? { ...c, session: { mode: isTournament ? "tournament" : (minutes ? "fixed" : "free"), startedAt: Date.now(), endsAt: minutes ? Date.now() + minutes * 60_000 : undefined, customerName, isTournament } } : c ) })),
       extendSession: (consoleId, addMinutes) => set((s) => ({ consoles: (s.consoles||[]).map((c) => { if (c?.id !== consoleId || !c.session) return c; const base = c.session.endsAt && c.session.endsAt > Date.now() ? c.session.endsAt : Date.now(); return { ...c, session: { ...c.session, mode: "fixed", endsAt: base + addMinutes * 60_000, alerted: false } }; }) })),
       markAlerted: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId && c.session ? { ...c, session: { ...c.session, alerted: true } } : c ) })), 
@@ -137,6 +116,10 @@ export const useStore = create<State>()(
       releaseConsole: (consoleId) => { const s = get(); const c = (s.consoles||[]).find((x) => x?.id === consoleId); if (!c || !c.session) return false; const pendingExtras = (c.charges || []).reduce((a, ch) => a + (ch?.amount||0), 0); if (pendingExtras > 0.001) return false; const mins = c.session.prepaidMinutes ?? 0; const histEntry: SessionHistoryEntry = { id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, customer: c.session.customerName, minutes: mins, amount: 0, prepaid: true }; set({ consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, session: undefined, charges: [], totalMinutes: (x.totalMinutes||0) + mins, maintenanceMinutes: (x.maintenanceMinutes || 0) + mins } : x ), sessionHistory: [histEntry, ...(s.sessionHistory||[])] }); return true; },
       payExtras: (consoleId, payload) => set((s) => { const c = (s.consoles||[]).find((x) => x?.id === consoleId); if (!c || (c.charges || []).length === 0) return s; const sale: SaleRecord = { id: uid(), ts: Date.now(), consoleId: c.id, consoleName: c.name, minutes: 0, timeAmount: 0, extrasAmount: payload.total, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, rate: s.rate, method: payload.method, customer: payload.customer, concept: "Adicionales", items: (c.charges || []).map((ch) => ({ name: ch.label, qty: 1, price: ch.amount })) }; const newCredits = payload.method === "credit" ? [...(s.credits||[]), { id: uid(), customer: payload.customer || "Sin nombre", amount: payload.total, createdAt: Date.now(), note: `Adicionales ${c.name}` }] : (s.credits||[]); return { consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, charges: [] } : x), sales: payload.method === "credit" ? (s.sales||[]) : [...(s.sales||[]), sale], credits: newCredits }; }),
       extendPaidSession: (consoleId, addMinutes, payload) => set((s) => { const c = (s.consoles||[]).find((x) => x?.id === consoleId); if (!c || !c.session) return s; const base = c.session.endsAt && c.session.endsAt > Date.now() ? c.session.endsAt : Date.now(); const newEnds = base + addMinutes * 60_000; const saleId = uid(); const sale: SaleRecord = { id: saleId, ts: Date.now(), consoleId: c.id, consoleName: c.name, minutes: addMinutes, timeAmount: payload.total, extrasAmount: 0, total: payload.total, cashUsd: payload.cashUsd, mobileBs: payload.mobileBs, mobileBank: payload.mobileBank, mobileRef: payload.mobileRef, rate: s.rate, method: payload.method, customer: payload.customer || c.session.customerName, concept: "Consola", items: [{ name: `Extensión ${c.name} (+${addMinutes} min)`, qty: 1, price: payload.total }] }; const newCredits = payload.method === "credit" ? [...(s.credits||[]), { id: uid(), customer: payload.customer || c.session.customerName || "Sin nombre", amount: payload.total, createdAt: Date.now(), note: `Extensión ${c.name}` }] : (s.credits||[]); return { consoles: (s.consoles||[]).map((x) => x?.id === consoleId ? { ...x, session: { ...x.session!, mode: "fixed", endsAt: newEnds, prepaidMinutes: (x.session!.prepaidMinutes ?? 0) + addMinutes, alerted: false, preAlerted: false, prepaidSaleIds: [...(x.session!.prepaidSaleIds || []), saleId] } } : x ), sales: payload.method === "credit" ? (s.sales||[]) : [...(s.sales||[]), sale], credits: newCredits }; }),
+      addExpense: ({ ts, ...rest }) => set((s) => ({ expenses: [ { id: uid(), ts: ts ?? Date.now(), createdAt: Date.now(), rate: s.rate, ...rest }, ...(s.expenses||[]) ] })),
+      setConsoleRate: (type, ratePerHour) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.type === type ? { ...c, ratePerHour: Math.max(0, ratePerHour) } : c ) })),
+      deleteSale: (id) => set((s) => ({ sales: (s.sales||[]).filter((x) => x?.id !== id) })),
+      resetConsoleStats: (consoleId) => set((s) => ({ consoles: (s.consoles||[]).map((c) => c?.id === consoleId ? { ...c, totalMinutes: 0, maintenanceMinutes: 0 } : c), sessionHistory: (s.sessionHistory||[]).filter((h) => h?.consoleId !== consoleId) })),
       
       createTournament: (t) => set((s) => ({ tournaments: [...(s.tournaments||[]), { ...t, id: uid(), createdAt: Date.now(), status: "registering" as "registering" }] })),
       updateTournament: (id, data) => set((s) => ({ tournaments: (s.tournaments||[]).map(t => t?.id === id ? { ...t, ...data } : t) })),
@@ -156,57 +139,19 @@ export const useStore = create<State>()(
       revertTournamentToRegistering: (tournamentId) => set((s) => { return { tournaments: (s.tournaments||[]).map(t => t?.id === tournamentId ? { ...t, status: "registering" as "registering" } : t), matches: (s.matches||[]).filter(m => m?.tournamentId !== tournamentId) }; })
     }),
     {
-      name: "gamerzone-store-v1",
+      name: "gamerzone-store-v2", // 🚨 LA MAGIA: Nos mudamos a v2 para evadir el caché corrupto 🚨
       storage: {
         getItem: async (name) => { 
-          // =========================================================================
-          // 🚨 MODO RESCATE DEFINITIVO: INYECCIÓN DIRECTA DESDE EL ARCHIVO LOCAL 🚨
-          // =========================================================================
-          if (localStorage.getItem("rescate_definitivo") !== "true") {
-            let core = historial as any;
-            while (core && core.state !== undefined) {
-              if (Array.isArray(core.state.sales) || Array.isArray(core.state.consoles) || core.state.rate !== undefined) {
-                core = core.state;
-              } else break;
-            }
-            core.consoles = Array.isArray(core.consoles) && core.consoles.length > 0 ? core.consoles : defaultConsoles;
-            core.sales = Array.isArray(core.sales) ? core.sales : [];
-            core.members = Array.isArray(core.members) ? core.members : [];
-            core.products = Array.isArray(core.products) ? core.products : [];
-            core.combos = Array.isArray(core.combos) ? core.combos : [];
-            core.credits = Array.isArray(core.credits) ? core.credits : [];
-            core.queue = Array.isArray(core.queue) ? core.queue : [];
-            core.sessionHistory = Array.isArray(core.sessionHistory) ? core.sessionHistory : [];
-            core.expenses = Array.isArray(core.expenses) ? core.expenses : [];
-            core.pastClosures = Array.isArray(core.pastClosures) ? core.pastClosures : [];
-            core.tournaments = Array.isArray(core.tournaments) ? core.tournaments : [];
-            core.participants = Array.isArray(core.participants) ? core.participants : [];
-            core.matches = Array.isArray(core.matches) ? core.matches : [];
-            core.maintenanceLogs = Array.isArray(core.maintenanceLogs) ? core.maintenanceLogs : [];
-            
-            const paquete = { state: core, version: 0 };
-            
-            // Reparamos la aplicación y dejamos una marca para que no se vuelva a inyectar en el futuro
-            localStorage.setItem(name, JSON.stringify(paquete));
-            localStorage.setItem("rescate_definitivo", "true");
-            
-            // Subimos el arreglo directo a Supabase
-            try { await supabase.from('app_state').upsert({ id: name, state: paquete }); } catch (err) {}
-            
-            return paquete;
-          }
-          // =========================================================================
-
           try { 
             const { data, error } = await supabase.from('app_state').select('state').eq('id', name).maybeSingle(); 
             if (!error && data && data.state) { 
-              localStorage.setItem(name, JSON.stringify(data.state)); 
-              return data.state; 
+              const paquete = extractCoreState(data.state);
+              localStorage.setItem(name, JSON.stringify(paquete)); 
+              return paquete; 
             } 
           } catch (err) {} 
-          
           const local = localStorage.getItem(name); 
-          if (local) { try { return JSON.parse(local); } catch(e) {} } 
+          if (local) { try { return extractCoreState(JSON.parse(local)); } catch(e) {} } 
           return null; 
         },
         setItem: async (name, value) => { 
@@ -236,13 +181,14 @@ const resyncFromCloud = async () => {
   if ((window as any).pausarDescarga) return; 
   (window as any).pausarSubida = true; 
   try { 
-    const { data, error } = await supabase.from('app_state').select('state').eq('id', 'gamerzone-store-v1').maybeSingle(); 
+    const { data, error } = await supabase.from('app_state').select('state').eq('id', 'gamerzone-store-v2').maybeSingle(); 
     if ((window as any).pausarDescarga) return; 
     if (!error && data && data.state) { 
+      const paquete = extractCoreState(data.state);
       const estadoActual = JSON.stringify(useStore.getState()); 
-      if (data.state.state && estadoActual !== JSON.stringify(data.state.state)) { 
-        useStore.setState(data.state.state); 
-        localStorage.setItem("gamerzone-store-v1", JSON.stringify(data.state)); 
+      if (paquete && estadoActual !== JSON.stringify(paquete.state)) { 
+        useStore.setState(paquete.state); 
+        localStorage.setItem("gamerzone-store-v2", JSON.stringify(paquete)); 
       } 
     } 
   } catch (e) { } finally { setTimeout(() => { (window as any).pausarSubida = false; }, 500); } 
