@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { supabase } from "./supabase";
-// 🚨 IMPORTAMOS TUS DATOS DIRECTAMENTE 🚨
 import { historial } from "./rescate"; 
 
 export type ProductId = string;
@@ -132,20 +131,20 @@ export const useStore = create<State>()(
       name: "gamerzone-store-v2",
       storage: {
         getItem: async (name) => { 
-          // 🚨 EL MOTOR DE INYECCIÓN DEFINITIVA 🚨
           if (localStorage.getItem("rescate_exitoso") !== "true") {
             const dataLimpia = historial.state;
             const paquete = { state: dataLimpia, version: 0 };
-            
-            // Inyectamos a nivel local
             localStorage.setItem(name, JSON.stringify(paquete));
             localStorage.setItem("rescate_exitoso", "true");
-            
-            // Reparamos la nube inmediatamente
             try { await supabase.from('app_state').upsert({ id: name, state: paquete }); } catch (err) {}
             return paquete;
           }
 
+          const local = localStorage.getItem(name); 
+          if (local) { 
+            try { return JSON.parse(local); } catch(e) {} 
+          } 
+          
           try { 
             const { data, error } = await supabase.from('app_state').select('state').eq('id', name).maybeSingle(); 
             if (!error && data && data.state) { 
@@ -153,25 +152,40 @@ export const useStore = create<State>()(
               return data.state; 
             } 
           } catch (err) {} 
-          
-          const local = localStorage.getItem(name); 
-          if (local) { try { return JSON.parse(local); } catch(e) {} } 
           return null; 
         },
         setItem: async (name, value) => { 
           localStorage.setItem(name, typeof value === 'string' ? value : JSON.stringify(value)); 
+          
+          // 🚨 ESCUDO ANTI-BORRADO DE SUBIDA 🚨
+          const valObj = typeof value === 'string' ? JSON.parse(value) : value;
+          const stateObj = valObj.state || valObj;
+          const currentLocalMembers = useStore.getState().members?.length || 0;
+          
+          // Si la app intenta subir una lista vacía de clientes, la bloqueamos
+          if (stateObj && Array.isArray(stateObj.members) && stateObj.members.length === 0 && currentLocalMembers > 0) {
+              return; 
+          }
+
           if ((window as any).pausarSubida) return; 
           (window as any).pausarDescarga = true; 
           if ((window as any).relojBloqueo) clearTimeout((window as any).relojBloqueo); 
           (window as any).relojBloqueo = setTimeout(() => { (window as any).pausarDescarga = false; }, 3500); 
           (window as any).estadoPendiente = value; 
+
           if ((window as any).relojSubida) clearTimeout((window as any).relojSubida); 
           (window as any).relojSubida = setTimeout(async () => { 
             if ((window as any).pausarSubida) return; 
-            try { await supabase.from('app_state').upsert({ id: name, state: typeof (window as any).estadoPendiente === 'string' ? JSON.parse((window as any).estadoPendiente) : (window as any).estadoPendiente }); } catch (err) {} 
+            try { 
+              const valToSave = typeof (window as any).estadoPendiente === 'string' ? JSON.parse((window as any).estadoPendiente) : (window as any).estadoPendiente;
+              await supabase.from('app_state').upsert({ id: name, state: valToSave }); 
+            } catch (err) {} 
           }, 800); 
         },
-        removeItem: async (name) => { localStorage.removeItem(name); try { await supabase.from('app_state').delete().eq('id', name); } catch (err) {} }
+        removeItem: async (name) => { 
+          localStorage.removeItem(name); 
+          try { await supabase.from('app_state').delete().eq('id', name); } catch (err) {} 
+        }
       }
     }
   )
@@ -181,20 +195,55 @@ export const fmtUsd = (n: number) => { if (isNaN(n)) return "$0.00"; return `$${
 export const fmtBs = (usd: number, rate: number) => { if (isNaN(usd) || isNaN(rate)) return "Bs 0.00"; return `Bs ${((usd || 0) * rate).toLocaleString("es-VE", { maximumFractionDigits: 2 })}`; };
 export const computeTimeAmount = (consoleObj: ConsoleState, nowMs: number): { minutes: number; amount: number } => { if (!consoleObj || !consoleObj.session) return { minutes: 0, amount: 0 }; const ref = consoleObj.session.pausedAt ?? nowMs; const elapsedMs = Math.max(0, ref - (consoleObj.session.startedAt || ref)); const minutes = Math.ceil(elapsedMs / 60_000); if (consoleObj.session.isTournament) return { minutes, amount: 0 }; return { minutes, amount: (minutes / 60) * (consoleObj.ratePerHour || 0) }; };
 
+// =======================================================================
+// 📡 ANTENAS DE SINCRONIZACIÓN (CON ESCUDO ANTI-BORRADO)
+// =======================================================================
 const resyncFromCloud = async () => { 
   if ((window as any).pausarDescarga) return; 
   (window as any).pausarSubida = true; 
   try { 
     const { data, error } = await supabase.from('app_state').select('state').eq('id', 'gamerzone-store-v2').maybeSingle(); 
     if ((window as any).pausarDescarga) return; 
+    
     if (!error && data && data.state) { 
-      const estadoActual = JSON.stringify(useStore.getState()); 
-      if (data.state.state && estadoActual !== JSON.stringify(data.state.state)) { 
-        useStore.setState(data.state.state); 
+      const nubeState = data.state.state || data.state;
+      const localState = useStore.getState(); 
+      
+      // 🚨 ESCUDO ANTI-BORRADO DE DESCARGA 🚨
+      const nubeMembers = Array.isArray(nubeState.members) ? nubeState.members.length : 0;
+      const localMembers = Array.isArray(localState.members) ? localState.members.length : 0;
+      
+      // Si la nube dice que hay 0 clientes, pero tu compu tiene clientes, se ignora a la nube
+      if (nubeMembers === 0 && localMembers > 0) {
+          return; 
+      }
+
+      const estadoActualStr = JSON.stringify(localState);
+      const nubeStateStr = JSON.stringify(nubeState);
+
+      if (estadoActualStr !== nubeStateStr) { 
+        useStore.setState(nubeState); 
         localStorage.setItem("gamerzone-store-v2", JSON.stringify(data.state)); 
       } 
     } 
   } catch (e) { } finally { setTimeout(() => { (window as any).pausarSubida = false; }, 500); } 
 };
-const channel = supabase.channel('escuchar-nube'); channel.on('postgres_changes', { event: '*', schema: 'public', table: 'app_state' }, () => { resyncFromCloud(); }).subscribe((status) => { if (status === 'CLOSED' || status === 'CHANNEL_ERROR') { setTimeout(() => supabase.channel('escuchar-nube').subscribe(), 5000); } });
-window.addEventListener('online', resyncFromCloud); window.addEventListener('focus', resyncFromCloud); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { resyncFromCloud(); } }); setInterval(() => { if (document.visibilityState === 'visible') resyncFromCloud(); }, 15000);
+
+// Activar la conexión en vivo con Supabase
+const channel = supabase.channel('escuchar-nube'); 
+channel.on('postgres_changes', { event: '*', schema: 'public', table: 'app_state' }, () => { 
+  resyncFromCloud(); 
+}).subscribe((status) => { 
+  if (status === 'CLOSED' || status === 'CHANNEL_ERROR') { 
+    setTimeout(() => supabase.channel('escuchar-nube').subscribe(), 5000); 
+  } 
+});
+
+window.addEventListener('online', resyncFromCloud); 
+window.addEventListener('focus', resyncFromCloud); 
+document.addEventListener('visibilitychange', () => { 
+  if (document.visibilityState === 'visible') { resyncFromCloud(); } 
+}); 
+setInterval(() => { 
+  if (document.visibilityState === 'visible') resyncFromCloud(); 
+}, 15000);
