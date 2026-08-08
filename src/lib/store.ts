@@ -139,7 +139,7 @@ export const useStore = create<State>()(
       revertTournamentToRegistering: (tournamentId) => set((s) => { return { tournaments: (s.tournaments||[]).map(t => t?.id === tournamentId ? { ...t, status: "registering" as "registering" } : t), matches: (s.matches||[]).filter(m => m?.tournamentId !== tournamentId) }; })
     }),
     {
-      name: "gamerzone-store-v2", // 🚨 LA MAGIA: Nos mudamos a v2 para evadir el caché corrupto 🚨
+      name: "gamerzone-store", // 🚨 LA MAGIA: Nos mudamos a v2 para evadir el caché corrupto 🚨
       storage: {
         getItem: async (name) => { 
           try { 
