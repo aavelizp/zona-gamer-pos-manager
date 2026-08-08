@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { supabase } from "./supabase";
-import { historial } from "./rescate"; 
 
 export type ProductId = string;
 export interface Product { id: ProductId; name: string; price: number; stock: number; }
@@ -71,6 +70,33 @@ interface State {
 const uid = () => Math.random().toString(36).slice(2, 10);
 const defaultConsoles: ConsoleState[] = [ { id: "ps4-1", name: "PS4 #3", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] }, { id: "ps4-2", name: "PS4 #4", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] }, { id: "ps4-3", name: "PS4 #5", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] }, { id: "ps4-4", name: "PS4 #6", type: "PS4", ratePerHour: 2, totalMinutes: 0, charges: [] }, { id: "ps5-1", name: "PS5 #1", type: "PS5", ratePerHour: 3, totalMinutes: 0, charges: [] }, { id: "ps5-2", name: "PS5 #2", type: "PS5", ratePerHour: 3, totalMinutes: 0, charges: [] } ];
 
+// 👇 EL VACUNADOR DEL CÓDIGO ANTIGUO (PROTEGE CONTRA DATOS CORRUPTOS) 👇
+const vaccinateZustandPayload = (payload: any) => { 
+  if (payload && payload.state) { 
+    if (Array.isArray(payload.state.consoles)) { 
+      payload.state.consoles = payload.state.consoles.map((c: any) => { 
+        if (!c) return null;
+        if (c.id === "ps4-1") c.name = "PS4 #3"; if (c.id === "ps4-2") c.name = "PS4 #4"; if (c.id === "ps4-3") c.name = "PS4 #5"; if (c.id === "ps4-4") c.name = "PS4 #6"; 
+        return { ...c, charges: Array.isArray(c.charges) ? c.charges : [] }; 
+      }).filter(Boolean); 
+    } else { payload.state.consoles = JSON.parse(JSON.stringify(defaultConsoles)); }
+    payload.state.sales = Array.isArray(payload.state.sales) ? payload.state.sales : []; 
+    payload.state.members = Array.isArray(payload.state.members) ? payload.state.members : []; 
+    payload.state.products = Array.isArray(payload.state.products) ? payload.state.products : []; 
+    payload.state.combos = Array.isArray(payload.state.combos) ? payload.state.combos : []; 
+    payload.state.credits = Array.isArray(payload.state.credits) ? payload.state.credits : []; 
+    payload.state.tournaments = Array.isArray(payload.state.tournaments) ? payload.state.tournaments : []; 
+    payload.state.participants = Array.isArray(payload.state.participants) ? payload.state.participants : []; 
+    payload.state.matches = Array.isArray(payload.state.matches) ? payload.state.matches : []; 
+    payload.state.maintenanceLogs = Array.isArray(payload.state.maintenanceLogs) ? payload.state.maintenanceLogs : []; 
+    payload.state.queue = Array.isArray(payload.state.queue) ? payload.state.queue : []; 
+    payload.state.sessionHistory = Array.isArray(payload.state.sessionHistory) ? payload.state.sessionHistory : []; 
+    payload.state.expenses = Array.isArray(payload.state.expenses) ? payload.state.expenses : [];
+    payload.state.pastClosures = Array.isArray(payload.state.pastClosures) ? payload.state.pastClosures : [];
+  } 
+  return payload; 
+};
+
 export const useStore = create<State>()(
   persist(
     (set, get) => ({
@@ -128,28 +154,20 @@ export const useStore = create<State>()(
       revertTournamentToRegistering: (tournamentId) => set((s) => { return { tournaments: (s.tournaments||[]).map(t => t?.id === tournamentId ? { ...t, status: "registering" as "registering" } : t), matches: (s.matches||[]).filter(m => m?.tournamentId !== tournamentId) }; })
     }),
     {
-      name: "gamerzone-store-v2",
+      name: "gamerzone-store-v2", // 🛡️ Apuntamos a la base de datos libre de errores de caché
       storage: {
         getItem: async (name) => { 
-          if (localStorage.getItem("rescate_exitoso") !== "true") {
-            const dataLimpia = historial.state;
-            const paquete = { state: dataLimpia, version: 0 };
-            localStorage.setItem(name, JSON.stringify(paquete));
-            localStorage.setItem("rescate_exitoso", "true");
-            try { await supabase.from('app_state').upsert({ id: name, state: paquete }); } catch (err) {}
-            return paquete;
-          }
-
           const local = localStorage.getItem(name); 
           if (local) { 
-            try { return JSON.parse(local); } catch(e) {} 
+            try { return vaccinateZustandPayload(JSON.parse(local)); } catch(e) {} 
           } 
           
           try { 
             const { data, error } = await supabase.from('app_state').select('state').eq('id', name).maybeSingle(); 
             if (!error && data && data.state) { 
-              localStorage.setItem(name, JSON.stringify(data.state)); 
-              return data.state; 
+              const safeData = vaccinateZustandPayload(data.state);
+              localStorage.setItem(name, JSON.stringify(safeData)); 
+              return safeData; 
             } 
           } catch (err) {} 
           return null; 
@@ -157,12 +175,10 @@ export const useStore = create<State>()(
         setItem: async (name, value) => { 
           localStorage.setItem(name, typeof value === 'string' ? value : JSON.stringify(value)); 
           
-          // 🚨 ESCUDO ANTI-BORRADO DE SUBIDA 🚨
+          // 🛡️ ESCUDO ANTI-BORRADO (SUBIDA)
           const valObj = typeof value === 'string' ? JSON.parse(value) : value;
           const stateObj = valObj.state || valObj;
           const currentLocalMembers = useStore.getState().members?.length || 0;
-          
-          // Si la app intenta subir una lista vacía de clientes, la bloqueamos
           if (stateObj && Array.isArray(stateObj.members) && stateObj.members.length === 0 && currentLocalMembers > 0) {
               return; 
           }
@@ -206,30 +222,28 @@ const resyncFromCloud = async () => {
     if ((window as any).pausarDescarga) return; 
     
     if (!error && data && data.state) { 
-      const nubeState = data.state.state || data.state;
+      const nubeState = vaccinateZustandPayload(data.state.state || data.state);
       const localState = useStore.getState(); 
       
-      // 🚨 ESCUDO ANTI-BORRADO DE DESCARGA 🚨
-      const nubeMembers = Array.isArray(nubeState.members) ? nubeState.members.length : 0;
+      // 🛡️ ESCUDO ANTI-BORRADO (DESCARGA)
+      const nubeMembers = Array.isArray(nubeState?.state?.members) ? nubeState.state.members.length : (Array.isArray(nubeState.members) ? nubeState.members.length : 0);
       const localMembers = Array.isArray(localState.members) ? localState.members.length : 0;
       
-      // Si la nube dice que hay 0 clientes, pero tu compu tiene clientes, se ignora a la nube
       if (nubeMembers === 0 && localMembers > 0) {
           return; 
       }
 
       const estadoActualStr = JSON.stringify(localState);
-      const nubeStateStr = JSON.stringify(nubeState);
+      const nubeStateStr = JSON.stringify(nubeState.state || nubeState);
 
       if (estadoActualStr !== nubeStateStr) { 
-        useStore.setState(nubeState); 
+        useStore.setState(nubeState.state || nubeState); 
         localStorage.setItem("gamerzone-store-v2", JSON.stringify(data.state)); 
       } 
     } 
   } catch (e) { } finally { setTimeout(() => { (window as any).pausarSubida = false; }, 500); } 
 };
 
-// Activar la conexión en vivo con Supabase
 const channel = supabase.channel('escuchar-nube'); 
 channel.on('postgres_changes', { event: '*', schema: 'public', table: 'app_state' }, () => { 
   resyncFromCloud(); 
